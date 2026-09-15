@@ -30,6 +30,8 @@ let terrain,
   wait,
   particles = [],
   trail = [],
+  popups = [],
+  shake = 0,
   keys = new Set(),
   last = 0,
   accumulator = 0,
@@ -49,16 +51,19 @@ function reset() {
   terrain = makeTerrain();
   originalTerrain = [...terrain];
   refreshGround();
+  const player = CHARACTERS.find((c) => c.id === selectedCharacter);
+  const others = CHARACTERS.filter((c) => c.id !== selectedCharacter);
+  const bot = others[Math.floor(Math.random() * others.length)];
   actors = [
-    { x: 205, hp: 100, color: "#7ebbc9", name: "Mochi" },
-    { x: 980, hp: 100, color: "#ec9b6c", name: "Hạt Dẻ" },
+    { x: 205, hp: 100, color: "#7ebbc9", name: player.name },
+    { x: 980, hp: 100, color: "#ec9b6c", name: bot.name },
   ];
   actors[0].skin = selectedCharacter;
   actors[0].weapon = selectedWeapon;
-  actors[0].name = CHARACTERS.find((c) => c.id === selectedCharacter).name;
-  actors[1].skin = "hat-de";
+  actors[1].skin = bot.id;
   actors[1].weapon = "acorn";
   actors[1].angle = 135;
+  actors.forEach((a) => (a.fire = a.hurt = a.walk = 0));
   actors.forEach((a) => (a.y = terrain[Math.floor(a.x)]));
   turn = 0;
   round = 1;
@@ -72,6 +77,8 @@ function reset() {
   wait = 0;
   particles = [];
   trail = [];
+  popups = [];
+  shake = 0;
   keys.clear();
   $("angle").value = 45;
   message("Đến lượt bạn — ngắm và giữ để bắn!");
@@ -144,6 +151,7 @@ function checkWinner() {
 }
 function shoot(angle, power) {
   actors[turn].angle = angle;
+  actors[turn].fire = 0.18;
   charging = false;
   projectile = launch(actors[turn], angle, power);
   trail = [];
@@ -167,9 +175,15 @@ function explode(p) {
   crater(terrain, p.x, p.y);
   refreshGround();
   actors.forEach((a) => {
-    a.hp = Math.max(0, a.hp - damage(a, p.x, p.y));
+    const hit = damage(a, p.x, p.y);
+    a.hp = Math.max(0, a.hp - hit);
     a.y = terrain[Math.floor(a.x)];
+    if (hit > 0) {
+      a.hurt = 0.3;
+      popups.push({ x: a.x, y: a.y - 130, text: `-${hit}`, life: 1 });
+    }
   });
+  shake = 0.3;
   for (let i = 0; i < 28; i++) {
     const a = Math.random() * Math.PI * 2,
       s = 40 + Math.random() * 150;
@@ -196,6 +210,8 @@ function move(dir, dt) {
   energy -= Math.abs(x - a.x);
   a.x = x;
   a.y = terrain[Math.floor(x)];
+  a.walk += dt;
+  a.moving = 0.1;
   checkWinner();
 }
 function update(dt) {
@@ -207,6 +223,14 @@ function update(dt) {
     p.life -= dt;
   });
   particles = particles.filter((p) => p.life > 0);
+  popups.forEach((p) => (p.life -= dt));
+  popups = popups.filter((p) => p.life > 0);
+  shake = Math.max(0, shake - dt);
+  actors.forEach((a) => {
+    a.fire = Math.max(0, a.fire - dt);
+    a.hurt = Math.max(0, a.hurt - dt);
+    a.moving = Math.max(0, (a.moving || 0) - dt);
+  });
   if (phase === "aim") {
     time = Math.max(0, time - dt);
     if (time === 0) {
@@ -302,6 +326,12 @@ function tree(x, y, s) {
 function character(a, i) {
   const angle = i === 0 ? +$("angle").value : a.angle;
   const sprite = images.get(a.skin);
+  // Recoil pushes away from the aim direction; walking bobs the sprite.
+  const recoil = (a.fire / 0.18) * 8,
+    dx = -Math.cos((angle * Math.PI) / 180) * recoil,
+    dy = a.moving > 0 ? -Math.abs(Math.sin(a.walk * 14)) * 4 : 0;
+  ctx.save();
+  ctx.translate(dx, dy);
   if (sprite) {
     drawCharacter(
       ctx,
@@ -309,12 +339,13 @@ function character(a, i) {
       a,
       angle > 90 ? -1 : 1,
       turn === i && phase !== "over",
+      a.hurt / 0.3,
     );
     const weapon = images.get(a.weapon);
     drawWeapon(ctx, weapon, a, angle);
+    ctx.restore();
     return;
   }
-  ctx.save();
   ctx.translate(a.x, a.y);
   ellipse(0, 0, 28, 6, "#263d3930");
   ellipse(-11, -5, 11, 7, "#384e57");
@@ -395,8 +426,14 @@ function character(a, i) {
     );
   }
   ctx.restore();
+  ctx.restore();
 }
 function render() {
+  ctx.save();
+  if (shake > 0) {
+    const s = (shake / 0.3) * 6;
+    ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
+  }
   if (images.has("background")) {
     ctx.drawImage(images.get("background"), 0, 0, WIDTH, HEIGHT);
   } else {
@@ -506,30 +543,43 @@ function render() {
       if (n % 4 === 0) ellipse(p.x, p.y, 2.5, 2.5, "#ffffefaa");
     }
   }
+  const weaponColor = WEAPONS.find((w) => w.id === actors[turn].weapon).color;
   trail.forEach((p, i) =>
     ellipse(
       p.x,
       p.y,
       (3 * i) / trail.length,
       (3 * i) / trail.length,
-      "#fff9dfbb",
+      weaponColor + "bb",
     ),
   );
   if (projectile) {
-    ellipse(
-      projectile.x,
-      projectile.y,
-      8,
-      8,
-      WEAPONS.find((w) => w.id === actors[turn].weapon).color,
-    );
-    ellipse(projectile.x - 2, projectile.y - 3, 3, 3, "#fff0b7");
+    ctx.save();
+    ctx.translate(projectile.x, projectile.y);
+    ctx.rotate(Math.atan2(projectile.vy, projectile.vx));
+    ellipse(0, 0, 10, 7, weaponColor);
+    ellipse(-3, -2, 3, 2.5, "#fff0b7");
+    ctx.restore();
   }
   particles.forEach((p) => {
     ctx.globalAlpha = Math.max(0, p.life / 0.7);
     ellipse(p.x, p.y, 5, 5, p.color);
   });
   ctx.globalAlpha = 1;
+  // Large text so the number stays readable when the canvas is scaled to a phone.
+  ctx.font = "900 34px 'Be Vietnam Pro', system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 5;
+  popups.forEach((p) => {
+    ctx.globalAlpha = Math.min(1, p.life * 2);
+    const y = p.y - (1 - p.life) * 40;
+    ctx.strokeStyle = "#3a2a1d";
+    ctx.strokeText(p.text, p.x, y);
+    ctx.fillStyle = "#ffd27b";
+    ctx.fillText(p.text, p.x, y);
+  });
+  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 function frame(now) {
   const elapsed = Math.min((now - last) / 1000, 0.1);

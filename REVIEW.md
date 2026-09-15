@@ -205,9 +205,9 @@ Khuyến nghị: làm A trước, dùng B chỉ cho 3 pose `fire`, `hurt`, `win`
 
 | Bước | Việc | Đụng file | Rủi ro | Cần asset mới |
 |---|---|---|---|---|
-| 1 | Bot random skin khác player | game.js | Thấp | Không |
-| 2 | Trail theo màu vũ khí, đạn xoay theo hướng bay | game.js | Thấp | Không |
-| 3 | Animation procedural: recoil, nháy khi trúng, rung màn hình, số sát thương | game.js | Thấp | Không |
+| 1 | Bot random skin khác player. Đã làm | game.js | Thấp | Không |
+| 2 | Trail theo màu vũ khí, đạn xoay theo hướng bay. Đã làm | game.js | Thấp | Không |
+| 3 | Animation procedural: recoil, nhún khi đi, nháy khi trúng, rung màn hình, số sát thương. Đã làm | game.js, sprites.js | Thấp | Không |
 | 4 | Ammo params: gravityScale, windScale, craterRadius, damageMax, damageRadius; truyền qua launch, step, damage, botShot; đường ngắm dùng ammo | physics.js, assets.js, game.js, tests | Trung bình, cần rebalance và sửa test | Không |
 | 5 | Sát thương rơi và sàn đá | physics.js, game.js, tests | Thấp | Không |
 | 6 | Sprite đạn riêng | assets.js, game.js | Thấp | 6 PNG 32x32 |
@@ -223,3 +223,34 @@ Gửi cho model thiết kế asset, cùng style với pack hiện tại:
 - 6 sprite đạn, 32x32, nền trong suốt, hướng phải, không bóng đổ: cà rốt, hạt dẻ, giọt mật, bong bóng, cá, sao.
 - 4 nhân vật x 3 pose `fire`, `hurt`, `win`, cùng canvas và baseline với pose idle hiện có, hướng phải, tay trống, có gutter 4 px như pack cũ.
 - Tùy chọn: 1 sprite hiệu ứng nổ 3 frame 96x96, nếu muốn thay particle. Không bắt buộc, particle hiện tại đủ dùng.
+
+### 7. Ghi chú sau khi làm bước 1 đến 3
+
+- Mọi timer hiệu ứng (`fire`, `hurt`, `moving` trên actor, `shake`, `popups`) giảm trong `update(dt)`, nên tạm dừng thì hiệu ứng cũng dừng, và không ảnh hưởng vật lý. Vẽ hoàn toàn trong `render()`.
+- Recoil và nhún áp qua một `ctx.translate` bọc cả sprite lẫn vũ khí trong `character()`, dùng chung cho cả đường vẽ sprite và đường fallback. Flash trúng đạn chỉ có ở đường sprite: vẽ lại sprite với `globalCompositeOperation = "lighter"`, không cần mask vì chỉ sáng lên trên pixel của sprite.
+- Rung màn hình là `ctx.translate` ngẫu nhiên tối đa 6 px trong 0,3 s. Viền canvas lộ nền `.arena` màu `#b2e2df` vài px khi rung, nhìn như bầu trời nên không xử lý thêm.
+- Bot chọn skin ngẫu nhiên trong `reset()`. Nếu player đổi sang đúng skin của bot giữa trận thì hai bên trùng sprite cho tới lượt "Trận mới". Chấp nhận được, vì đổi skin giữa trận là cosmetic.
+- Sprite đạn: hiện là ellipse 10x7 xoay theo `atan2(vy, vx)`. Khi có PNG đạn, thay `ellipse` bằng `drawImage` tại cùng chỗ, phép xoay giữ nguyên.
+
+## Tỷ lệ khung hình mobile và desktop
+
+Số đo thực tế bằng Chromium headless:
+
+| Viewport | Canvas CSS px | Tỷ lệ scale so với 1200x620 | Nhân vật cao trên màn hình |
+|---|---|---|---|
+| Desktop 1440 | 1226 x 634 | 1,02 | 114 px |
+| Phone 390 | 362 x 187 | 0,30 | 34 px |
+
+Kết luận: giữ khung logic cố định 1200x620, tỷ lệ 1,94:1, scale theo chiều rộng.
+
+Lý do:
+
+- `WIDTH` là độ dài mảng heightmap và tầm bắn tối đa. Đổi tỷ lệ theo thiết bị là đổi gameplay, bot và test phải viết lại theo từng tỷ lệ.
+- Game bắn tọa độ cần thấy cả hai bên cùng lúc. Tỷ lệ ngang rộng là đúng thể loại. Khung 16:9 hay 4:3 cắt bớt chiều ngang sẽ thu hẹp tầm bắn.
+
+Vấn đề thật trên mobile không phải tỷ lệ mà là canvas quá nhỏ, 187 px cao, và scoreboard overlay chiếm gần nửa chiều cao đó. Đề xuất, chưa làm:
+
+1. Trên `max-width: 760px`, đổi `.scoreboard` từ `position: absolute` sang static, đặt trên canvas. Canvas được nhìn trọn. Chỉ sửa CSS, không đụng JS.
+2. Text vẽ trên canvas phải cỡ lớn: số sát thương đang dùng 34 px logic, ra khoảng 10 px trên phone, vừa đọc được. Không vẽ text nhỏ hơn 30 px logic lên canvas.
+3. Desktop 2x DPR: backing store 1200 px hiển thị 1226 px, hơi mờ. Có thể đặt `canvas.width = 1200 * devicePixelRatio` và `ctx.scale(dpr, dpr)` một lần lúc khởi động, khoảng 4 dòng. Layer địa hình trong `sprites.js` cũng phải nhân theo, nên để sau khi có sprite đạn mới.
+4. Tuỳ chọn: gợi ý xoay ngang trên phone. Ở landscape 844 px, canvas rộng 800 px, scale 0,67, chơi thoải mái hơn nhiều. Chỉ là một dòng text trong `#status` khi `matchMedia("(orientation: portrait)")` và `max-width: 760px`.

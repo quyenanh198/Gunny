@@ -25,7 +25,7 @@ export function terrainLayer(image, original, current) {
   return layer;
 }
 
-export function drawCharacter(ctx, image, actor, facing, active) {
+export function drawCharacter(ctx, image, actor, facing, active, flash = 0) {
   const height = 112;
   const width = (height * image.width) / image.height;
   ctx.save();
@@ -36,6 +36,12 @@ export function drawCharacter(ctx, image, actor, facing, active) {
   ctx.fill();
   ctx.scale(facing, 1);
   ctx.drawImage(image, -width / 2, -height + 1, width, height);
+  // "lighter" only brightens the sprite's own pixels, so the flash needs no mask.
+  if (flash > 0) {
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = flash;
+    ctx.drawImage(image, -width / 2, -height + 1, width, height);
+  }
   ctx.restore();
   if (active) {
     ctx.fillStyle = "#ffe3a0";
