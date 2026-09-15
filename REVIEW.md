@@ -289,3 +289,29 @@ Mô hình gió, để trả lời câu hỏi "có tính gió chưa": gió là gi
 - Ý "thay đổi theo địa hình" mình hiểu là nhân vật nghiêng theo dốc như Gunny gốc. Cách hiểu khác là dải góc tự co lại khi đứng trong hố để không bắn vào vách. Cái này chưa làm, vì đứng trong hố phải bắn cao hơn là luật tự nhiên của thể loại. Nếu muốn, tính góc tối thiểu từ vách hố gần nhất và nâng `lo` tạm thời trong `applyAngleLimits()`.
 - Đạn bay khỏi khung: physics vốn không kết thúc khi `y < 0`, chỉ khi ra hai bên, xuống dưới hoặc quá 15 s. Test mới xác nhận: cà rốt 88 độ lực 100 lên cao hơn 500 px trên khung, rơi lại chạm đất sau khoảng 5 s, gió 30 dịch điểm rơi hơn 100 px. Bot `simulate()` giới hạn 1800 bước bằng 15 s nên vẫn bao được. Render thêm mũi tên và số độ cao tại y 120 đến 170 khi `projectile.y < 0`, đặt dưới scoreboard overlay của desktop vì lần đầu vẽ ở mép trên bị bảng điểm che.
 - Chú ý gameplay: cối hạt dẻ góc thấp nhất 45 cộng dốc 10 thành 55, lực 100 tầm bay dài nhất là 760² x sin(110°) / 377 khoảng 1.440 px, quá chiều rộng sân, nên cối vẫn với được mọi vị trí. Bong bóng 80 độ với `windScale 2` lệch tới 400 px, gần như không điều khiển được, cố ý.
+
+### 12. Những điểm còn phải cân nhắc
+
+Gameplay, theo mức ảnh hưởng:
+
+1. **Bot quá mạnh.** Brute-force gần như không trượt, jitter 3 độ và 5 lực. Cối 50 sát thương cộng rơi, 2 đến 3 phát là hết 100 HP. Nên có mức khó: jitter 3, 6, 10 độ; hoặc bot chỉ sim lưới thưa hơn ở mức dễ. Hoặc tăng HP lên 150 để trận dài hơn như Gunny gốc.
+2. **Trận có thể kéo dài vô hạn.** Hết giờ chỉ mất lượt, không bắt buộc bắn. Hai bên đứng yên thì không ai thua. Cần một trong: giới hạn lượt rồi xử thắng theo HP, gió tăng dần, hoặc hết giờ tự bắn với góc và lực hiện tại.
+3. **Đi bộ lên vách thẳng đứng.** `move()` đặt `y = terrain[x]` bất kể dốc, nên leo ra khỏi hố sâu 60 px không tốn gì. Giờ nhân vật đã nghiêng theo dốc nên leo vách trông sai. Đề xuất: chặn di chuyển khi `slopeAngle` ngược chiều lớn hơn 35 độ, hoặc trừ năng lượng gấp đôi khi lên dốc. Cần thêm test vì `move()` chưa có test.
+4. **Nghiêng cộng góc có thể bắn ngược hướng.** Dốc dương 30 cộng góc 85 thành 115, tức là chọn bắn phải nhưng đạn bay trái. Đúng vật lý nhưng gây bối rối. Nên hạ `MAX_TILT` xuống 20, hoặc cap góc thật không vượt 90 về phía đối diện.
+5. **Gió hiển thị số thô** `GIÓ ← 24` là px/s², người chơi không có cảm giác. Đổi sang thang 1 đến 10 hoặc số mũi tên, giữ giá trị thật trong logic.
+6. **Bot nhắm vào chân.** `botShot()` đo sai số tới `target.y` là chân, trong khi tâm sát thương là `y - BODY_OFFSET`. Chênh 20 px vẫn trong `HIT_RADIUS` nên chưa sai, nhưng nếu tăng `BODY_OFFSET` hoặc giảm `HIT_RADIUS` thì bot mất trúng trực tiếp.
+7. **Chỉ có một bản đồ**, `makeTerrain()` là hai hàm sin cố định. Thêm seed và vài profile địa hình sẽ đổi meta rõ rệt, nhưng test bot phải chạy trên nhiều map.
+
+Code và kiểm thử:
+
+8. **Trạng thái góc vẫn nằm trong DOM slider.** Đã có `settleAngle`, `applyAngleLimits`, `clampAngle` xoay quanh `$("angle")`. Chuyển góc vào `actors[0].angle` và chỉ sync ra slider sẽ gọn hơn và test được logic dead zone bằng unit test thay vì Playwright.
+9. **State machine trong `game.js` không có unit test.** Mọi luật lượt, timer, rơi, thắng thua chỉ được smoke test cover, mà smoke test lại flaky ở một check. Tách `update()` và trạng thái trận sang module thuần, không DOM, rồi test bằng `node --test`.
+10. **Không có seed cho ngẫu nhiên.** Gió, skin bot, jitter bot đều `Math.random`. Không tái hiện được bug. Một `random` có thể thay bằng seed sẽ giúp cả test lẫn replay.
+11. **`desc` của vũ khí lặp lại số trong `angles`.** Sửa `angles` mà quên `desc` là HUD sai. Nên tạo chuỗi góc từ `angles` khi build loadout.
+12. **`character()` còn 80 dòng fallback procedural** cộng fallback nền và đất. Càng thêm hiệu ứng, nhánh fallback càng tụt hậu: nghiêng, flash trúng đạn chưa có ở fallback. Quyết định giữ hay bỏ nên chốt sớm.
+13. **Chưa kiểm tra nhãn góc trên mobile.** `45° +10° dốc` dài hơn trước, ô label 16 px có thể xuống dòng ở 390 px. Cần chụp lại.
+
+Asset, chờ model thiết kế:
+
+14. Sprite đạn 32x32 và pose `fire`, `hurt`, `win` như mục 6. Khi có sprite đạn, mũi tên chỉ đạn trên khung nên dùng chính sprite đó thu nhỏ.
+15. Ranh giới đá đang là dải tô màu. Nếu texture mới có lớp đá rõ ở đúng 45% dưới thì bỏ dải tô, chỉ giữ vạch.
