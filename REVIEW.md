@@ -291,6 +291,15 @@ Mô hình gió, để trả lời câu hỏi "có tính gió chưa": gió là gi
 - Đạn bay khỏi khung: physics vốn không kết thúc khi `y < 0`, chỉ khi ra hai bên, xuống dưới hoặc quá 15 s. Test mới xác nhận: cà rốt 88 độ lực 100 lên cao hơn 500 px trên khung, rơi lại chạm đất sau khoảng 5 s, gió 30 dịch điểm rơi hơn 100 px. Bot `simulate()` giới hạn 1800 bước bằng 15 s nên vẫn bao được. Render thêm mũi tên và số độ cao tại y 120 đến 170 khi `projectile.y < 0`, đặt dưới scoreboard overlay của desktop vì lần đầu vẽ ở mép trên bị bảng điểm che.
 - Chú ý gameplay: cối hạt dẻ góc thấp nhất 45 cộng dốc 10 thành 55, lực 100 tầm bay dài nhất là 760² x sin(110°) / 377 khoảng 1.440 px, quá chiều rộng sân, nên cối vẫn với được mọi vị trí. Bong bóng 80 độ với `windScale 2` lệch tới 400 px, gần như không điều khiển được, cố ý.
 
+### 12a. Hợp nhất với PR #2 (animation sprite sheet)
+
+Trong lúc làm nhánh này, `main` nhận PR #2 từ session khác: `src/animation.js`, 4 sheet `assets/animations/*.webp` 4x4 khung (idle, walk, shoot, hurt), chớp nòng, vòng xung kích, `prefers-reduced-motion`, test và check trong smoke test. Đã merge `origin/main` vào nhánh và ghép:
+
+- Trạng thái animation nằm trên actor trong `Match` (`animation.js` thuần, không DOM): `shoot()` gọi `playAnimation("shoot")`, `explode()` gọi `"hurt"`, `move()` đặt `walking`, `update()` gọi `advanceAnimation` cùng bước cố định nên pause đóng băng animation, đúng như PR #2 yêu cầu.
+- Bỏ recoil dịch thân và nhún đi bộ procedural của mục 7, vì sheet có khung bắn và đi bộ, và `recoilOffset` của PR #2 đã giật vũ khí. Giữ flash trắng khi trúng đạn, số sát thương, rung màn hình. Rung tắt khi reduced-motion.
+- `drawCharacter` nhận `{ flash, sheet, reducedMotion }`; flash vẽ đè lên khung sheet đang hiển thị.
+- Mục 6 danh sách asset đặt hàng: pose `fire`, `hurt`, `win` không cần nữa vì sheet đã có bắn và trúng đạn. Còn thiếu: pose thắng, và 6 sprite đạn.
+
 ### 12. Những điểm còn phải cân nhắc
 
 Gameplay, theo mức ảnh hưởng:

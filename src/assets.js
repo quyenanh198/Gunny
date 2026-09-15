@@ -61,7 +61,16 @@ export const ENVIRONMENT = [
   { id: "background", file: "environment/sky-islands.webp" },
   { id: "ground", file: "environment/grass-earth.webp" },
 ];
-export const ASSET_LIST = [...CHARACTERS, ...WEAPONS, ...ENVIRONMENT];
+export const ANIMATION_ASSETS = CHARACTERS.map((character) => ({
+  id: `${character.id}-animation`,
+  file: `animations/${character.id}.webp`,
+}));
+export const ASSET_LIST = [
+  ...CHARACTERS,
+  ...WEAPONS,
+  ...ENVIRONMENT,
+  ...ANIMATION_ASSETS,
+];
 export const assetURL = (file) =>
   new URL(`../assets/${file}`, import.meta.url).href;
 

@@ -36,14 +36,15 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 - `src/match.js`: trạng thái và luật trận (lượt, timer, bắn, nổ, di chuyển, thắng thua, độ khó bot), không đụng DOM, có unit test. PRNG có seed để replay.
 - `src/game.js`: input, render Canvas và HUD; chỉ đọc và ghi vào `Match`.
 - `style.css`: giao diện desktop/mobile và bảng chọn trang bị.
-- `src/assets.js`: danh mục 12 asset và cơ chế tải có fallback.
+- `src/assets.js`: danh mục 16 asset và cơ chế tải có fallback.
+- `src/animation.js`: trạng thái, thời lượng khung hình và recoil độc lập với vật lý.
 - `src/sprites.js`: vẽ sprite, lật hướng và cắt texture theo địa hình.
 - `assets/`: 4 sprite nhân vật, 6 sprite vũ khí, 2 ảnh môi trường; xem `assets/README.md`.
 - `tests/physics.test.js`: đối xứng quỹ đạo, gió, phá địa hình, sát thương, độ chính xác bot.
 
-## Phạm vi v0.2
+## Phạm vi v0.3
 
-Đấu tập 1v1 với bot, một bản đồ, 4 nhân vật và 6 diện mạo vũ khí có thể chọn. Sprite PNG riêng, background và texture sân đấu WebP. Các vũ khí cùng chỉ số. Sprite hiện là tư thế đứng tĩnh, chưa có chuỗi khung hình animation. Chưa có PvP online, tài khoản, âm thanh, trang bị hay nâng cấp. Địa hình là heightmap nên có hố nhưng chưa có hang hoặc phần đất nhô độc lập. Không sử dụng mã nguồn, hình ảnh hoặc âm thanh của Gunny gốc.
+Đấu tập 1v1 với bot 3 mức khó, một bản đồ, 4 nhân vật và 6 vũ khí khác quỹ đạo, dải góc, hình hố và sát thương. Địa hình có lớp đá, sát thương rơi, di chuyển tốn năng lượng theo dốc, nhân vật nghiêng theo dốc. Tối đa 30 lượt. Sprite PNG riêng, background và texture sân đấu WebP. Mỗi nhân vật có 16 khung hình: đứng chờ, đi bộ, bắn và trúng đạn. Vũ khí có recoil/chớp nòng; vụ nổ có vòng xung kích. Animation dừng cùng trận và hỗ trợ prefers-reduced-motion. Chưa có PvP online, tài khoản, âm thanh, trang bị hay nâng cấp. Địa hình là heightmap nên có hố nhưng chưa có hang hoặc phần đất nhô độc lập. Không sử dụng mã nguồn, hình ảnh hoặc âm thanh của Gunny gốc.
 
 ## Kiểm tra giao diện (tùy chọn)
 

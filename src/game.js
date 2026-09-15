@@ -1,6 +1,12 @@
 import { WIDTH, HEIGHT, DT, step, collides, ROCK_Y } from "./physics.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
-import { terrainLayer, drawCharacter, drawWeapon } from "./sprites.js";
+import {
+  terrainLayer,
+  drawCharacter,
+  drawWeapon,
+  drawMuzzle,
+  drawBlast,
+} from "./sprites.js";
 import { Match, MAX_ROUNDS, DIFFICULTIES, ammoOf } from "./match.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("game"),
@@ -12,6 +18,12 @@ let images = new Map(),
   last = 0,
   accumulator = 0,
   paused = false;
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+let reducedMotion = motionPreference.matches;
+motionPreference.addEventListener(
+  "change",
+  (event) => (reducedMotion = event.matches),
+);
 function refreshGround() {
   groundLayer = images.has("ground")
     ? terrainLayer(images.get("ground"), m.originalTerrain, m.terrain)
@@ -66,18 +78,23 @@ function path(points, color) {
 function character(a, i) {
   const sprite = images.get(a.skin),
     active = m.turn === i && m.phase !== "over";
-  // Recoil pushes away from the aim direction; walking bobs the sprite.
-  const recoil = (a.fire / 0.18) * 8,
-    dx = -Math.cos((a.angle * Math.PI) / 180) * recoil,
-    dy = a.moving > 0 ? -Math.abs(Math.sin(a.walk * 14)) * 4 : 0;
   ctx.save();
-  ctx.translate(dx, dy);
   // Stand perpendicular to the slope; the weapon inherits the tilt, matching launch().
   ctx.translate(a.x, a.y);
   ctx.rotate((-m.tiltOf(a) * Math.PI) / 180);
   ctx.translate(-a.x, -a.y);
   if (sprite) {
-    drawCharacter(ctx, sprite, a, a.angle > 90 ? -1 : 1, active, a.hurt / 0.3);
+    const facing =
+      a.animation.state === "walk"
+        ? a.animation.moveDirection
+        : a.angle > 90
+          ? -1
+          : 1;
+    drawCharacter(ctx, sprite, a, facing, active, {
+      flash: a.hurt / 0.3,
+      sheet: images.get(`${a.skin}-animation`),
+      reducedMotion,
+    });
   } else {
     // Minimal stand-in when the sprite failed to load.
     ellipse(a.x, a.y, 25, 5, "#183a3e35");
@@ -85,13 +102,14 @@ function character(a, i) {
     ellipse(a.x, a.y - 88, 24, 24, "#fff0d5");
     if (active) path([[a.x - 7, a.y - 125], [a.x + 7, a.y - 125], [a.x, a.y - 116]], "#ffe3a0");
   }
-  drawWeapon(ctx, images.get(a.weapon), a, a.angle);
+  drawWeapon(ctx, images.get(a.weapon), a, a.angle, reducedMotion);
+  drawMuzzle(ctx, a, a.angle, reducedMotion);
   ctx.restore();
 }
 function render() {
   const { actors, turn, phase, projectile, trail } = m;
   ctx.save();
-  if (m.shake > 0) {
+  if (m.shake > 0 && !reducedMotion) {
     const s = (m.shake / 0.3) * 6;
     ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
   }
@@ -160,6 +178,7 @@ function render() {
       ctx.fillText(`${Math.round(-projectile.y)} px`, x, 168);
     }
   }
+  m.blasts.forEach((blast) => drawBlast(ctx, blast, reducedMotion));
   m.particles.forEach((p) => {
     ctx.globalAlpha = Math.max(0, p.life / 0.7);
     ellipse(p.x, p.y, 5, 5, p.color);

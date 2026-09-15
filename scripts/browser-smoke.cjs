@@ -25,6 +25,44 @@ const assert = require("node:assert/strict");
     );
     assert.match(await page.locator("#assetStatus").innerText(), /4 nhân vật/);
     assert.equal(await page.locator(".loadout button").count(), 10);
+    // Every character sheet contains four distinct frames in all four rows.
+    assert.equal(
+      await page.evaluate(async () => {
+        const { ANIMATION_ASSETS, assetURL } = await import("./src/assets.js");
+        for (const asset of ANIMATION_ASSETS) {
+          const image = new Image();
+          image.src = assetURL(asset.file);
+          await image.decode();
+          if (image.width !== 768 || image.height !== 768) return false;
+          const c = document.createElement("canvas");
+          c.width = c.height = 192;
+          const ctx = c.getContext("2d");
+          for (let row = 0; row < 4; row++) {
+            const frames = new Set();
+            for (let column = 0; column < 4; column++) {
+              ctx.clearRect(0, 0, 192, 192);
+              ctx.drawImage(
+                image,
+                column * 192,
+                row * 192,
+                192,
+                192,
+                0,
+                0,
+                192,
+                192,
+              );
+              if (ctx.getImageData(0, 0, 1, 1).data[3] !== 0) return false;
+              frames.add(c.toDataURL());
+            }
+            if (frames.size !== 4) return false;
+          }
+        }
+        return true;
+      }),
+      true,
+    );
+
     for (const id of ["mochi", "hat-de", "bzz", "nemu"]) {
       await page.locator(`[data-id="${id}"]`).click();
       assert.equal(
@@ -49,6 +87,7 @@ const assert = require("node:assert/strict");
         path: `${process.env.SCREENSHOT_DIR}/gunny-desktop.png`,
         fullPage: true,
       });
+    console.log("Assets and selections passed");
     // Terrain cache removes pixels above the live heightmap after a blast.
     assert.equal(
       await page.evaluate(async () => {
@@ -84,10 +123,19 @@ const assert = require("node:assert/strict");
       { timeout: 15000 },
     );
     await page.locator("#restart").click();
+    console.log("Turns passed");
     await page.locator("#help").click();
     const timer = await page.locator("#timer").innerText();
+    const pausedImage = await page
+      .locator("#game")
+      .evaluate((canvas) => canvas.toDataURL());
     await page.waitForTimeout(1100);
     assert.equal(await page.locator("#timer").innerText(), timer);
+    assert.ok(
+      (await page.locator("#game").evaluate((canvas) => canvas.toDataURL())) ===
+        pausedImage,
+      "paused canvas must remain still",
+    );
     await page.locator("#closeHelp").click();
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(
@@ -101,6 +149,18 @@ const assert = require("node:assert/strict");
         path: `${process.env.SCREENSHOT_DIR}/gunny-mobile.png`,
         fullPage: true,
       });
+    console.log("Pause and mobile passed");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.waitForTimeout(50);
+    const still = await page
+      .locator("#game")
+      .evaluate((canvas) => canvas.toDataURL());
+    await page.waitForTimeout(300);
+    assert.ok(
+      (await page.locator("#game").evaluate((canvas) => canvas.toDataURL())) ===
+        still,
+      "reduced-motion canvas must remain still",
+    );
     assert.deepEqual(errors, []);
     // Failed image requests fall back to playable procedural artwork.
     // A second page can start hidden, which pauses the game and throttles
@@ -118,7 +178,7 @@ const assert = require("node:assert/strict");
     );
     await fallback.close();
     console.log(
-      "PASS: 12 assets, 10 selections, restart, crater pixels, player/bot turns, pause, mobile layout, asset fallback.",
+      "PASS: 16 assets, 64 animation frames, 10 selections, restart, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
     );
   } finally {
     await browser.close();

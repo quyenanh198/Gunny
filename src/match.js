@@ -20,6 +20,7 @@ import {
   ENERGY,
 } from "./physics.js";
 import { CHARACTERS, WEAPONS } from "./assets.js";
+import { createAnimation, playAnimation, advanceAnimation } from "./animation.js";
 
 export const MAX_ROUNDS = 30;
 export const TURN_TIME = 25;
@@ -67,7 +68,9 @@ export class Match {
     ];
     for (const a of this.actors) {
       a.y = this.terrain[Math.floor(a.x)];
-      a.fire = a.hurt = a.walk = a.moving = 0;
+      a.hurt = 0;
+      a.walking = false;
+      a.animation = createAnimation();
     }
     this.turn = 0;
     this.round = 1;
@@ -80,6 +83,7 @@ export class Match {
     this.charging = false;
     this.wait = 0;
     this.particles = [];
+    this.blasts = [];
     this.trail = [];
     this.popups = [];
     this.shake = 0;
@@ -110,6 +114,7 @@ export class Match {
       this.character = character;
       a.skin = character;
       a.name = CHARACTERS.find((c) => c.id === character).name;
+      a.animation = createAnimation();
     }
     if (weapon) {
       this.weapon = weapon;
@@ -142,7 +147,7 @@ export class Match {
       ammo = ammoOf(actor);
     angle = clampAngle(angle, ammo.angles);
     actor.angle = angle;
-    actor.fire = 0.18;
+    playAnimation(actor.animation, "shoot");
     this.charging = false;
     this.projectile = launch(actor, launchAngle(angle, this.tiltOf(actor)), power, ammo);
     this.trail = [];
@@ -155,6 +160,7 @@ export class Match {
     return launch(a, launchAngle(a.angle, this.tiltOf(a)), power, ammoOf(a));
   }
   explode(p) {
+    this.blasts.push({ x: p.x, y: p.y, age: 0 });
     crater(this.terrain, p.x, p.y, p.ammo.craterWidth, p.ammo.craterDepth);
     this.terrainDirty = true;
     for (const a of this.actors) {
@@ -164,6 +170,7 @@ export class Match {
       a.y = floor;
       if (hit > 0) {
         a.hurt = 0.3;
+        playAnimation(a.animation, "hurt");
         this.popups.push({ x: a.x, y: a.y - 130, text: `-${hit}`, life: 1 });
       }
     }
@@ -194,10 +201,10 @@ export class Match {
       x = Math.max(25, Math.min(WIDTH - 26, a.x + dir * distance));
     if (Math.abs(x - this.actors[1].x) < 45) return;
     this.energy -= Math.abs(x - a.x) * cost;
+    a.walking = Math.abs(x - a.x) > 0.001;
+    if (a.walking) a.animation.moveDirection = dir;
     a.x = x;
     a.y = this.terrain[Math.floor(x)];
-    a.walk += dt;
-    a.moving = 0.1;
   }
   nextTurn() {
     if (this.round >= MAX_ROUNDS) {
@@ -241,6 +248,9 @@ export class Match {
     return true;
   }
   update(dt) {
+    for (const a of this.actors) a.walking = false;
+    for (const b of this.blasts) b.age += dt;
+    this.blasts = this.blasts.filter((b) => b.age < 0.55);
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -251,11 +261,13 @@ export class Match {
     for (const p of this.popups) p.life -= dt;
     this.popups = this.popups.filter((p) => p.life > 0);
     this.shake = Math.max(0, this.shake - dt);
-    for (const a of this.actors) {
-      a.fire = Math.max(0, a.fire - dt);
-      a.hurt = Math.max(0, a.hurt - dt);
-      a.moving = Math.max(0, a.moving - dt);
-    }
+    for (const a of this.actors) a.hurt = Math.max(0, a.hurt - dt);
+    this.tick(dt);
+    // Animation is visual only; it advances on the same fixed step so pause freezes it.
+    for (const a of this.actors)
+      advanceAnimation(a.animation, dt, { moving: a.walking, dead: a.hp <= 0 });
+  }
+  tick(dt) {
     if (this.phase === "aim") {
       this.time = Math.max(0, this.time - dt);
       if (this.time === 0) {
