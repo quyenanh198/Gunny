@@ -13,6 +13,8 @@ npm test
 npm run check
 ```
 
+Smoke test trình duyệt: cài Playwright rồi chạy `BROWSER_EXECUTABLE=/path/to/chromium node scripts/browser-smoke.cjs` với server dev đang chạy.
+
 Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pages hoặc Nginx). Không có bước build, đường dẫn tương đối hỗ trợ subdirectory. Font Google là tùy chọn, có font hệ thống dự phòng.
 
 ## Cách chơi
@@ -20,6 +22,8 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 - A/D hoặc nút trái/phải: di chuyển. Mỗi lượt có 100 năng lượng, đi ngang hoặc xuống dốc tốn 1 mỗi pixel, lên dốc tốn thêm 2 lần độ dốc (tan), dốc quá 45° không leo được. Đứng trong hố sâu thì phải bắn ra chứ không trèo được.
 - ↑/↓ hoặc thanh trượt: góc 10–170°. 45° hướng phải, 135° hướng trái. Mỗi vũ khí có dải góc riêng (cối hạt dẻ chỉ 45–85°); kéo vào vùng cấm quanh 90° sẽ nhảy sang hướng ngược lại. Đứng trên dốc thì góc thật cộng thêm độ dốc (tối đa 20°), HUD hiển thị phần cộng thêm; góc thật không bao giờ vượt qua 90° sang hướng ngược lại.
 - Giữ SPACE hoặc nút BẮN để tăng lực, thả để bắn. Lực tối đa được giữ ở 100%.
+- Độ khó bot chọn trong bảng chuẩn bị: Dễ, Vừa, Khó, khác nhau ở độ lệch ngắm và mật độ tìm kiếm. Áp dụng từ lượt bot kế tiếp.
+- Thêm `?seed=123` vào URL để trận lặp lại y hệt (gió, skin bot, độ lệch của bot), tiện tái hiện lỗi.
 - Mỗi lượt 25 giây, hết giờ mất lượt. Tối đa 30 lượt, sau đó ai nhiều máu hơn thắng, bằng nhau thì hòa. Bot tự ngắm theo địa hình và gió, có độ lệch nhẹ.
 - Bắn góc cao đạn bay khỏi khung hình; một mũi tên ở mép trên chỉ vị trí và độ cao của đạn.
 - Đạn chịu trọng lực và gió; vụ nổ gây sát thương theo khoảng cách và khoét địa hình. Nổ trong 24 pixel quanh thân là trúng trực tiếp, sát thương tối đa; xa hơn giảm dần tới 0. Mỗi vũ khí có trọng lực, độ bám gió, bán kính hố và sát thương riêng.
@@ -29,7 +33,8 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 ## Cấu trúc
 
 - `src/physics.js`: vật lý bước cố định 120 Hz, địa hình dạng heightmap, sát thương và tìm góc cho bot.
-- `src/game.js`: trạng thái trận, input, render Canvas; HUD là HTML dễ tương tác bằng bàn phím.
+- `src/match.js`: trạng thái và luật trận (lượt, timer, bắn, nổ, di chuyển, thắng thua, độ khó bot), không đụng DOM, có unit test. PRNG có seed để replay.
+- `src/game.js`: input, render Canvas và HUD; chỉ đọc và ghi vào `Match`.
 - `style.css`: giao diện desktop/mobile và bảng chọn trang bị.
 - `src/assets.js`: danh mục 12 asset và cơ chế tải có fallback.
 - `src/sprites.js`: vẽ sprite, lật hướng và cắt texture theo địa hình.

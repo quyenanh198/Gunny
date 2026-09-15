@@ -103,13 +103,19 @@ const assert = require("node:assert/strict");
       });
     assert.deepEqual(errors, []);
     // Failed image requests fall back to playable procedural artwork.
+    // A second page can start hidden, which pauses the game and throttles
+    // requestAnimationFrame, so the HUD only enables once it is in front.
     const fallback = await browser.newPage();
     await fallback.route("**/assets/**", (route) => route.abort());
     await fallback.goto(process.env.GAME_URL || "http://127.0.0.1:5173");
+    await fallback.bringToFront();
     await fallback.waitForFunction(() =>
       document.querySelector("#assetStatus").textContent.includes("dự phòng"),
     );
-    assert.equal(await fallback.locator("#fire").isEnabled(), true);
+    await fallback.waitForFunction(
+      () => !document.querySelector("#fire").disabled,
+      { timeout: 5000 },
+    );
     await fallback.close();
     console.log(
       "PASS: 12 assets, 10 selections, restart, crater pixels, player/bot turns, pause, mobile layout, asset fallback.",

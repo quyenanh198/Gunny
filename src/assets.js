@@ -11,7 +11,7 @@ export const WEAPONS = [
   {
     id: "carrot",
     name: "Pháo cà rốt",
-    desc: "Xuyên sâu · Góc 10-75",
+    desc: "Xuyên sâu",
     file: "weapons/carrot.png",
     color: "#ffac59",
     ammo: { gravityScale: 1, windScale: 1, craterWidth: 34, craterDepth: 62, damageMax: 42, damageRadius: 95, angles: [10, 75] },
@@ -19,7 +19,7 @@ export const WEAPONS = [
   {
     id: "acorn",
     name: "Cối hạt dẻ",
-    desc: "Cối · Nổ rộng · Góc 45-85",
+    desc: "Cối · Nổ rộng",
     file: "weapons/acorn.png",
     color: "#ccaa78",
     ammo: { gravityScale: 1.3, windScale: 0.5, craterWidth: 72, craterDepth: 44, damageMax: 50, damageRadius: 85, angles: [45, 85] },
@@ -27,7 +27,7 @@ export const WEAPONS = [
   {
     id: "honey",
     name: "Súng mật ong",
-    desc: "Nổ rộng · Nhẹ đòn · Góc 15-70",
+    desc: "Nổ rộng · Nhẹ đòn",
     file: "weapons/honey.png",
     color: "#ffda62",
     ammo: { gravityScale: 1, windScale: 1, craterWidth: 26, craterDepth: 18, damageMax: 30, damageRadius: 110, angles: [15, 70] },
@@ -35,7 +35,7 @@ export const WEAPONS = [
   {
     id: "bubble",
     name: "Súng bong bóng",
-    desc: "Bay xa · Theo gió · Góc 20-80",
+    desc: "Bay xa · Theo gió",
     file: "weapons/bubble.png",
     color: "#edb5ff",
     ammo: { gravityScale: 0.6, windScale: 2, craterWidth: 22, craterDepth: 14, damageMax: 28, damageRadius: 110, angles: [20, 80] },
@@ -43,7 +43,7 @@ export const WEAPONS = [
   {
     id: "fish",
     name: "Pháo cá nước",
-    desc: "Xói đất rộng · Góc 10-60",
+    desc: "Xói đất rộng",
     file: "weapons/fish.png",
     color: "#88ddff",
     ammo: { gravityScale: 1, windScale: 1.2, craterWidth: 58, craterDepth: 22, damageMax: 25, damageRadius: 120, angles: [10, 60] },
@@ -51,7 +51,7 @@ export const WEAPONS = [
   {
     id: "star",
     name: "Ná sao",
-    desc: "Nhẹ · Chính xác · Góc 10-85",
+    desc: "Nhẹ · Chính xác",
     file: "weapons/star.png",
     color: "#fff08e",
     ammo: { gravityScale: 0.9, windScale: 1, craterWidth: 26, craterDepth: 32, damageMax: 36, damageRadius: 90, angles: [10, 85] },

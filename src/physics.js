@@ -16,6 +16,10 @@ export function moveCost(terrain,x,dir){const up=groundSlope(terrain,x)*dir;if(u
 export function launchAngle(aim,tilt){const a=aim+tilt;return aim<=90?Math.min(89,a):Math.max(91,a);}
 // Slider angle (10..170, 90 straight up) clamped to the weapon's elevation range on its own side.
 export function clampAngle(angle,[lo,hi]){const e=Math.min(hi,Math.max(lo,angle<=90?angle:180-angle));return angle<=90?e:180-e;}
+// Aim slider value after a change: clamped to [lo,180-lo]; the dead zone (hi,180-hi) jumps to the far edge in the direction of travel, which is how direction flips.
+export function settleAim(v,last,[lo,hi]){v=Math.max(lo,Math.min(180-lo,v));if(v>hi&&v<180-hi)v=v>last?180-hi:v<last?hi:v-hi<180-hi-v?hi:180-hi;return v;}
+// Bot search density and aim noise per difficulty.
+export const DEFAULT_SKILL={angleJitter:3,powerJitter:5,angleStep:3,powerStep:2};
 export function makeTerrain(){return Array.from({length:WIDTH},(_,x)=>440+24*Math.sin(x/140)+12*Math.sin(x/57));}
 export function launch(actor,angle,power,ammo=DEFAULT_AMMO){const r=angle*Math.PI/180,s=160+power*6;return{x:actor.x+Math.cos(r)*30,y:actor.y-30-Math.sin(r)*30,vx:Math.cos(r)*s,vy:-Math.sin(r)*s,age:0,ammo};}
 export function step(p,wind,dt=DT){p.vx+=wind*p.ammo.windScale*dt;p.vy+=GRAVITY*p.ammo.gravityScale*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.age+=dt;return p;}
@@ -26,4 +30,4 @@ export function fallDamage(drop){return drop>40?Math.round(drop/4):0;}
 export function damage(actor,x,y,ammo=DEFAULT_AMMO){const d=Math.hypot(actor.x-x,actor.y-BODY_OFFSET-y),t=Math.max(0,d-HIT_RADIUS)/(ammo.damageRadius-HIT_RADIUS);return Math.round(Math.max(0,ammo.damageMax*(1-t)));}
 export function simulate(actor,angle,power,wind,terrain,ammo=DEFAULT_AMMO){let p=launch(actor,angle,power,ammo);for(let i=0;i<1800;i++){step(p,wind);if(collides(p,terrain)||p.x<0||p.x>=WIDTH||p.y>HEIGHT)return p;}return p;}
 // Returns the aim angle before tilt; the caller adds the same tilt when launching.
-export function botShot(actor,target,wind,terrain,random=Math.random,ammo=DEFAULT_AMMO,tilt=0){const[lo,hi]=ammo.angles;let best={error:Infinity,angle:180-lo,power:60};for(let e=lo;e<=hi;e+=3)for(const angle of[e,180-e])for(let power=15;power<=100;power+=2){const p=simulate(actor,launchAngle(angle,tilt),power,wind,terrain,ammo),error=Math.hypot(p.x-target.x,p.y-target.y);if(error<best.error)best={error,angle,power};}return{angle:clampAngle(best.angle+(random()-.5)*3,ammo.angles),power:Math.max(1,Math.min(100,best.power+(random()-.5)*5))};}
+export function botShot(actor,target,wind,terrain,random=Math.random,ammo=DEFAULT_AMMO,tilt=0,skill=DEFAULT_SKILL){const[lo,hi]=ammo.angles;let best={error:Infinity,angle:180-lo,power:60};for(let e=lo;e<=hi;e+=skill.angleStep)for(const angle of[e,180-e])for(let power=15;power<=100;power+=skill.powerStep){const p=simulate(actor,launchAngle(angle,tilt),power,wind,terrain,ammo),error=Math.hypot(p.x-target.x,p.y-target.y);if(error<best.error)best={error,angle,power};}return{angle:clampAngle(best.angle+(random()-.5)*skill.angleJitter,ammo.angles),power:Math.max(1,Math.min(100,best.power+(random()-.5)*skill.powerJitter))};}

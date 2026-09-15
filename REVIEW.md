@@ -11,7 +11,8 @@ Vanilla JS, không build step, không backend. Bốn file nguồn, khoảng 840 
 | `src/physics.js` | Logic thuần: heightmap địa hình, đạn, crater, sát thương, bot AI. Không chạm DOM. Có unit test. |
 | `src/assets.js` | Manifest 12 asset và loader có timeout, fallback. |
 | `src/sprites.js` | Vẽ sprite nhân vật, vũ khí; cache layer địa hình. |
-| `src/game.js` | State machine trận đấu, input, render Canvas, HUD. File lớn nhất, gần 700 dòng. |
+| `src/match.js` | State machine trận đấu, thuần, không DOM. Có unit test. |
+| `src/game.js` | Input, render Canvas, HUD. Chỉ đọc và ghi vào `Match`. |
 
 Trạng thái kiểm tra: `npm test` 5/5 pass, `npm run check` pass.
 
@@ -78,7 +79,7 @@ Chưa fix, cần quyết định:
 4. **`move()` gọi `checkWinner()`** dù di chuyển không thể rơi khỏi nền, vì `y` luôn bằng `terrain[x]`. Vô hại, có thể bỏ.
 5. **Bot cố định skin `hat-de`**, cũng là lựa chọn của player. Chọn Hạt Dẻ thì hai bên trùng sprite. Khi asset mới về, cân nhắc bot chọn random skin khác player.
 6. **Smoke test Playwright không nằm trong `npm test`.** Chấp nhận được với repo static, nhưng nên ghi rõ trong README cách chạy.
-7. **Smoke test flaky ở check terrain cache**, dòng 112 của `scripts/browser-smoke.cjs`, assert `false !== true`. Có sẵn từ commit gốc `7706740`: chạy 4 lần trên commit đó fail 3. Chạy riêng đoạn `terrainLayer` 8 lần liên tiếp thì luôn đúng, kể cả với cờ swiftshader, nên nghi do readback canvas dưới GPU giả lập sau chuỗi click và screenshot trước đó. Chưa sửa. Nếu fail, chạy lại. Hướng sửa nếu cần: tách check này ra một page mới ngay sau `goto`, trước mọi tương tác.
+7. **Smoke test flaky.** Đã sửa. Chẩn đoán ban đầu sai: dòng lỗi trỏ vào check terrain cache vì đếm nhầm dòng, thực ra assert fail là `#fire` enabled trên trang fallback. Trang thứ hai mở nền bị `document.hidden`, game đặt `paused`, `requestAnimationFrame` bị throttle nên `sync()` không chạy và nút không bao giờ enable. Có sẵn từ commit gốc. Sửa trong `scripts/browser-smoke.cjs`: `bringToFront()` rồi `waitForFunction` tới khi nút enable. Chạy 4 lần liên tiếp đều PASS.
 
 ## Lưu ý khi thay asset mới
 
@@ -294,7 +295,7 @@ Mô hình gió, để trả lời câu hỏi "có tính gió chưa": gió là gi
 
 Gameplay, theo mức ảnh hưởng:
 
-1. **Bot quá mạnh.** Brute-force gần như không trượt, jitter 3 độ và 5 lực. Cối 50 sát thương cộng rơi, 2 đến 3 phát là hết 100 HP. Nên có mức khó: jitter 3, 6, 10 độ; hoặc bot chỉ sim lưới thưa hơn ở mức dễ. Hoặc tăng HP lên 150 để trận dài hơn như Gunny gốc.
+1. **Bot quá mạnh.** Đã làm: `DIFFICULTIES` trong `match.js`, chọn bằng `<select id="difficulty">` trong bảng chuẩn bị. Dễ: lệch 10 độ, 14 lực, lưới 6 độ x 4 lực. Vừa (mặc định): 5 độ, 8 lực. Khó: 2 độ, 3 lực. `botShot()` nhận `skill`. HP vẫn 100, xem lại sau khi chơi thử.
 2. **Trận có thể kéo dài vô hạn.** Đã làm: `MAX_ROUNDS = 30` trong `game.js`, `nextTurn()` kết thúc trận khi hết lượt, ai nhiều máu hơn thắng, bằng nhau hòa. HUD hiện `LƯỢT 03/30`. Hết giờ vẫn mất lượt như cũ.
 3. **Đi bộ lên vách thẳng đứng.** Đã làm: `ENERGY = 100` mỗi lượt. `moveCost(terrain, x, dir)` trong `physics.js` trả năng lượng mỗi pixel: 1 khi phẳng hoặc xuống dốc, `1 + 2 · tan(dốc)` khi lên dốc, `Infinity` khi dốc lên quá `MAX_CLIMB = 45` độ thì `move()` không đi. Dốc đo bằng `groundSlope()` không cap, cửa sổ 12 px. Hệ quả cố ý và đúng thể loại: hố cà rốt 34 x 62 và hố cối 72 x 44 có vách gần thẳng đứng ở mép, đứng dưới đáy thì đi được trong lòng hố nhưng không trèo ra, phải bắn từ trong hố. Hố mật ong, bong bóng nông thì trèo ra được. Kiểm chứng bằng script: đứng trong hố, đi phải 1 giây tốn 94 năng lượng, kẹt ở vách.
 4. **Nghiêng cộng góc có thể bắn ngược hướng.** Đã làm cả hai: `MAX_TILT` hạ xuống 20, và `launchAngle(aim, tilt)` giữ góc thật cùng phía với góc chọn, tối đa 89 khi bắn phải, tối thiểu 91 khi bắn trái. Dùng chung ở `shoot()`, đường ngắm và bot. Dốc xuống vẫn hạ góc thật xuống dưới góc chọn, kể cả âm, nghĩa là bắn góc thấp trên dốc xuống có thể nổ ngay chân mình. Cố ý, tự trừng phạt.
@@ -304,12 +305,12 @@ Gameplay, theo mức ảnh hưởng:
 
 Code và kiểm thử:
 
-8. **Trạng thái góc vẫn nằm trong DOM slider.** Đã có `settleAngle`, `applyAngleLimits`, `clampAngle` xoay quanh `$("angle")`. Chuyển góc vào `actors[0].angle` và chỉ sync ra slider sẽ gọn hơn và test được logic dead zone bằng unit test thay vì Playwright.
-9. **State machine trong `game.js` không có unit test.** Mọi luật lượt, timer, rơi, thắng thua chỉ được smoke test cover, mà smoke test lại flaky ở một check. Tách `update()` và trạng thái trận sang module thuần, không DOM, rồi test bằng `node --test`.
-10. **Không có seed cho ngẫu nhiên.** Gió, skin bot, jitter bot đều `Math.random`. Không tái hiện được bug. Một `random` có thể thay bằng seed sẽ giúp cả test lẫn replay.
-11. **`desc` của vũ khí lặp lại số trong `angles`.** Sửa `angles` mà quên `desc` là HUD sai. Nên tạo chuỗi góc từ `angles` khi build loadout.
-12. **`character()` còn 80 dòng fallback procedural** cộng fallback nền và đất. Càng thêm hiệu ứng, nhánh fallback càng tụt hậu: nghiêng, flash trúng đạn chưa có ở fallback. Quyết định giữ hay bỏ nên chốt sớm.
-13. **Chưa kiểm tra nhãn góc trên mobile.** `45° +10° dốc` dài hơn trước, ô label 16 px có thể xuống dòng ở 390 px. Cần chụp lại.
+8. **Trạng thái góc trong DOM.** Đã làm: góc nằm ở `actors[0].angle`, slider chỉ là view, `input` event gọi `match.setAim()`. Dead zone là `settleAim()` thuần trong `physics.js`, test trong `tests/match.test.js`.
+9. **State machine không có unit test.** Đã làm: `src/match.js` là class `Match` thuần, `game.js` còn khoảng 330 dòng chỉ input và render. `tests/match.test.js` cover: replay theo seed, hết giờ mất lượt, charge và bắn qua hai lượt, độ khó bot trong dải góc, hết lượt xử theo HP, rơi khỏi đảo, dead zone góc, di chuyển tốn năng lượng, đổi loadout đúng lúc. Tổng 27 test.
+10. **Không có seed.** Đã làm: `mulberry32(seed)` trong `match.js`, `?seed=123` trên URL. `reset()` gieo lại nên nút Trận mới cũng lặp lại y hệt. Particle và trail vẫn `Math.random` vì chỉ là hình.
+11. **`desc` lặp số góc.** Đã làm: `buildLoadout()` nối `· Góc lo-hi` từ `ammo.angles`.
+12. **Fallback procedural.** Đã chốt: rút xuống tối thiểu. Nền là gradient, đất là polygon với dải đá và viền cỏ, nhân vật là ba ellipse cộng vũ khí hình chữ nhật. Bỏ mây, cây, mặt, mũ, hoa. Vẫn chơi được khi mất ảnh, smoke test cover. Bớt khoảng 200 dòng.
+13. **Nhãn góc trên mobile.** Đã kiểm tra ở 390 px: phần dốc tách thành `<small>` 9 px, `white-space: nowrap`, cao 19 px, không xuống dòng, không tràn ngang.
 
 Asset, chờ model thiết kế:
 

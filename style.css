@@ -257,6 +257,20 @@ label {
 label b {
   font-size: 16px;
   color: #e4f4c4;
+  white-space: nowrap;
+}
+label b small {
+  font-size: 9px;
+  color: #aec49c;
+}
+.difficulty select {
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: #ffffff08;
+  border: 1px solid #ffffff25;
+  border-radius: 8px;
+  padding: 8px 12px;
 }
 label span {
   font-size: 9px;
