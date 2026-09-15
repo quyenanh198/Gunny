@@ -21,8 +21,8 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 - ↑/↓ hoặc thanh trượt: góc 10–170°. 45° hướng phải, 135° hướng trái.
 - Giữ SPACE hoặc nút BẮN để tăng lực, thả để bắn. Lực tối đa được giữ ở 100%.
 - Mỗi lượt 25 giây. Bot tự ngắm theo địa hình và gió, có độ lệch nhẹ.
-- Đạn chịu trọng lực và gió; vụ nổ gây sát thương theo khoảng cách và khoét địa hình. Mỗi vũ khí có trọng lực, độ bám gió, bán kính hố và sát thương riêng.
-- Từ độ sâu 540 trở xuống là lớp đá, đạn chỉ khoét được 40% so với đất. Đất dưới chân bị khoét sâu hơn 40 pixel thì mất thêm máu theo độ sâu. Hết máu hoặc rơi khỏi nền sân đấu sẽ thua. Nút Trận mới khởi tạo lại toàn bộ trận.
+- Đạn chịu trọng lực và gió; vụ nổ gây sát thương theo khoảng cách và khoét địa hình. Nổ trong 24 pixel quanh thân là trúng trực tiếp, sát thương tối đa; xa hơn giảm dần tới 0. Mỗi vũ khí có trọng lực, độ bám gió, bán kính hố và sát thương riêng.
+- Hố đạn là nửa elip, rộng và sâu tùy vũ khí: cà rốt xuyên sâu, hạt dẻ nổ rộng. Từ độ sâu 540 trở xuống là lớp đá (dải tối), đạn chỉ khoét được 40% so với đất. Đất dưới chân bị khoét sâu hơn 40 pixel thì mất thêm máu theo độ sâu. Hết máu hoặc rơi khỏi nền sân đấu sẽ thua. Nút Trận mới khởi tạo lại toàn bộ trận.
 - Hướng dẫn hoặc tab ẩn tạm dừng trận. Mất focus hủy giữ phím để tránh bắn ngoài ý muốn.
 
 ## Cấu trúc

@@ -5,23 +5,24 @@ export const CHARACTERS = [
   { id: "nemu", name: "Nemu", file: "characters/nemu.png" },
 ];
 export const WEAPONS = [
-  // ammo: gravityScale and windScale change the arc, craterRadius the terrain
-  // hole, damageMax/damageRadius the blast. Bot uses the same numbers.
+  // ammo: gravityScale and windScale change the arc; craterWidth (half width)
+  // and craterDepth shape the hole; damageMax/damageRadius the blast. Bot uses
+  // the same numbers.
   {
     id: "carrot",
     name: "Pháo cà rốt",
-    desc: "Cân bằng",
+    desc: "Xuyên sâu",
     file: "weapons/carrot.png",
     color: "#ffac59",
-    ammo: { gravityScale: 1, windScale: 1, craterRadius: 48, damageMax: 42, damageRadius: 95 },
+    ammo: { gravityScale: 1, windScale: 1, craterWidth: 34, craterDepth: 62, damageMax: 42, damageRadius: 95 },
   },
   {
     id: "acorn",
     name: "Cối hạt dẻ",
-    desc: "Nặng · Phá đất · Ít gió",
+    desc: "Nặng · Nổ rộng · Ít gió",
     file: "weapons/acorn.png",
     color: "#ccaa78",
-    ammo: { gravityScale: 1.3, windScale: 0.5, craterRadius: 64, damageMax: 50, damageRadius: 85 },
+    ammo: { gravityScale: 1.3, windScale: 0.5, craterWidth: 72, craterDepth: 44, damageMax: 50, damageRadius: 85 },
   },
   {
     id: "honey",
@@ -29,7 +30,7 @@ export const WEAPONS = [
     desc: "Nổ rộng · Nhẹ đòn",
     file: "weapons/honey.png",
     color: "#ffda62",
-    ammo: { gravityScale: 1, windScale: 1, craterRadius: 24, damageMax: 30, damageRadius: 110 },
+    ammo: { gravityScale: 1, windScale: 1, craterWidth: 26, craterDepth: 18, damageMax: 30, damageRadius: 110 },
   },
   {
     id: "bubble",
@@ -37,7 +38,7 @@ export const WEAPONS = [
     desc: "Bay xa · Theo gió",
     file: "weapons/bubble.png",
     color: "#edb5ff",
-    ammo: { gravityScale: 0.6, windScale: 2, craterRadius: 20, damageMax: 28, damageRadius: 110 },
+    ammo: { gravityScale: 0.6, windScale: 2, craterWidth: 22, craterDepth: 14, damageMax: 28, damageRadius: 110 },
   },
   {
     id: "fish",
@@ -45,7 +46,7 @@ export const WEAPONS = [
     desc: "Xói đất rộng",
     file: "weapons/fish.png",
     color: "#88ddff",
-    ammo: { gravityScale: 1, windScale: 1.2, craterRadius: 40, damageMax: 25, damageRadius: 120 },
+    ammo: { gravityScale: 1, windScale: 1.2, craterWidth: 58, craterDepth: 22, damageMax: 25, damageRadius: 120 },
   },
   {
     id: "star",
@@ -53,7 +54,7 @@ export const WEAPONS = [
     desc: "Nhẹ · Chính xác",
     file: "weapons/star.png",
     color: "#fff08e",
-    ammo: { gravityScale: 0.9, windScale: 1, craterRadius: 30, damageMax: 36, damageRadius: 90 },
+    ammo: { gravityScale: 0.9, windScale: 1, craterWidth: 26, craterDepth: 32, damageMax: 36, damageRadius: 90 },
   },
 ];
 export const ENVIRONMENT = [

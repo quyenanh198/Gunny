@@ -11,6 +11,8 @@ import {
   fallDamage,
   botShot,
   BODY_OFFSET,
+  HIT_RADIUS,
+  ROCK_Y,
 } from "./physics.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
 import { terrainLayer, drawCharacter, drawWeapon } from "./sprites.js";
@@ -174,7 +176,7 @@ function release() {
   }
 }
 function explode(p) {
-  crater(terrain, p.x, p.y, p.ammo.craterRadius);
+  crater(terrain, p.x, p.y, p.ammo.craterWidth, p.ammo.craterDepth);
   refreshGround();
   actors.forEach((a) => {
     const floor = terrain[Math.floor(a.x)];
@@ -272,7 +274,8 @@ function update(dt) {
       actors.some(
         (a, i) =>
           i !== turn &&
-          Math.hypot(a.x - projectile.x, a.y - BODY_OFFSET - projectile.y) < 24,
+          Math.hypot(a.x - projectile.x, a.y - BODY_OFFSET - projectile.y) <
+            HIT_RADIUS,
       )
     )
       explode(projectile);
@@ -516,6 +519,10 @@ function render() {
     for (let row = 0; row < 5; row++)
       for (let x = 0; x < WIDTH; x += 51)
         ellipse(x + (row % 2) * 23, 473 + row * 36, 3, 2, "#d8b984");
+    ctx.fillStyle = "#4a4552";
+    ctx.fillRect(0, ROCK_Y, WIDTH, HEIGHT - ROCK_Y);
+    ctx.fillStyle = "#7a7284";
+    ctx.fillRect(0, ROCK_Y, WIDTH, 3);
     ctx.restore();
     ctx.beginPath();
     terrain.forEach((y, x) => (x ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));

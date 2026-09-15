@@ -1,4 +1,4 @@
-import { WIDTH, HEIGHT } from "./physics.js";
+import { WIDTH, HEIGHT, ROCK_Y } from "./physics.js";
 
 // Rebuild only after terrain changes, not for every animation frame.
 // Texture stays fixed to the original soil; craters reveal soil, not new grass.
@@ -22,6 +22,14 @@ export function terrainLayer(image, original, current) {
     );
     c.clearRect(x, 0, 1, current[x]);
   }
+  // Rock band. source-atop only tints pixels the texture already covers.
+  c.globalCompositeOperation = "source-atop";
+  c.fillStyle = "#2a2438";
+  c.globalAlpha = 0.42;
+  c.fillRect(0, ROCK_Y, WIDTH, HEIGHT - ROCK_Y);
+  c.globalAlpha = 0.7;
+  c.fillStyle = "#9a90a8";
+  c.fillRect(0, ROCK_Y, WIDTH, 3);
   return layer;
 }
 
