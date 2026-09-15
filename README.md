@@ -21,7 +21,7 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 - ↑/↓ hoặc thanh trượt: góc 10–170°. 45° hướng phải, 135° hướng trái.
 - Giữ SPACE hoặc nút BẮN để tăng lực, thả để bắn. Lực tối đa được giữ ở 100%.
 - Mỗi lượt 25 giây. Bot tự ngắm theo địa hình và gió, có độ lệch nhẹ.
-- Đạn chịu trọng lực và gió; vụ nổ gây sát thương theo khoảng cách và khoét địa hình.
+- Đạn chịu trọng lực và gió; vụ nổ gây sát thương theo khoảng cách và khoét địa hình. Mỗi vũ khí có trọng lực, độ bám gió, bán kính hố và sát thương riêng.
 - Hết máu hoặc rơi khỏi nền sân đấu sẽ thua. Nút Trận mới khởi tạo lại toàn bộ trận.
 - Hướng dẫn hoặc tab ẩn tạm dừng trận. Mất focus hủy giữ phím để tránh bắn ngoài ý muốn.
 

@@ -47,6 +47,7 @@ function refreshGround() {
     : null;
 }
 const randomWind = () => Math.round((Math.random() - 0.5) * 60);
+const ammoOf = (actor) => WEAPONS.find((w) => w.id === actor.weapon).ammo;
 function reset() {
   terrain = makeTerrain();
   originalTerrain = [...terrain];
@@ -153,7 +154,7 @@ function shoot(angle, power) {
   actors[turn].angle = angle;
   actors[turn].fire = 0.18;
   charging = false;
-  projectile = launch(actors[turn], angle, power);
+  projectile = launch(actors[turn], angle, power, ammoOf(actors[turn]));
   trail = [];
   phase = "flight";
   message(turn ? "Cẩn thận! Đạn đang tới…" : "Một phát bắn đầy hy vọng!");
@@ -172,10 +173,10 @@ function release() {
   }
 }
 function explode(p) {
-  crater(terrain, p.x, p.y);
+  crater(terrain, p.x, p.y, p.ammo.craterRadius);
   refreshGround();
   actors.forEach((a) => {
-    const hit = damage(a, p.x, p.y);
+    const hit = damage(a, p.x, p.y, p.ammo);
     a.hp = Math.max(0, a.hp - hit);
     a.y = terrain[Math.floor(a.x)];
     if (hit > 0) {
@@ -249,7 +250,14 @@ function update(dt) {
     } else {
       wait -= dt;
       if (wait <= 0) {
-        const shot = botShot(actors[1], actors[0], wind, terrain);
+        const shot = botShot(
+          actors[1],
+          actors[0],
+          wind,
+          terrain,
+          Math.random,
+          ammoOf(actors[1]),
+        );
         shoot(shot.angle, shot.power);
       }
     }
@@ -536,7 +544,12 @@ function render() {
   }
   actors.forEach(character);
   if (turn === 0 && phase === "aim") {
-    const p = launch(actors[0], +$("angle").value, charging ? charge : 50);
+    const p = launch(
+      actors[0],
+      +$("angle").value,
+      charging ? charge : 50,
+      ammoOf(actors[0]),
+    );
     for (let n = 0; n < 38; n++) {
       step(p, wind, 0.025);
       if (collides(p, terrain)) break;
@@ -699,6 +712,11 @@ function buildLoadout() {
       const name = document.createElement("span");
       name.textContent = entry.name;
       button.append(image, name);
+      if (entry.desc) {
+        const desc = document.createElement("small");
+        desc.textContent = entry.desc;
+        button.append(desc);
+      }
       button.onclick = () => {
         if (turn !== 0 || phase !== "aim" || paused || charging) return;
         if (kind === "character") {

@@ -208,7 +208,7 @@ Khuyến nghị: làm A trước, dùng B chỉ cho 3 pose `fire`, `hurt`, `win`
 | 1 | Bot random skin khác player. Đã làm | game.js | Thấp | Không |
 | 2 | Trail theo màu vũ khí, đạn xoay theo hướng bay. Đã làm | game.js | Thấp | Không |
 | 3 | Animation procedural: recoil, nhún khi đi, nháy khi trúng, rung màn hình, số sát thương. Đã làm | game.js, sprites.js | Thấp | Không |
-| 4 | Ammo params: gravityScale, windScale, craterRadius, damageMax, damageRadius; truyền qua launch, step, damage, botShot; đường ngắm dùng ammo | physics.js, assets.js, game.js, tests | Trung bình, cần rebalance và sửa test | Không |
+| 4 | Ammo params: gravityScale, windScale, craterRadius, damageMax, damageRadius; truyền qua launch, step, damage, botShot; đường ngắm dùng ammo. Đã làm | physics.js, assets.js, game.js, tests | Trung bình, cần rebalance và sửa test | Không |
 | 5 | Sát thương rơi và sàn đá | physics.js, game.js, tests | Thấp | Không |
 | 6 | Sprite đạn riêng | assets.js, game.js | Thấp | 6 PNG 32x32 |
 | 7 | Pose fire, hurt, win | assets.js, sprites.js, game.js | Thấp | 12 PNG |
@@ -250,7 +250,17 @@ Lý do:
 
 Vấn đề thật trên mobile không phải tỷ lệ mà là canvas quá nhỏ, 187 px cao, và scoreboard overlay chiếm gần nửa chiều cao đó. Đề xuất, chưa làm:
 
-1. Trên `max-width: 760px`, đổi `.scoreboard` từ `position: absolute` sang static, đặt trên canvas. Canvas được nhìn trọn. Chỉ sửa CSS, không đụng JS.
+1. Đã làm: trên `max-width: 760px`, `.scoreboard` là `position: static`, nằm trên canvas trong `.arena`. Canvas 362x187 được nhìn trọn. Chỉ sửa CSS.
 2. Text vẽ trên canvas phải cỡ lớn: số sát thương đang dùng 34 px logic, ra khoảng 10 px trên phone, vừa đọc được. Không vẽ text nhỏ hơn 30 px logic lên canvas.
 3. Desktop 2x DPR: backing store 1200 px hiển thị 1226 px, hơi mờ. Có thể đặt `canvas.width = 1200 * devicePixelRatio` và `ctx.scale(dpr, dpr)` một lần lúc khởi động, khoảng 4 dòng. Layer địa hình trong `sprites.js` cũng phải nhân theo, nên để sau khi có sprite đạn mới.
 4. Tuỳ chọn: gợi ý xoay ngang trên phone. Ở landscape 844 px, canvas rộng 800 px, scale 0,67, chơi thoải mái hơn nhiều. Chỉ là một dòng text trong `#status` khi `matchMedia("(orientation: portrait)")` và `max-width: 760px`.
+
+### 8. Ghi chú sau khi làm bước 4
+
+- `launch()` gắn `ammo` lên projectile, `step()` đọc `p.ammo.windScale` và `p.ammo.gravityScale`. Mọi nơi tạo đạn (bắn, bot, đường ngắm) đều đi qua `launch()` nên không có chỗ nào quên ammo.
+- `DEFAULT_AMMO` trong `physics.js` trùng số của cà rốt. Test cũ giữ nguyên nhờ tham số mặc định. Thêm 3 test: ammo đổi quỹ đạo theo gió và trọng lực, đổi sát thương, bot vẫn trúng với đạn nặng.
+- Số hiện tại trong `src/assets.js` chưa cân bằng bằng chơi thật. Chú ý: bong bóng `windScale: 2` với gió 30 lệch tới 270 px sau 3 s bay, gần bằng một phần tư sân. Cố ý khó ngắm. Nếu quá khó thì hạ về 1.5.
+- Bot vẫn cố định cối hạt dẻ (nặng, ít gió) nên brute-force chỉ chạy một loại đạn, chi phí không đổi.
+- Mật ong chưa có hiệu ứng dính, cá nước chưa có hố nông, sao chưa tách chùm. Ba cái này là bước 8, cần đổi state machine.
+
+Mô hình gió, để trả lời câu hỏi "có tính gió chưa": gió là gia tốc ngang không đổi, `vx += wind * windScale * dt`, `wind` từ -30 đến 30 px/s². Độ lệch ngang sau `t` giây bằng `0,5 * wind * windScale * t²`: gió 30, đạn thường bay 2 s lệch 60 px, bay 3 s lệch 135 px. Bot và đường ngắm dự đoán dùng đúng `step()` này nên đã bù gió.

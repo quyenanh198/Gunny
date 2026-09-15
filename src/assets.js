@@ -5,37 +5,56 @@ export const CHARACTERS = [
   { id: "nemu", name: "Nemu", file: "characters/nemu.png" },
 ];
 export const WEAPONS = [
+  // ammo: gravityScale and windScale change the arc, craterRadius the terrain
+  // hole, damageMax/damageRadius the blast. Bot uses the same numbers.
   {
     id: "carrot",
     name: "Pháo cà rốt",
+    desc: "Cân bằng",
     file: "weapons/carrot.png",
     color: "#ffac59",
+    ammo: { gravityScale: 1, windScale: 1, craterRadius: 48, damageMax: 42, damageRadius: 95 },
   },
   {
     id: "acorn",
     name: "Cối hạt dẻ",
+    desc: "Nặng · Phá đất · Ít gió",
     file: "weapons/acorn.png",
     color: "#ccaa78",
+    ammo: { gravityScale: 1.3, windScale: 0.5, craterRadius: 64, damageMax: 50, damageRadius: 85 },
   },
   {
     id: "honey",
     name: "Súng mật ong",
+    desc: "Nổ rộng · Nhẹ đòn",
     file: "weapons/honey.png",
     color: "#ffda62",
+    ammo: { gravityScale: 1, windScale: 1, craterRadius: 24, damageMax: 30, damageRadius: 110 },
   },
   {
     id: "bubble",
     name: "Súng bong bóng",
+    desc: "Bay xa · Theo gió",
     file: "weapons/bubble.png",
     color: "#edb5ff",
+    ammo: { gravityScale: 0.6, windScale: 2, craterRadius: 20, damageMax: 28, damageRadius: 110 },
   },
   {
     id: "fish",
     name: "Pháo cá nước",
+    desc: "Xói đất rộng",
     file: "weapons/fish.png",
     color: "#88ddff",
+    ammo: { gravityScale: 1, windScale: 1.2, craterRadius: 40, damageMax: 25, damageRadius: 120 },
   },
-  { id: "star", name: "Ná sao", file: "weapons/star.png", color: "#fff08e" },
+  {
+    id: "star",
+    name: "Ná sao",
+    desc: "Nhẹ · Chính xác",
+    file: "weapons/star.png",
+    color: "#fff08e",
+    ammo: { gravityScale: 0.9, windScale: 1, craterRadius: 30, damageMax: 36, damageRadius: 90 },
+  },
 ];
 export const ENVIRONMENT = [
   { id: "background", file: "environment/sky-islands.webp" },

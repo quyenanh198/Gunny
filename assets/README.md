@@ -7,7 +7,7 @@
 - `environment/sky-islands.webp`: opaque background layer.
 - `environment/grass-earth.webp`: grass/soil texture for destructible terrain.
 
-PNG sprites have a four-pixel transparent gutter. Runtime render uses feet at the actor anchor and mirrors sprites for left aim. These are static idle sprites, not frame-by-frame walk/fire animation sheets. Weapons are cosmetic variants with identical physics and damage.
+PNG sprites have a four-pixel transparent gutter. Runtime render uses feet at the actor anchor and mirrors sprites for left aim. These are static idle sprites, not frame-by-frame walk/fire animation sheets. Each weapon carries its own `ammo` parameters in `src/assets.js` (gravity, wind drift, crater radius, damage).
 
 `src/assets.js` is the runtime manifest and asset loader. Relative URLs support a hosted subdirectory. Image failure/timeout falls back to procedural artwork. The terrain texture is drawn against the original heightmap, then clipped against the live heightmap, so craters do not regrow grass.
 
