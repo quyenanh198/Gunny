@@ -13,6 +13,8 @@ import {
   BODY_OFFSET,
   HIT_RADIUS,
   ROCK_Y,
+  slopeAngle,
+  clampAngle,
 } from "./physics.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
 import { terrainLayer, drawCharacter, drawWeapon } from "./sprites.js";
@@ -51,6 +53,26 @@ function refreshGround() {
 }
 const randomWind = () => Math.round((Math.random() - 0.5) * 60);
 const ammoOf = (actor) => WEAPONS.find((w) => w.id === actor.weapon).ammo;
+const tiltOf = (actor) => slopeAngle(terrain, actor.x);
+// The slider runs 10..170 but each weapon has a dead zone around 90 it cannot
+// aim into. Entering it jumps to the other side, which is how direction flips.
+let lastAngle = 45;
+function settleAngle() {
+  const el = $("angle"),
+    v = +el.value,
+    [, hi] = ammoOf(actors[0]).angles;
+  if (v > hi && v < 180 - hi) el.value = v >= lastAngle ? 180 - hi : hi;
+  lastAngle = +el.value;
+}
+function applyAngleLimits() {
+  const el = $("angle"),
+    [lo] = ammoOf(actors[0]).angles;
+  el.min = lo;
+  el.max = 180 - lo;
+  $("tickMin").textContent = lo + "°";
+  $("tickMax").textContent = 180 - lo + "°";
+  settleAngle();
+}
 function reset() {
   terrain = makeTerrain();
   originalTerrain = [...terrain];
@@ -101,7 +123,11 @@ function sync() {
   $("timer").textContent = Math.ceil(time);
   $("wind").textContent = `GIÓ ${wind < 0 ? "←" : "→"} ${Math.abs(wind)}`;
   $("energy").textContent = `${Math.ceil(energy)} / 60`;
-  $("angleValue").textContent = Math.round(+$("angle").value) + "°";
+  const tilt = Math.round(tiltOf(actors[0]));
+  $("angleValue").textContent =
+    Math.round(+$("angle").value) +
+    "°" +
+    (tilt ? ` ${tilt > 0 ? "+" : ""}${tilt}° dốc` : "");
   $("powerValue").textContent = Math.round(charge) + "%";
   $("powerFill").style.width = charge + "%";
   const disabled = turn !== 0 || phase !== "aim" || paused;
@@ -154,10 +180,13 @@ function checkWinner() {
   return false;
 }
 function shoot(angle, power) {
-  actors[turn].angle = angle;
-  actors[turn].fire = 0.18;
+  const actor = actors[turn],
+    ammo = ammoOf(actor);
+  angle = clampAngle(angle, ammo.angles);
+  actor.angle = angle;
+  actor.fire = 0.18;
   charging = false;
-  projectile = launch(actors[turn], angle, power, ammoOf(actors[turn]));
+  projectile = launch(actor, angle + tiltOf(actor), power, ammo);
   trail = [];
   phase = "flight";
   message(turn ? "Cẩn thận! Đạn đang tới…" : "Một phát bắn đầy hy vọng!");
@@ -246,10 +275,9 @@ function update(dt) {
     if (turn === 0) {
       if (keys.has("left")) move(-1, dt);
       if (keys.has("right")) move(1, dt);
-      if (keys.has("up"))
-        $("angle").value = Math.min(170, +$("angle").value + 45 * dt);
-      if (keys.has("down"))
-        $("angle").value = Math.max(10, +$("angle").value - 45 * dt);
+      if (keys.has("up")) $("angle").value = +$("angle").value + 45 * dt;
+      if (keys.has("down")) $("angle").value = +$("angle").value - 45 * dt;
+      settleAngle();
       if (charging) charge = Math.min(100, charge + 45 * dt);
     } else {
       wait -= dt;
@@ -261,6 +289,7 @@ function update(dt) {
           terrain,
           Math.random,
           ammoOf(actors[1]),
+          tiltOf(actors[1]),
         );
         shoot(shot.angle, shot.power);
       }
@@ -345,6 +374,10 @@ function character(a, i) {
     dy = a.moving > 0 ? -Math.abs(Math.sin(a.walk * 14)) * 4 : 0;
   ctx.save();
   ctx.translate(dx, dy);
+  // Stand perpendicular to the slope; the weapon inherits the tilt, matching launch().
+  ctx.translate(a.x, a.y);
+  ctx.rotate((-tiltOf(a) * Math.PI) / 180);
+  ctx.translate(-a.x, -a.y);
   if (sprite) {
     drawCharacter(
       ctx,
@@ -555,7 +588,8 @@ function render() {
   if (turn === 0 && phase === "aim") {
     const p = launch(
       actors[0],
-      +$("angle").value,
+      clampAngle(+$("angle").value, ammoOf(actors[0]).angles) +
+        tiltOf(actors[0]),
       charging ? charge : 50,
       ammoOf(actors[0]),
     );
@@ -582,6 +616,25 @@ function render() {
     ellipse(0, 0, 10, 7, weaponColor);
     ellipse(-3, -2, 3, 2.5, "#fff0b7");
     ctx.restore();
+    if (projectile.y < 0) {
+      // Above the frame: marker below the scoreboard overlay plus height, so the shot stays trackable.
+      const x = Math.max(30, Math.min(WIDTH - 30, projectile.x));
+      path(
+        [
+          [x - 12, 140],
+          [x + 12, 140],
+          [x, 120],
+        ],
+        weaponColor,
+      );
+      ctx.font = "800 26px 'Be Vietnam Pro', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#3a2a1d";
+      ctx.strokeText(`${Math.round(-projectile.y)} px`, x, 168);
+      ctx.fillStyle = "#ffffffdd";
+      ctx.fillText(`${Math.round(-projectile.y)} px`, x, 168);
+    }
   }
   particles.forEach((p) => {
     ctx.globalAlpha = Math.max(0, p.life / 0.7);
@@ -698,6 +751,7 @@ function updateLoadout() {
     img.src = assetURL(CHARACTERS.find((c) => c.id === actor.skin).file);
     img.alt = actor.name;
   }
+  applyAngleLimits();
   document.querySelectorAll(".loadout button").forEach((button) => {
     const selected =
       button.dataset.kind === "character" ? selectedCharacter : selectedWeapon;
