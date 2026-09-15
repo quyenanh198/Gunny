@@ -9,6 +9,7 @@ import {
   crater,
   damage,
   botShot,
+  BODY_OFFSET,
 } from "./physics.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
 import { terrainLayer, drawCharacter, drawWeapon } from "./sprites.js";
@@ -117,7 +118,11 @@ function nextTurn() {
   charge = 0;
   charging = false;
   keys.clear();
-  message(turn ? "Hạt Dẻ đang ngắm…" : "Đến lượt bạn — ngắm và giữ để bắn!");
+  message(
+    turn
+      ? `${actors[1].name} đang ngắm…`
+      : "Đến lượt bạn — ngắm và giữ để bắn!",
+  );
 }
 function checkWinner() {
   actors.forEach((a) => {
@@ -131,7 +136,7 @@ function checkWinner() {
         ? "Hòa rồi! ↻ Thử một trận nữa?"
         : actors[1].hp <= 0
           ? `Chiến thắng! ${actors[0].name} làm được rồi! ✦`
-          : "Hạt Dẻ thắng! ↻ Thử lại nhé!",
+          : `${actors[1].name} thắng! ↻ Thử lại nhé!`,
     );
     return true;
   }
@@ -233,7 +238,7 @@ function update(dt) {
       actors.some(
         (a, i) =>
           i !== turn &&
-          Math.hypot(a.x - projectile.x, a.y - 25 - projectile.y) < 24,
+          Math.hypot(a.x - projectile.x, a.y - BODY_OFFSET - projectile.y) < 24,
       )
     )
       explode(projectile);
