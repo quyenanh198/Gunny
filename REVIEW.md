@@ -78,6 +78,7 @@ Chưa fix, cần quyết định:
 4. **`move()` gọi `checkWinner()`** dù di chuyển không thể rơi khỏi nền, vì `y` luôn bằng `terrain[x]`. Vô hại, có thể bỏ.
 5. **Bot cố định skin `hat-de`**, cũng là lựa chọn của player. Chọn Hạt Dẻ thì hai bên trùng sprite. Khi asset mới về, cân nhắc bot chọn random skin khác player.
 6. **Smoke test Playwright không nằm trong `npm test`.** Chấp nhận được với repo static, nhưng nên ghi rõ trong README cách chạy.
+7. **Smoke test flaky ở check terrain cache**, dòng 112 của `scripts/browser-smoke.cjs`, assert `false !== true`. Có sẵn từ commit gốc `7706740`: chạy 4 lần trên commit đó fail 3. Chạy riêng đoạn `terrainLayer` 8 lần liên tiếp thì luôn đúng, kể cả với cờ swiftshader, nên nghi do readback canvas dưới GPU giả lập sau chuỗi click và screenshot trước đó. Chưa sửa. Nếu fail, chạy lại. Hướng sửa nếu cần: tách check này ra một page mới ngay sau `goto`, trước mọi tương tác.
 
 ## Lưu ý khi thay asset mới
 
