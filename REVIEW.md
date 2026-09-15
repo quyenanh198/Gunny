@@ -209,7 +209,7 @@ Khuyến nghị: làm A trước, dùng B chỉ cho 3 pose `fire`, `hurt`, `win`
 | 2 | Trail theo màu vũ khí, đạn xoay theo hướng bay. Đã làm | game.js | Thấp | Không |
 | 3 | Animation procedural: recoil, nhún khi đi, nháy khi trúng, rung màn hình, số sát thương. Đã làm | game.js, sprites.js | Thấp | Không |
 | 4 | Ammo params: gravityScale, windScale, craterRadius, damageMax, damageRadius; truyền qua launch, step, damage, botShot; đường ngắm dùng ammo. Đã làm | physics.js, assets.js, game.js, tests | Trung bình, cần rebalance và sửa test | Không |
-| 5 | Sát thương rơi và sàn đá | physics.js, game.js, tests | Thấp | Không |
+| 5 | Sát thương rơi. Đã làm. Sàn đá bỏ, xem mục 9 | physics.js, game.js, tests | Thấp | Không |
 | 6 | Sprite đạn riêng | assets.js, game.js | Thấp | 6 PNG 32x32 |
 | 7 | Pose fire, hurt, win | assets.js, sprites.js, game.js | Thấp | 12 PNG |
 | 8 | Đạn dính, đạn chùm | physics.js, game.js | Cao, đổi state machine | Không |
@@ -264,3 +264,9 @@ Vấn đề thật trên mobile không phải tỷ lệ mà là canvas quá nh�
 - Mật ong chưa có hiệu ứng dính, cá nước chưa có hố nông, sao chưa tách chùm. Ba cái này là bước 8, cần đổi state machine.
 
 Mô hình gió, để trả lời câu hỏi "có tính gió chưa": gió là gia tốc ngang không đổi, `vx += wind * windScale * dt`, `wind` từ -30 đến 30 px/s². Độ lệch ngang sau `t` giây bằng `0,5 * wind * windScale * t²`: gió 30, đạn thường bay 2 s lệch 60 px, bay 3 s lệch 135 px. Bot và đường ngắm dự đoán dùng đúng `step()` này nên đã bù gió.
+
+### 9. Ghi chú sau khi làm bước 5
+
+- `fallDamage(drop)` trong `physics.js`: tụt quá 40 px thì mất `drop / 4` HP, làm tròn. Tụt 120 px mất 30. Chỉ tính trong `explode()`, so `a.y` trước nổ với mặt đất sau crater. Đi bộ xuống hố không mất máu vì `move()` cập nhật từng bước nhỏ.
+- Sát thương rơi cộng vào sát thương nổ, hiện chung một số popup.
+- Sàn đá không làm. Lý do: sàn đá tại y 560 chặn crater thì actor không bao giờ rơi khỏi nền, mà "rơi khỏi đảo sẽ thua" đang là luật trong README, hướng dẫn và `checkWinner()`. Hai cơ chế loại trừ nhau. Chọn giữ luật rơi vì đào chân đối thủ là chiến thuật đặc trưng của thể loại, và bán kính hố đã cap 64 trong dữ liệu vũ khí. Muốn đổi sang sàn đá thì bỏ điều kiện `a.y > HEIGHT - 20` trong `checkWinner()`, thêm `Math.min(BEDROCK, ...)` trong `crater()`, sửa README và hướng dẫn.

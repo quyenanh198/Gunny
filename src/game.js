@@ -8,6 +8,7 @@ import {
   collides,
   crater,
   damage,
+  fallDamage,
   botShot,
   BODY_OFFSET,
 } from "./physics.js";
@@ -176,9 +177,10 @@ function explode(p) {
   crater(terrain, p.x, p.y, p.ammo.craterRadius);
   refreshGround();
   actors.forEach((a) => {
-    const hit = damage(a, p.x, p.y, p.ammo);
+    const floor = terrain[Math.floor(a.x)];
+    const hit = damage(a, p.x, p.y, p.ammo) + fallDamage(floor - a.y);
     a.hp = Math.max(0, a.hp - hit);
-    a.y = terrain[Math.floor(a.x)];
+    a.y = floor;
     if (hit > 0) {
       a.hurt = 0.3;
       popups.push({ x: a.x, y: a.y - 130, text: `-${hit}`, life: 1 });

@@ -5,6 +5,7 @@ export function launch(actor,angle,power,ammo=DEFAULT_AMMO){const r=angle*Math.P
 export function step(p,wind,dt=DT){p.vx+=wind*p.ammo.windScale*dt;p.vy+=GRAVITY*p.ammo.gravityScale*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.age+=dt;return p;}
 export function collides(p,terrain){return p.x>=0&&p.x<WIDTH&&p.y>=terrain[Math.floor(p.x)];}
 export function crater(terrain,x,y,r=48){for(let i=Math.max(0,Math.floor(x-r));i<Math.min(WIDTH,x+r);i++){const depth=Math.sqrt(r*r-(i-x)**2);terrain[i]=Math.max(terrain[i],y+depth);}}
+export function fallDamage(drop){return drop>40?Math.round(drop/4):0;}
 export function damage(actor,x,y,ammo=DEFAULT_AMMO){return Math.round(Math.max(0,ammo.damageMax*(1-Math.hypot(actor.x-x,actor.y-BODY_OFFSET-y)/ammo.damageRadius)));}
 export function simulate(actor,angle,power,wind,terrain,ammo=DEFAULT_AMMO){let p=launch(actor,angle,power,ammo);for(let i=0;i<1800;i++){step(p,wind);if(collides(p,terrain)||p.x<0||p.x>=WIDTH||p.y>HEIGHT)return p;}return p;}
 export function botShot(actor,target,wind,terrain,random=Math.random,ammo=DEFAULT_AMMO){let best={error:Infinity,angle:135,power:60};for(let angle=25;angle<=155;angle+=3)for(let power=15;power<=100;power+=2){const p=simulate(actor,angle,power,wind,terrain,ammo),error=Math.hypot(p.x-target.x,p.y-target.y);if(error<best.error)best={error,angle,power};}return{angle:best.angle+(random()-.5)*3,power:Math.max(1,Math.min(100,best.power+(random()-.5)*5))};}
