@@ -140,7 +140,7 @@ export function damage(actor, x, y, ammo = DEFAULT_AMMO) { ... ammo.damageMax * 
 
 Tính hợp lý vật lý, gợi ý cho 6 vũ khí hiện có:
 
-| Vũ khí | Ý tưởng | gravityScale | windScale | craterRadius | damageMax | Ghi chú |
+| Vũ khí | Ý tưởng | gravityScale | windScale | craterRadius (đề xuất ban đầu, nay là craterWidth x craterDepth) | damageMax | Ghi chú |
 |---|---|---|---|---|---|---|
 | Cà rốt | Chuẩn | 1.0 | 1.0 | 48 | 42 | Giữ nguyên, làm mốc |
 | Hạt dẻ | Nặng, phá đất | 1.3 | 0.5 | 64 | 50 | Tầm ngắn, bot dễ đoán |
@@ -271,5 +271,11 @@ Mô hình gió, để trả lời câu hỏi "có tính gió chưa": gió là gi
 - `fallDamage(drop)` trong `physics.js`: tụt quá 40 px thì mất `drop / 4` HP, làm tròn. Tụt 120 px mất 30. Chỉ tính trong `explode()`, so `a.y` trước nổ với mặt đất sau crater. Đi bộ xuống hố không mất máu vì `move()` cập nhật từng bước nhỏ.
 - Sát thương rơi cộng vào sát thương nổ, hiện chung một số popup.
 - Lớp đá: từ `ROCK_Y = 540` trở xuống, `crater()` chỉ khoét `ROCK_SOFTNESS = 0.4` phần độ sâu. Đá không bất tử, chỉ lì hơn đất, nên luật "rơi khỏi đảo" vẫn còn nhưng khó hơn. Mặt đất ở 400 đến 476, đất dày 64 đến 140 px, ngưỡng rơi 600. Ví dụ cối hạt dẻ bán kính 64 bắn cùng một chỗ: 2 phát hết đất, thêm 3 phát trong đá mới rơi. Đạn nổ ngay trong đá thì hố chỉ sâu 40% bán kính.
-- Đá chỉ giảm sức phá địa hình, không giảm sát thương lên nhân vật. Chưa có hướng va chạm ảnh hưởng hình hố, crater vẫn là nửa hình tròn từ điểm nổ. Nếu muốn: dùng góc `atan2(vy, vx)` lúc nổ để lệch tâm hố theo hướng bay 10 đến 15 px, một dòng trong `explode()`.
-- Chưa vẽ ranh giới đá trên canvas. Texture `grass-earth.webp` đã có đá ở phần dưới nên nhìn tạm hợp lý. Nếu muốn rõ: vẽ một dải tối alpha thấp từ `ROCK_Y` xuống, clip theo địa hình, trong nhánh vẽ `groundLayer`.
+- Đá chỉ giảm sức phá địa hình, không giảm sát thương lên nhân vật. Hướng va chạm chưa ảnh hưởng hình hố. Nếu muốn: dùng `atan2(vy, vx)` lúc nổ để lệch tâm hố theo hướng bay 10 đến 15 px, một dòng trong `explode()`.
+
+### 10. Hố elip theo đạn, trúng trực tiếp, vẽ lớp đá
+
+- `crater(terrain, x, y, rx, ry)`: hố là nửa elip, `rx` nửa chiều rộng, `ry` độ sâu tại điểm nổ. Ammo đổi `craterRadius` thành `craterWidth` và `craterDepth`. Cà rốt 34 x 62 xuyên sâu, hạt dẻ 72 x 44 nổ rộng, cá nước 58 x 22 xói rộng nông, mật ong và bong bóng nhỏ. Bán kính đơn vẫn dùng được: `ry` mặc định bằng `rx`.
+- `damage()`: nổ trong `HIT_RADIUS = 24` px quanh tâm thân là trúng trực tiếp, sát thương tối đa. Xa hơn giảm tuyến tính về 0 tại `damageRadius`. Cùng hằng `HIT_RADIUS` dùng cho hit-test đạn trong `game.js`, nên đạn chạm người luôn là trúng trực tiếp. Trước đây giảm tuyến tính từ tâm, chạm người vẫn mất vài điểm.
+- Ranh giới đá: dải tối alpha 0,42 từ `ROCK_Y` xuống và vạch sáng 3 px tại `ROCK_Y`, vẽ ngay trong `terrainLayer()` bằng `source-atop` nên chỉ tô lên pixel địa hình, không tốn chi phí mỗi frame. Nhánh fallback không texture vẽ tương tự trong vùng clip.
+- Cân bằng cần chú ý sau lần chơi thử bằng script: bot dùng cối hạt dẻ, 2 phát trúng trực tiếp cộng sát thương rơi đã hạ player từ 100 xuống 7. Bot brute-force gần như không trượt. Nếu quá khó: tăng jitter trong `botShot()` từ 3 độ lên 6 độ, hoặc cho bot cà rốt.
