@@ -209,7 +209,7 @@ Khuyến nghị: làm A trước, dùng B chỉ cho 3 pose `fire`, `hurt`, `win`
 | 2 | Trail theo màu vũ khí, đạn xoay theo hướng bay. Đã làm | game.js | Thấp | Không |
 | 3 | Animation procedural: recoil, nhún khi đi, nháy khi trúng, rung màn hình, số sát thương. Đã làm | game.js, sprites.js | Thấp | Không |
 | 4 | Ammo params: gravityScale, windScale, craterRadius, damageMax, damageRadius; truyền qua launch, step, damage, botShot; đường ngắm dùng ammo. Đã làm | physics.js, assets.js, game.js, tests | Trung bình, cần rebalance và sửa test | Không |
-| 5 | Sát thương rơi. Đã làm. Sàn đá bỏ, xem mục 9 | physics.js, game.js, tests | Thấp | Không |
+| 5 | Sát thương rơi và lớp đá. Đã làm, xem mục 9 | physics.js, game.js, tests | Thấp | Không |
 | 6 | Sprite đạn riêng | assets.js, game.js | Thấp | 6 PNG 32x32 |
 | 7 | Pose fire, hurt, win | assets.js, sprites.js, game.js | Thấp | 12 PNG |
 | 8 | Đạn dính, đạn chùm | physics.js, game.js | Cao, đổi state machine | Không |
@@ -269,4 +269,6 @@ Mô hình gió, để trả lời câu hỏi "có tính gió chưa": gió là gi
 
 - `fallDamage(drop)` trong `physics.js`: tụt quá 40 px thì mất `drop / 4` HP, làm tròn. Tụt 120 px mất 30. Chỉ tính trong `explode()`, so `a.y` trước nổ với mặt đất sau crater. Đi bộ xuống hố không mất máu vì `move()` cập nhật từng bước nhỏ.
 - Sát thương rơi cộng vào sát thương nổ, hiện chung một số popup.
-- Sàn đá không làm. Lý do: sàn đá tại y 560 chặn crater thì actor không bao giờ rơi khỏi nền, mà "rơi khỏi đảo sẽ thua" đang là luật trong README, hướng dẫn và `checkWinner()`. Hai cơ chế loại trừ nhau. Chọn giữ luật rơi vì đào chân đối thủ là chiến thuật đặc trưng của thể loại, và bán kính hố đã cap 64 trong dữ liệu vũ khí. Muốn đổi sang sàn đá thì bỏ điều kiện `a.y > HEIGHT - 20` trong `checkWinner()`, thêm `Math.min(BEDROCK, ...)` trong `crater()`, sửa README và hướng dẫn.
+- Lớp đá: từ `ROCK_Y = 540` trở xuống, `crater()` chỉ khoét `ROCK_SOFTNESS = 0.4` phần độ sâu. Đá không bất tử, chỉ lì hơn đất, nên luật "rơi khỏi đảo" vẫn còn nhưng khó hơn. Mặt đất ở 400 đến 476, đất dày 64 đến 140 px, ngưỡng rơi 600. Ví dụ cối hạt dẻ bán kính 64 bắn cùng một chỗ: 2 phát hết đất, thêm 3 phát trong đá mới rơi. Đạn nổ ngay trong đá thì hố chỉ sâu 40% bán kính.
+- Đá chỉ giảm sức phá địa hình, không giảm sát thương lên nhân vật. Chưa có hướng va chạm ảnh hưởng hình hố, crater vẫn là nửa hình tròn từ điểm nổ. Nếu muốn: dùng góc `atan2(vy, vx)` lúc nổ để lệch tâm hố theo hướng bay 10 đến 15 px, một dòng trong `explode()`.
+- Chưa vẽ ranh giới đá trên canvas. Texture `grass-earth.webp` đã có đá ở phần dưới nên nhìn tạm hợp lý. Nếu muốn rõ: vẽ một dải tối alpha thấp từ `ROCK_Y` xuống, clip theo địa hình, trong nhánh vẽ `groundLayer`.
