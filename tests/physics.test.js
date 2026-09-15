@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import{makeTerrain,launch,step,crater,damage,simulate,botShot}from'../src/physics.js';
+test('opposite angles give symmetric shots without wind',()=>{const a={x:600,y:440};let l=launch(a,135,50),r=launch(a,45,50);for(let i=0;i<120;i++){step(l,0);step(r,0);}assert.ok(Math.abs((600-l.x)-(r.x-600))<.001);assert.ok(Math.abs(l.y-r.y)<.001);});
+test('wind changes horizontal flight only',()=>{const a={x:200,y:440},p=launch(a,45,50),q={...p};for(let i=0;i<120;i++){step(p,30);step(q,-30);}assert.ok(p.x>q.x);assert.equal(p.y,q.y);});
+test('craters remove ground locally and never restore it',()=>{let t=makeTerrain(),before=[...t];crater(t,600,t[600],48);assert.ok(t[600]>before[600]);assert.equal(t[500],before[500]);assert.ok(t.every((y,x)=>y>=before[x]));});
+test('blast damage falls off and is capped',()=>{assert.equal(damage({x:100,y:120},100,100),42);assert.equal(damage({x:300,y:120},100,100),0);});
+test('bot finds a damaging shot on starting terrain',()=>{const t=makeTerrain(),a={x:980,y:t[980]},target={x:205,y:t[205]};for(const wind of[-30,0,30]){const s=botShot(a,target,wind,t,()=>.5),p=simulate(a,s.angle,s.power,wind,t);assert.ok(damage(target,p.x,p.y)>20);}});
