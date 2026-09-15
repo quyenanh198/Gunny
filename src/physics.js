@@ -5,9 +5,15 @@ export const HIT_RADIUS=24;
 export const ROCK_Y=540, ROCK_SOFTNESS=0.4;
 // angles: [min,max] elevation above horizontal the weapon can aim at, mirrored for left shots.
 export const DEFAULT_AMMO={gravityScale:1,windScale:1,craterWidth:48,craterDepth:48,damageMax:42,damageRadius:95,angles:[10,80]};
-export const MAX_TILT=30;
-// Ground slope under x in degrees; positive when the ground rises to the right. Actors stand perpendicular to it.
-export function slopeAngle(terrain,x){const i=Math.round(x),l=terrain[Math.max(0,i-6)],r=terrain[Math.min(WIDTH-1,i+6)];return Math.max(-MAX_TILT,Math.min(MAX_TILT,Math.atan2(l-r,12)*180/Math.PI));}
+export const MAX_TILT=20, MAX_CLIMB=45, CLIMB_COST=2, ENERGY=100;
+// Ground slope under x in degrees; positive when the ground rises to the right.
+export function groundSlope(terrain,x){const i=Math.round(x),l=terrain[Math.max(0,i-6)],r=terrain[Math.min(WIDTH-1,i+6)];return Math.atan2(l-r,12)*180/Math.PI;}
+// Body tilt: actors stand perpendicular to the slope, capped so aim stays readable.
+export function slopeAngle(terrain,x){return Math.max(-MAX_TILT,Math.min(MAX_TILT,groundSlope(terrain,x)));}
+// Energy per pixel walked in direction dir (+1 right): 1 on flat or downhill, more uphill, Infinity when too steep to climb.
+export function moveCost(terrain,x,dir){const up=groundSlope(terrain,x)*dir;if(up>MAX_CLIMB)return Infinity;return 1+CLIMB_COST*Math.max(0,Math.tan(up*Math.PI/180));}
+// Aim plus tilt, kept on the aimed side so a slope never turns a right shot into a left one.
+export function launchAngle(aim,tilt){const a=aim+tilt;return aim<=90?Math.min(89,a):Math.max(91,a);}
 // Slider angle (10..170, 90 straight up) clamped to the weapon's elevation range on its own side.
 export function clampAngle(angle,[lo,hi]){const e=Math.min(hi,Math.max(lo,angle<=90?angle:180-angle));return angle<=90?e:180-e;}
 export function makeTerrain(){return Array.from({length:WIDTH},(_,x)=>440+24*Math.sin(x/140)+12*Math.sin(x/57));}
@@ -20,4 +26,4 @@ export function fallDamage(drop){return drop>40?Math.round(drop/4):0;}
 export function damage(actor,x,y,ammo=DEFAULT_AMMO){const d=Math.hypot(actor.x-x,actor.y-BODY_OFFSET-y),t=Math.max(0,d-HIT_RADIUS)/(ammo.damageRadius-HIT_RADIUS);return Math.round(Math.max(0,ammo.damageMax*(1-t)));}
 export function simulate(actor,angle,power,wind,terrain,ammo=DEFAULT_AMMO){let p=launch(actor,angle,power,ammo);for(let i=0;i<1800;i++){step(p,wind);if(collides(p,terrain)||p.x<0||p.x>=WIDTH||p.y>HEIGHT)return p;}return p;}
 // Returns the aim angle before tilt; the caller adds the same tilt when launching.
-export function botShot(actor,target,wind,terrain,random=Math.random,ammo=DEFAULT_AMMO,tilt=0){const[lo,hi]=ammo.angles;let best={error:Infinity,angle:180-lo,power:60};for(let e=lo;e<=hi;e+=3)for(const angle of[e,180-e])for(let power=15;power<=100;power+=2){const p=simulate(actor,angle+tilt,power,wind,terrain,ammo),error=Math.hypot(p.x-target.x,p.y-target.y);if(error<best.error)best={error,angle,power};}return{angle:clampAngle(best.angle+(random()-.5)*3,ammo.angles),power:Math.max(1,Math.min(100,best.power+(random()-.5)*5))};}
+export function botShot(actor,target,wind,terrain,random=Math.random,ammo=DEFAULT_AMMO,tilt=0){const[lo,hi]=ammo.angles;let best={error:Infinity,angle:180-lo,power:60};for(let e=lo;e<=hi;e+=3)for(const angle of[e,180-e])for(let power=15;power<=100;power+=2){const p=simulate(actor,launchAngle(angle,tilt),power,wind,terrain,ammo),error=Math.hypot(p.x-target.x,p.y-target.y);if(error<best.error)best={error,angle,power};}return{angle:clampAngle(best.angle+(random()-.5)*3,ammo.angles),power:Math.max(1,Math.min(100,best.power+(random()-.5)*5))};}

@@ -17,10 +17,10 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 
 ## Cách chơi
 
-- A/D hoặc nút trái/phải: di chuyển, tối đa 60 pixel mỗi lượt.
-- ↑/↓ hoặc thanh trượt: góc 10–170°. 45° hướng phải, 135° hướng trái. Mỗi vũ khí có dải góc riêng (cối hạt dẻ chỉ 45–85°); kéo vào vùng cấm quanh 90° sẽ nhảy sang hướng ngược lại. Đứng trên dốc thì góc thật cộng thêm độ dốc, HUD hiển thị phần cộng thêm.
+- A/D hoặc nút trái/phải: di chuyển. Mỗi lượt có 100 năng lượng, đi ngang hoặc xuống dốc tốn 1 mỗi pixel, lên dốc tốn thêm 2 lần độ dốc (tan), dốc quá 45° không leo được. Đứng trong hố sâu thì phải bắn ra chứ không trèo được.
+- ↑/↓ hoặc thanh trượt: góc 10–170°. 45° hướng phải, 135° hướng trái. Mỗi vũ khí có dải góc riêng (cối hạt dẻ chỉ 45–85°); kéo vào vùng cấm quanh 90° sẽ nhảy sang hướng ngược lại. Đứng trên dốc thì góc thật cộng thêm độ dốc (tối đa 20°), HUD hiển thị phần cộng thêm; góc thật không bao giờ vượt qua 90° sang hướng ngược lại.
 - Giữ SPACE hoặc nút BẮN để tăng lực, thả để bắn. Lực tối đa được giữ ở 100%.
-- Mỗi lượt 25 giây. Bot tự ngắm theo địa hình và gió, có độ lệch nhẹ.
+- Mỗi lượt 25 giây, hết giờ mất lượt. Tối đa 30 lượt, sau đó ai nhiều máu hơn thắng, bằng nhau thì hòa. Bot tự ngắm theo địa hình và gió, có độ lệch nhẹ.
 - Bắn góc cao đạn bay khỏi khung hình; một mũi tên ở mép trên chỉ vị trí và độ cao của đạn.
 - Đạn chịu trọng lực và gió; vụ nổ gây sát thương theo khoảng cách và khoét địa hình. Nổ trong 24 pixel quanh thân là trúng trực tiếp, sát thương tối đa; xa hơn giảm dần tới 0. Mỗi vũ khí có trọng lực, độ bám gió, bán kính hố và sát thương riêng.
 - Hố đạn là nửa elip, rộng và sâu tùy vũ khí: cà rốt xuyên sâu, hạt dẻ nổ rộng. Từ độ sâu 540 trở xuống là lớp đá (dải tối), đạn chỉ khoét được 40% so với đất. Đất dưới chân bị khoét sâu hơn 40 pixel thì mất thêm máu theo độ sâu. Hết máu hoặc rơi khỏi nền sân đấu sẽ thua. Nút Trận mới khởi tạo lại toàn bộ trận.

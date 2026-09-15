@@ -15,6 +15,9 @@ import {
   ROCK_Y,
   slopeAngle,
   clampAngle,
+  launchAngle,
+  moveCost,
+  ENERGY,
 } from "./physics.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
 import { terrainLayer, drawCharacter, drawWeapon } from "./sprites.js";
@@ -51,6 +54,7 @@ function refreshGround() {
     ? terrainLayer(images.get("ground"), originalTerrain, terrain)
     : null;
 }
+const MAX_ROUNDS = 30;
 const randomWind = () => Math.round((Math.random() - 0.5) * 60);
 const ammoOf = (actor) => WEAPONS.find((w) => w.id === actor.weapon).ammo;
 const tiltOf = (actor) => slopeAngle(terrain, actor.x);
@@ -95,7 +99,7 @@ function reset() {
   round = 1;
   wind = randomWind();
   time = 25;
-  energy = 60;
+  energy = ENERGY;
   phase = "aim";
   projectile = null;
   charge = 0;
@@ -119,10 +123,10 @@ function sync() {
     $("hp" + i).value = a.hp;
     $("health" + i).textContent = `${a.hp} / 100 HP`;
   });
-  $("round").textContent = `LƯỢT ${String(round).padStart(2, "0")}`;
+  $("round").textContent = `LƯỢT ${String(round).padStart(2, "0")}/${MAX_ROUNDS}`;
   $("timer").textContent = Math.ceil(time);
   $("wind").textContent = `GIÓ ${wind < 0 ? "←" : "→"} ${Math.abs(wind)}`;
-  $("energy").textContent = `${Math.ceil(energy)} / 60`;
+  $("energy").textContent = `${Math.ceil(energy)} / ${ENERGY}`;
   const tilt = Math.round(tiltOf(actors[0]));
   $("angleValue").textContent =
     Math.round(+$("angle").value) +
@@ -145,10 +149,23 @@ function sync() {
         : "Bot đang ngắm";
 }
 function nextTurn() {
+  if (round >= MAX_ROUNDS) {
+    phase = "over";
+    charging = false;
+    const [a, b] = actors;
+    message(
+      a.hp === b.hp
+        ? "Hết lượt, hòa! ↻ Thử một trận nữa?"
+        : a.hp > b.hp
+          ? `Hết lượt! ${a.name} nhiều máu hơn, thắng! ✦`
+          : `Hết lượt! ${b.name} nhiều máu hơn, thắng. ↻ Thử lại nhé!`,
+    );
+    return;
+  }
   turn = 1 - turn;
   round++;
   time = 25;
-  energy = 60;
+  energy = ENERGY;
   wind = randomWind();
   phase = "aim";
   wait = 1.1;
@@ -186,7 +203,7 @@ function shoot(angle, power) {
   actor.angle = angle;
   actor.fire = 0.18;
   charging = false;
-  projectile = launch(actor, angle + tiltOf(actor), power, ammo);
+  projectile = launch(actor, launchAngle(angle, tiltOf(actor)), power, ammo);
   trail = [];
   phase = "flight";
   message(turn ? "Cẩn thận! Đạn đang tới…" : "Một phát bắn đầy hy vọng!");
@@ -238,10 +255,12 @@ function explode(p) {
 function move(dir, dt) {
   if (phase !== "aim" || turn !== 0 || energy <= 0 || charging) return;
   const a = actors[0],
-    distance = Math.min(energy, 65 * dt),
+    cost = moveCost(terrain, a.x, dir);
+  if (cost === Infinity) return;
+  const distance = Math.min(energy / cost, 65 * dt),
     x = Math.max(25, Math.min(WIDTH - 26, a.x + dir * distance));
   if (Math.abs(x - actors[1].x) < 45) return;
-  energy -= Math.abs(x - a.x);
+  energy -= Math.abs(x - a.x) * cost;
   a.x = x;
   a.y = terrain[Math.floor(x)];
   a.walk += dt;
@@ -588,8 +607,10 @@ function render() {
   if (turn === 0 && phase === "aim") {
     const p = launch(
       actors[0],
-      clampAngle(+$("angle").value, ammoOf(actors[0]).angles) +
+      launchAngle(
+        clampAngle(+$("angle").value, ammoOf(actors[0]).angles),
         tiltOf(actors[0]),
+      ),
       charging ? charge : 50,
       ammoOf(actors[0]),
     );

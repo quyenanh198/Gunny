@@ -76,11 +76,11 @@ const assert = require("node:assert/strict");
     assert.ok(parseInt(await page.locator("#powerValue").innerText()) > 30);
     await page.keyboard.up("Space");
     await page.waitForFunction(
-      () => document.querySelector("#round").textContent !== "LƯỢT 01",
+      () => !document.querySelector("#round").textContent.startsWith("LƯỢT 01"),
       { timeout: 15000 },
     );
     await page.waitForFunction(
-      () => document.querySelector("#round").textContent === "LƯỢT 03",
+      () => document.querySelector("#round").textContent.startsWith("LƯỢT 03"),
       { timeout: 15000 },
     );
     await page.locator("#restart").click();
