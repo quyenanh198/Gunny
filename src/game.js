@@ -11,7 +11,18 @@ import {
   botShot,
 } from "./physics.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
-import { terrainLayer, drawCharacter, drawWeapon } from "./sprites.js";
+import {
+  createAnimation,
+  playAnimation,
+  advanceAnimation,
+} from "./animation.js";
+import {
+  terrainLayer,
+  drawCharacter,
+  drawWeapon,
+  drawMuzzle,
+  drawBlast,
+} from "./sprites.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("game"),
   ctx = canvas.getContext("2d");
@@ -36,6 +47,13 @@ let terrain,
 let images = new Map(),
   groundLayer = null,
   originalTerrain;
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+let reducedMotion = motionPreference.matches;
+motionPreference.addEventListener(
+  "change",
+  (event) => (reducedMotion = event.matches),
+);
+let blasts = [];
 let selectedCharacter = "mochi",
   selectedWeapon = "carrot";
 function refreshGround() {
@@ -58,7 +76,11 @@ function reset() {
   actors[1].skin = "hat-de";
   actors[1].weapon = "acorn";
   actors[1].angle = 135;
-  actors.forEach((a) => (a.y = terrain[Math.floor(a.x)]));
+  actors.forEach((a) => {
+    a.y = terrain[Math.floor(a.x)];
+    a.animation = createAnimation();
+    a.walking = false;
+  });
   turn = 0;
   round = 1;
   wind = randomWind();
@@ -70,6 +92,7 @@ function reset() {
   charging = false;
   wait = 0;
   particles = [];
+  blasts = [];
   trail = [];
   keys.clear();
   $("angle").value = 45;
@@ -139,6 +162,7 @@ function checkWinner() {
 }
 function shoot(angle, power) {
   actors[turn].angle = angle;
+  playAnimation(actors[turn].animation, "shoot");
   charging = false;
   projectile = launch(actors[turn], angle, power);
   trail = [];
@@ -159,10 +183,13 @@ function release() {
   }
 }
 function explode(p) {
+  blasts.push({ x: p.x, y: p.y, age: 0 });
   crater(terrain, p.x, p.y);
   refreshGround();
   actors.forEach((a) => {
-    a.hp = Math.max(0, a.hp - damage(a, p.x, p.y));
+    const amount = damage(a, p.x, p.y);
+    if (amount > 0) playAnimation(a.animation, "hurt");
+    a.hp = Math.max(0, a.hp - amount);
     a.y = terrain[Math.floor(a.x)];
   });
   for (let i = 0; i < 28; i++) {
@@ -188,6 +215,8 @@ function move(dir, dt) {
     distance = Math.min(energy, 65 * dt),
     x = Math.max(25, Math.min(WIDTH - 26, a.x + dir * distance));
   if (Math.abs(x - actors[1].x) < 45) return;
+  a.walking = Math.abs(x - a.x) > 0.001;
+  if (a.walking) a.animation.moveDirection = dir;
   energy -= Math.abs(x - a.x);
   a.x = x;
   a.y = terrain[Math.floor(x)];
@@ -195,6 +224,9 @@ function move(dir, dt) {
 }
 function update(dt) {
   if (paused) return;
+  actors.forEach((a) => (a.walking = false));
+  blasts.forEach((blast) => (blast.age += dt));
+  blasts = blasts.filter((blast) => blast.age < 0.55);
   particles.forEach((p) => {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
@@ -302,11 +334,18 @@ function character(a, i) {
       ctx,
       sprite,
       a,
-      angle > 90 ? -1 : 1,
+      a.animation.state === "walk"
+        ? a.animation.moveDirection
+        : angle > 90
+          ? -1
+          : 1,
       turn === i && phase !== "over",
+      images.get(`${a.skin}-animation`),
+      reducedMotion,
     );
     const weapon = images.get(a.weapon);
-    drawWeapon(ctx, weapon, a, angle);
+    drawWeapon(ctx, weapon, a, angle, reducedMotion);
+    drawMuzzle(ctx, a, angle, reducedMotion);
     return;
   }
   ctx.save();
@@ -520,6 +559,7 @@ function render() {
     );
     ellipse(projectile.x - 2, projectile.y - 3, 3, 3, "#fff0b7");
   }
+  blasts.forEach((blast) => drawBlast(ctx, blast, reducedMotion));
   particles.forEach((p) => {
     ctx.globalAlpha = Math.max(0, p.life / 0.7);
     ellipse(p.x, p.y, 5, 5, p.color);
@@ -532,6 +572,13 @@ function frame(now) {
   accumulator += elapsed;
   while (accumulator >= DT) {
     update(DT);
+    if (!paused)
+      actors.forEach((a) =>
+        advanceAnimation(a.animation, DT, {
+          moving: a.walking,
+          dead: a.hp <= 0,
+        }),
+      );
     accumulator -= DT;
   }
   render();
@@ -649,6 +696,7 @@ function buildLoadout() {
         if (kind === "character") {
           selectedCharacter = entry.id;
           actors[0].skin = entry.id;
+          actors[0].animation = createAnimation();
           actors[0].name = entry.name;
         } else {
           selectedWeapon = entry.id;
