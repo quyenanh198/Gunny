@@ -1,6 +1,6 @@
 # Gunny · Chibi Arena
 
-Webgame bắn tọa độ theo lượt, lấy cảm hứng từ Gunny, với nhân vật chibi vẽ bằng Canvas và đồ họa riêng. Giao diện tiếng Việt, responsive, không cần tài khoản hay backend.
+Webgame bắn tọa độ theo lượt, lấy cảm hứng từ Gunny, với sprite chibi nền trong suốt và đồ họa riêng, hiển thị bằng Canvas. Giao diện tiếng Việt, responsive, không cần tài khoản hay backend.
 
 ## Chạy
 
@@ -29,9 +29,24 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 
 - `src/physics.js`: vật lý bước cố định 120 Hz, địa hình dạng heightmap, sát thương và tìm góc cho bot.
 - `src/game.js`: trạng thái trận, input, render Canvas; HUD là HTML dễ tương tác bằng bàn phím.
-- `style.css`: giao diện desktop/mobile.
+- `style.css`: giao diện desktop/mobile và bảng chọn trang bị.
+- `src/assets.js`: danh mục 12 asset và cơ chế tải có fallback.
+- `src/sprites.js`: vẽ sprite, lật hướng và cắt texture theo địa hình.
+- `assets/`: 4 sprite nhân vật, 6 sprite vũ khí, 2 ảnh môi trường; xem `assets/README.md`.
 - `tests/physics.test.js`: đối xứng quỹ đạo, gió, phá địa hình, sát thương, độ chính xác bot.
 
-## Phạm vi v0.1
+## Phạm vi v0.2
 
-Đấu tập 1v1 với bot, một bản đồ, một vũ khí, đồ họa chibi dạng vector vẽ bằng mã. Chưa có PvP online, tài khoản, âm thanh, trang bị hay nâng cấp. Địa hình là heightmap nên có hố nhưng chưa có hang hoặc phần đất nhô độc lập. Không sử dụng mã nguồn, hình ảnh hoặc âm thanh của Gunny gốc.
+Đấu tập 1v1 với bot, một bản đồ, 4 nhân vật và 6 diện mạo vũ khí có thể chọn. Sprite PNG riêng, background và texture sân đấu WebP. Các vũ khí cùng chỉ số. Sprite hiện là tư thế đứng tĩnh, chưa có chuỗi khung hình animation. Chưa có PvP online, tài khoản, âm thanh, trang bị hay nâng cấp. Địa hình là heightmap nên có hố nhưng chưa có hang hoặc phần đất nhô độc lập. Không sử dụng mã nguồn, hình ảnh hoặc âm thanh của Gunny gốc.
+
+## Kiểm tra giao diện (tùy chọn)
+
+Cần Playwright và Chromium. Chạy server ở terminal riêng, rồi:
+
+```sh
+npm install --no-save playwright
+npx playwright install chromium
+node scripts/browser-smoke.cjs
+```
+
+Có thể đặt `GAME_URL`, `BROWSER_EXECUTABLE` và `SCREENSHOT_DIR`. Script kiểm tra chọn đủ nhân vật/vũ khí, giữ lựa chọn khi chơi lại, hố nổ trên texture, lượt người chơi/bot, tạm dừng, layout mobile và ảnh dự phòng khi tải lỗi.
