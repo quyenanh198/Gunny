@@ -240,7 +240,11 @@ export class Match {
     this.projectile = launch(actor, launchAngle(angle, this.tiltOf(actor)), power, ammo);
     this.trail = [];
     this.phase = "flight";
-    this.status = actor.control === "bot" ? "Cẩn thận! Đạn đang tới…" : "Một phát bắn đầy hy vọng!";
+    // Naming the shooter matters once several people share one match.
+    this.status =
+      actor.control === "bot"
+        ? `${actor.label || actor.name} bắn rồi — cẩn thận!`
+        : `${actor.label || actor.name} đã bắn — đạn đang bay!`;
   }
   // Launch the current human's shot would use right now, for the aim preview.
   previewShot(power) {

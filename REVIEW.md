@@ -346,3 +346,27 @@ Asset, chờ model thiết kế:
 - Lỗi đã gặp khi thử: link mời tạo trước khi có mã phòng; select đội hình bị ghi đè bởi snapshot cũ ngay sau khi chủ phòng đổi, làm mất ghế người 2. Cả hai sửa bằng cách cho HUD online chỉ đi theo snapshot.
 - Kiểm chứng: `tests/server.test.js` chạy server thật trên port ngẫu nhiên, hai client WebSocket, kiểm tra ghế, quyền chủ phòng, input sai ghế bị bỏ, bắn thật đổi phase, rời phòng chuyển chủ. Playwright hai trình duyệt: tạo phòng, vào bằng link, khán giả bị khóa, chủ mở ghế 2, bắn xen kẽ, cả hai thấy cùng trạng thái.
 - Chưa làm và nên cân nhắc: chống mất kết nối tạm (hiện ngắt là mất ghế, vào lại bằng link nhận ghế trống kế tiếp); chat; danh sách phòng trên trang chủ dùng `/api/rooms`; giới hạn số phòng và số kết nối mỗi IP nếu mở ra internet; HTTPS phải qua reverse proxy.
+
+### 15. Thiết kế lại theo game online hoàn chỉnh
+
+Vì game đã có server, trang không còn là một màn duy nhất. Chia làm ba màn hình trong cùng một tài liệu, đổi bằng `body[data-screen]`:
+
+- **Sảnh chờ**: tên hiển thị (nhớ trong `localStorage`), mã phòng, Tạo phòng mới, Luyện tập với bot, và danh sách phòng lấy từ `GET /api/rooms`.
+- **Phòng chờ**: ba cột Đội 1, Khán giả, Đội 2 với danh sách người và bot; chọn nhân vật, vũ khí; Sẵn sàng; chủ phòng chỉnh bản đồ, độ khó, số bot rồi Bắt đầu trận.
+- **Trận đấu**: sân đấu như cũ, thêm kho vũ khí đổi trong lượt, nút Về phòng chờ và bảng kết quả với Chơi lại.
+
+Điểm thiết kế đáng ghi:
+
+- Một giao diện cho cả online và luyện tập. `LocalSession` trong `src/session.js` và `OnlineSession` trong `src/net.js` có cùng bề mặt (`state`, `players`, `bots`, `map`, `difficulty`, `canStart`, `chooseTeam`, `setReady`, `setCharacter`, `setWeapon`, `setSetup`, `start`, `restart`, `backToLobby`, `match`), nên `game.js` không rẽ nhánh theo chế độ, chỉ hỏi phiên hiện tại.
+- Server giữ cả vòng đời phòng, không chỉ trận: lobby, ghế, sẵn sàng, cấu hình, bắt đầu, chơi lại, quay về phòng chờ. Loadout chọn ở phòng chờ được áp lên actor sau mỗi lần tạo trận (`applyRoster`), nên đổi nhân vật trước trận có hiệu lực thật.
+- Actor có thêm `label` là tên người chơi. HUD và tên trên canvas hiện tên người, còn tên nhân vật đứng sau, vì trong một trận có thể hai người cùng chọn một skin.
+- Thông báo khi bắn giờ gọi tên người bắn, thay cho câu cố định, vì nhiều người cùng xem một trận.
+- Link mời mở ra màn sảnh với mã điền sẵn để người mới nhập tên; ai đã từng chơi thì vào thẳng.
+
+Lỗi tự phát hiện khi kiểm thử và đã sửa:
+
+- `.result` đặt `display: flex` đè lên thuộc tính `hidden`, làm bảng kết quả hiện ngay từ lượt đầu. Thêm `.result[hidden] { display: none }`.
+- Trong test server, snapshot đến liên tục nên `next()` bỏ lỡ đúng bản tin mang bước chuyển; đổi sang hàng đợi. Cũng thêm `closeAllConnections()` và `unref()` cho timer phòng để tiến trình test thoát được.
+- Smoke test chờ theo thời gian cố định nên đọc phải HUD của trận cũ; đổi sang `waitForFunction` theo trạng thái.
+
+Chưa làm: chat trong phòng, giữ ghế khi rớt mạng tạm, mời bằng QR, xếp phòng tự động.

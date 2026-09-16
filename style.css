@@ -118,49 +118,6 @@ h1 span + span {
   font-size: 12px;
   margin-bottom: 0;
 }
-.lobby {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  margin-bottom: 16px;
-  font-size: 9px;
-  letter-spacing: 1px;
-  color: #bfccc4;
-}
-.lobby input {
-  width: auto;
-  font: inherit;
-  font-size: 12px;
-  letter-spacing: 0;
-  color: inherit;
-  background: #ffffff08;
-  border: 1px solid #ffffff25;
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-.lobby #roomCode {
-  width: 70px;
-  text-transform: uppercase;
-}
-.lobby #roomLink {
-  display: none;
-  flex: 1;
-  min-width: 200px;
-}
-.lobby p {
-  width: 100%;
-  margin: 0;
-  font-size: 10px;
-  letter-spacing: 0;
-  color: #aec49c;
-}
-body.online .lobby #roomLink {
-  display: block;
-}
-body.online .lobby #newRoom {
-  display: none;
-}
 .arena {
   position: relative;
   border-radius: 20px;
@@ -382,7 +339,8 @@ input {
   color: #9cb5b0;
 }
 #fire,
-#closeHelp {
+#closeHelp,
+.primary {
   background: #d2ef9c;
   color: #20392c;
   border-radius: 11px;
@@ -678,5 +636,288 @@ dialog li {
   }
   .loadout legend span {
     font-size: 8px;
+  }
+}
+
+/* ---------------------------------------------------------------- screens */
+.screen {
+  display: none;
+}
+body[data-screen="home"] #home,
+body[data-screen="room"] #room,
+body[data-screen="game"] #game {
+  display: block;
+}
+.hero {
+  margin-bottom: 26px;
+}
+.hero h1 {
+  font-size: 40px;
+  margin: 10px 0 8px;
+}
+.hero p:last-child {
+  color: #a5bcb9;
+  font-size: 13px;
+  max-width: 520px;
+  margin: 0;
+}
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.card {
+  background: #19383e;
+  border: 1px solid #ffffff14;
+  border-radius: 16px;
+  padding: 22px 24px;
+}
+.card h2 {
+  font-size: 15px;
+  margin: 0 0 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.card label {
+  display: block;
+  margin: 14px 0 7px;
+}
+.card input {
+  font: inherit;
+  font-size: 14px;
+  color: inherit;
+  background: #ffffff08;
+  border: 1px solid #ffffff25;
+  border-radius: 10px;
+  padding: 11px 13px;
+  width: 100%;
+}
+.card .row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.card .row > * {
+  flex: 1;
+}
+#roomCode {
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  max-width: 140px;
+}
+.primary {
+  font-size: 14px;
+  padding: 12px 18px;
+}
+#homeError {
+  font-size: 11px;
+  color: #ffc3a6;
+  min-height: 15px;
+  margin: 12px 0 0;
+}
+.room-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+.room-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff06;
+  border: 1px solid #ffffff14;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 11px;
+}
+.room-list li strong {
+  font-size: 15px;
+  letter-spacing: 2px;
+}
+.room-list li span {
+  flex: 1;
+  color: #a5bcb9;
+}
+.room-list .empty {
+  color: #8da9a6;
+  justify-content: center;
+}
+/* ------------------------------------------------------------------- room */
+.room-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.room-actions input {
+  font: inherit;
+  font-size: 11px;
+  color: #a5bcb9;
+  background: #ffffff08;
+  border: 1px solid #ffffff25;
+  border-radius: 10px;
+  padding: 11px 12px;
+  width: 230px;
+}
+body:not(.is-online) .room-actions input,
+body:not(.is-online) #copyLink {
+  display: none;
+}
+.teams-grid {
+  display: grid;
+  grid-template-columns: 1fr 0.7fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.team-card {
+  background: #19383e;
+  border: 1px solid #ffffff14;
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.team-card[data-team="0"] {
+  border-color: #d2ef9c40;
+}
+.team-card[data-team="1"] {
+  border-color: #ffb49440;
+}
+.team-card h2 {
+  font-size: 13px;
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+}
+.team-card h2 span {
+  color: #8da9a6;
+  font-weight: 400;
+}
+.team-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 60px;
+}
+.team-card li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff06;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.team-card li.me {
+  background: #cfe79717;
+  box-shadow: inset 0 0 0 1px #d2ef9c66;
+}
+.team-card li img {
+  width: 26px;
+  height: 32px;
+  object-fit: contain;
+}
+.team-card li span {
+  flex: 1;
+  min-width: 0;
+}
+.team-card li strong {
+  display: block;
+  font-size: 12px;
+}
+.team-card li small {
+  font-size: 9px;
+  color: #9db3ab;
+}
+.team-card li b {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #93aaa4;
+}
+.team-card li b.ok {
+  color: #cfed9a;
+}
+.team-card li.bot small {
+  color: #8da9a6;
+}
+.team-join[aria-pressed="true"] {
+  background: #cfe79717;
+  border-color: #d2ef9c;
+  color: #e4f4c4;
+}
+.room-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+#ready[aria-pressed="true"] {
+  background: #cfe79717;
+  border-color: #d2ef9c;
+  color: #e4f4c4;
+}
+#startHint {
+  font-size: 11px;
+  color: #9db3ab;
+  margin: 0;
+}
+/* ----------------------------------------------------------------- battle */
+.result[hidden] {
+  display: none;
+}
+.result {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #0b242bcc;
+  z-index: 2;
+}
+.result p {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0;
+  text-align: center;
+  padding: 0 20px;
+}
+.result div {
+  display: flex;
+  gap: 10px;
+}
+.battle-loadout .choices {
+  grid-template-columns: repeat(6, 1fr);
+}
+@media (max-width: 760px) {
+  .home-grid,
+  .teams-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero h1 {
+    font-size: 28px;
+  }
+  .room-actions {
+    flex-wrap: wrap;
+  }
+  .room-actions input {
+    width: 100%;
+  }
+  .battle-loadout .choices {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .room-foot {
+    flex-wrap: wrap;
   }
 }

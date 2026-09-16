@@ -8,138 +8,262 @@
     <link rel="icon" href="assets/characters/mochi.png" />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body>
+  <body data-screen="home">
     <header>
       <a class="brand" href="./"
         ><span class="logo">✦</span> GUNNY <small>CHIBI ARENA</small></a
-      ><span class="online" id="online"><i></i> ĐẤU TẬP · OFFLINE</span
+      ><span class="online" id="headerStatus"><i></i> SẢNH CHỜ</span
       ><button id="help" class="subtle" aria-label="Hướng dẫn">
         ? <span>Hướng dẫn</span>
       </button>
     </header>
     <main>
-      <div class="heading">
-        <div>
+      <section id="home" class="screen" aria-label="Sảnh chờ">
+        <div class="hero">
           <p class="eyebrow">MỘT PHÁT BẮN. NGÀN NIỀM VUI.</p>
-          <h1><span id="mapName">Đảo Gió Xanh</span><span>01</span></h1>
-          <p>Chỉnh góc thật khéo. Thả một chút bất ngờ.</p>
+          <h1>Đấu trường chibi</h1>
+          <p>
+            Bắn tọa độ theo lượt, mỗi phe tối đa 3 người và 3 bot. Tạo phòng rồi
+            gửi link cho bạn bè, hoặc luyện tập với bot.
+          </p>
         </div>
-        <button id="restart" class="subtle">↻ Trận mới</button>
-      </div>
-      <section class="lobby" aria-label="Chơi online">
-        <label for="playerName">TÊN</label>
-        <input id="playerName" maxlength="16" placeholder="Tên của bạn" />
-        <label for="roomCode">MÃ PHÒNG</label>
-        <input id="roomCode" maxlength="4" placeholder="ABCD" autocapitalize="characters" />
-        <button id="joinRoom" class="subtle">Vào phòng</button>
-        <button id="newRoom" class="subtle">Tạo phòng mới</button>
-        <input id="roomLink" readonly aria-label="Link mời" />
-        <p id="roomInfo" role="status"></p>
-      </section>
-      <section class="arena" aria-label="Sân đấu">
-        <div class="scoreboard">
-          <div class="player">
-            <img class="avatar" id="avatar0" alt="Mochi" />
-            <div>
-              <strong><span id="name0">Mochi</span> <small id="tag0">BẠN</small></strong
-              ><progress id="hp0" max="100" value="100"></progress
-              ><span id="health0">100 / 100 HP</span>
+        <div class="home-grid">
+          <form id="joinForm" class="card">
+            <h2>Vào trận</h2>
+            <label for="playerName">TÊN HIỂN THỊ</label>
+            <input
+              id="playerName"
+              maxlength="16"
+              placeholder="Tên của bạn"
+              autocomplete="nickname"
+            />
+            <label for="roomCode">MÃ PHÒNG</label>
+            <div class="row">
+              <input
+                id="roomCode"
+                maxlength="4"
+                placeholder="ABCD"
+                autocapitalize="characters"
+                spellcheck="false"
+              /><button id="joinRoom" class="primary" type="submit">
+                Vào phòng
+              </button>
             </div>
-          </div>
-          <div class="turn">
-            <span id="round">LƯỢT 01</span><strong id="timer">25</strong
-            ><small id="wind">GIÓ → 0</small>
-          </div>
-          <div class="player enemy">
-            <div>
-              <strong><span id="name1">Hạt Dẻ</span> <small id="tag1">BOT</small></strong
-              ><progress id="hp1" max="100" value="100"></progress
-              ><span id="health1">100 / 100 HP</span>
+            <div class="row">
+              <button id="newRoom" type="button" class="subtle">
+                + Tạo phòng mới
+              </button
+              ><button id="practice" type="button" class="subtle">
+                Luyện tập với bot
+              </button>
             </div>
-            <img class="avatar" id="avatar1" alt="Hạt Dẻ" />
+            <p id="homeError" role="alert"></p>
+          </form>
+          <div class="card">
+            <h2>
+              Phòng đang mở
+              <button id="refreshRooms" type="button" class="subtle">
+                Làm mới
+              </button>
+            </h2>
+            <ul id="roomList" class="room-list">
+              <li class="empty">Đang tải danh sách…</li>
+            </ul>
           </div>
-        </div>
-        <canvas
-          id="game"
-          width="1200"
-          height="620"
-          aria-label="Sân đấu chibi. Dùng bảng điều khiển bên dưới để ngắm và bắn."
-        ></canvas>
-        <div class="status" id="status" role="status">
-          Đến lượt bạn — ngắm và giữ để bắn!
-        </div>
-        <div class="map-label">
-          ✧ <span id="mapLabel">ĐẢO GIÓ XANH</span> <span>•</span>
-          <span id="versus">1 VS 1</span>
         </div>
       </section>
-      <section class="controls">
-        <div class="move">
-          <label>DI CHUYỂN <span id="energy">100 / 100</span></label>
+
+      <section id="room" class="screen" aria-label="Phòng chờ">
+        <div class="heading">
           <div>
-            <button id="left" aria-label="Di chuyển trái">←</button
-            ><button id="right" aria-label="Di chuyển phải">→</button
-            ><small>A / D<br />Đổi vị trí</small>
+            <p class="eyebrow">PHÒNG CHỜ</p>
+            <h1 id="roomTitle">Phòng</h1>
+            <p id="roomHint">Chọn phe, chọn nhân vật rồi bấm Sẵn sàng.</p>
+          </div>
+          <div class="room-actions">
+            <input id="roomLink" readonly aria-label="Link mời" /><button
+              id="copyLink"
+              class="subtle"
+              type="button"
+            >
+              Sao chép link</button
+            ><button id="leaveRoom" class="subtle" type="button">
+              Rời phòng
+            </button>
           </div>
         </div>
-        <div class="aim">
-          <label for="angle"
-            >GÓC BẮN <b id="angleValue">45° <small id="tiltValue"></small></b></label
-          ><input
-            id="angle"
-            type="range"
-            min="10"
-            max="170"
-            step="0.1"
-            value="45"
-          />
-          <div class="ticks">
-            <span id="tickMin">10°</span><span>90°</span
-            ><span id="tickMax">170°</span>
+        <div class="teams-grid">
+          <div class="team-card" data-team="0">
+            <h2>Đội 1 <span id="teamCount0">0</span></h2>
+            <ul id="teamList0"></ul>
+            <button type="button" class="subtle team-join" data-join="0">
+              Vào đội 1
+            </button>
+          </div>
+          <div class="team-card watchers">
+            <h2>Khán giả</h2>
+            <ul id="teamListNull"></ul>
+            <button type="button" class="subtle team-join" data-join="">
+              Xem trận
+            </button>
+          </div>
+          <div class="team-card" data-team="1">
+            <h2>Đội 2 <span id="teamCount1">0</span></h2>
+            <ul id="teamList1"></ul>
+            <button type="button" class="subtle team-join" data-join="1">
+              Vào đội 2
+            </button>
           </div>
         </div>
-        <div class="power">
-          <label>LỰC BẮN <b id="powerValue">0%</b></label>
-          <div class="power-track"><div id="powerFill"></div></div>
-          <small>Giữ để tăng lực · Thả để bắn</small>
+        <section class="loadout" aria-label="Chọn nhân vật và vũ khí">
+          <div class="loadout-heading">
+            <h2>Chuẩn bị ra trận</h2>
+            <p id="assetStatus" role="status">Đang tải bộ sprite…</p>
+          </div>
+          <fieldset>
+            <legend>NHÂN VẬT</legend>
+            <div id="characterChoices" class="choices characters"></div>
+          </fieldset>
+          <fieldset>
+            <legend>
+              VŨ KHÍ <span>Khác quỹ đạo, sức phá và sát thương</span>
+            </legend>
+            <div id="weaponChoices" class="choices weapons"></div>
+          </fieldset>
+          <div class="setup">
+            <fieldset class="difficulty">
+              <legend><label for="difficulty">ĐỘ KHÓ BOT</label></legend>
+              <select id="difficulty"></select>
+            </fieldset>
+            <fieldset class="difficulty">
+              <legend><label for="map">BẢN ĐỒ</label></legend>
+              <select id="map"></select>
+            </fieldset>
+            <fieldset class="difficulty teams">
+              <legend>SỐ BOT MỖI ĐỘI</legend>
+              <label for="bots0">Đội 1</label><select id="bots0"></select>
+              <label for="bots1">Đội 2</label><select id="bots1"></select>
+            </fieldset>
+          </div>
+        </section>
+        <div class="room-foot">
+          <button id="ready" type="button" class="subtle">Sẵn sàng</button
+          ><button id="startMatch" type="button" class="primary">
+            Bắt đầu trận
+          </button>
+          <p id="startHint" role="status"></p>
         </div>
-        <button id="fire">BẮN! <small>GIỮ SPACE / CHẠM</small></button>
       </section>
-      <section class="loadout" aria-label="Chọn nhân vật và vũ khí">
-        <div class="loadout-heading">
-          <h2>Chuẩn bị ra trận</h2>
-          <p id="assetStatus" role="status">Đang tải bộ sprite…</p>
+
+      <section id="game" class="screen" aria-label="Trận đấu">
+        <div class="heading">
+          <div>
+            <p class="eyebrow" id="matchTag">TRẬN ĐẤU</p>
+            <h1><span id="mapName">Đảo Gió Xanh</span><span>01</span></h1>
+            <p>Chỉnh góc thật khéo. Thả một chút bất ngờ.</p>
+          </div>
+          <button id="leaveMatch" class="subtle" type="button">
+            ← Về phòng chờ
+          </button>
         </div>
-        <fieldset>
-          <legend>NHÂN VẬT</legend>
-          <div id="characterChoices" class="choices characters"></div>
-        </fieldset>
-        <fieldset>
-          <legend>VŨ KHÍ <span>Khác quỹ đạo, sức phá và sát thương</span></legend>
-          <div id="weaponChoices" class="choices weapons"></div>
-        </fieldset>
-        <div class="setup">
-          <fieldset class="difficulty">
-            <legend><label for="difficulty">ĐỘ KHÓ BOT</label></legend>
-            <select id="difficulty"></select>
-          </fieldset>
-          <fieldset class="difficulty">
-            <legend><label for="map">BẢN ĐỒ <span>Đổi là bắt đầu trận mới</span></label></legend>
-            <select id="map"></select>
-          </fieldset>
-          <fieldset class="difficulty teams">
-            <legend>ĐỘI HÌNH <span>Người chơi thay phiên trên cùng máy · Đổi là trận mới</span></legend>
-            <label for="humans0">Đội 1 người</label><select id="humans0"></select>
-            <label for="bots0">bot</label><select id="bots0"></select>
-            <label for="humans1">Đội 2 người</label><select id="humans1"></select>
-            <label for="bots1">bot</label><select id="bots1"></select>
-          </fieldset>
-        </div>
+        <section class="arena" aria-label="Sân đấu">
+          <div class="scoreboard">
+            <div class="player">
+              <img class="avatar" id="avatar0" alt="" />
+              <div>
+                <strong
+                  ><span id="name0">Đội 1</span>
+                  <small id="tag0">BẠN</small></strong
+                ><progress id="hp0" max="100" value="100"></progress
+                ><span id="health0">100 / 100 HP</span>
+              </div>
+            </div>
+            <div class="turn">
+              <span id="round">LƯỢT 01</span><strong id="timer">25</strong
+              ><small id="wind">GIÓ LẶNG</small>
+            </div>
+            <div class="player enemy">
+              <div>
+                <strong
+                  ><span id="name1">Đội 2</span>
+                  <small id="tag1">BOT</small></strong
+                ><progress id="hp1" max="100" value="100"></progress
+                ><span id="health1">100 / 100 HP</span>
+              </div>
+              <img class="avatar" id="avatar1" alt="" />
+            </div>
+          </div>
+          <canvas
+            id="canvas"
+            width="1200"
+            height="620"
+            aria-label="Sân đấu chibi. Dùng bảng điều khiển bên dưới để ngắm và bắn."
+          ></canvas>
+          <div class="status" id="status" role="status">
+            Đến lượt bạn — ngắm và giữ để bắn!
+          </div>
+          <div class="map-label">
+            ✧ <span id="mapLabel">ĐẢO GIÓ XANH</span> <span>•</span>
+            <span id="versus">1 VS 1</span>
+          </div>
+          <div class="result" id="result" hidden>
+            <p id="resultText">Kết thúc</p>
+            <div>
+              <button id="restart" class="primary" type="button">
+                ↻ Chơi lại
+              </button
+              ><button id="toLobby" class="subtle" type="button">
+                Về phòng chờ
+              </button>
+            </div>
+          </div>
+        </section>
+        <section class="controls">
+          <div class="move">
+            <label>DI CHUYỂN <span id="energy">100 / 100</span></label>
+            <div>
+              <button id="left" aria-label="Di chuyển trái">←</button
+              ><button id="right" aria-label="Di chuyển phải">→</button
+              ><small>A / D<br />Đổi vị trí</small>
+            </div>
+          </div>
+          <div class="aim">
+            <label for="angle"
+              >GÓC BẮN
+              <b id="angleValue">45° <small id="tiltValue"></small></b></label
+            ><input
+              id="angle"
+              type="range"
+              min="10"
+              max="170"
+              step="0.1"
+              value="45"
+            />
+            <div class="ticks">
+              <span id="tickMin">10°</span><span>90°</span
+              ><span id="tickMax">170°</span>
+            </div>
+          </div>
+          <div class="power">
+            <label>LỰC BẮN <b id="powerValue">0%</b></label>
+            <div class="power-track"><div id="powerFill"></div></div>
+            <small>Giữ để tăng lực · Thả để bắn</small>
+          </div>
+          <button id="fire">BẮN! <small>GIỮ SPACE / CHẠM</small></button>
+        </section>
+        <section class="loadout battle-loadout" aria-label="Đổi vũ khí">
+          <div class="loadout-heading">
+            <h2>Kho vũ khí</h2>
+            <p id="battleHint">Đổi vũ khí trong lượt của bạn.</p>
+          </div>
+          <div id="battleWeapons" class="choices weapons"></div>
+        </section>
       </section>
+
       <footer>
-        <span><i></i> <span id="turnHint">Lượt của bạn</span></span
+        <span><i></i> <span id="turnHint">Sảnh chờ</span></span
         ><span>↑ ↓ chỉnh góc <b>·</b> A D di chuyển <b>·</b> SPACE bắn</span
-        ><span>CHIBI ARENA / v0.3</span>
+        ><span>CHIBI ARENA / v0.5</span>
       </footer>
     </main>
     <dialog id="guide">
@@ -150,23 +274,25 @@
       </p>
       <ol>
         <li>
-          Mỗi đội tối đa 3 thành viên, người hoặc bot. Nhiều người chơi thay phiên
-          trên cùng máy theo tên hiện ở thanh trạng thái. Vị trí xuất phát ngẫu
-          nhiên trong nửa sân của đội.
+          Tạo phòng rồi gửi link cho bạn bè, hoặc chọn Luyện tập với bot. Mỗi đội
+          tối đa 3 thành viên, người hoặc bot.
         </li>
         <li>
-          Dùng A/D hoặc nút mũi tên để di chuyển. Mỗi lượt có 100 năng lượng,
-          lên dốc tốn nhiều hơn, dốc quá 45° thì không leo được.
+          Trong phòng chờ: chọn phe, chọn nhân vật, bấm Sẵn sàng. Chủ phòng chỉnh
+          bản đồ, số bot, độ khó rồi bấm Bắt đầu trận.
+        </li>
+        <li>
+          Dùng A/D hoặc nút mũi tên để di chuyển. Mỗi lượt có 100 năng lượng, lên
+          dốc tốn nhiều hơn, dốc quá 45° thì không leo được.
         </li>
         <li>Kéo thanh góc: 45° bắn phải, 135° bắn trái. ↑/↓ cũng chỉnh góc.</li>
         <li>Giữ SPACE hoặc nút BẮN, thả ở lực mong muốn.</li>
         <li>
-          Nổ gần đối thủ gây sát thương và khoét đất. Tụt xuống hố sâu cũng
-          mất máu. Rơi khỏi đảo sẽ thua!
+          Nổ gần đối thủ gây sát thương và khoét đất. Tụt xuống hố sâu cũng mất
+          máu. Rơi khỏi đảo sẽ thua!
         </li>
         <li>
-          Bạn có 25 giây mỗi lượt. Hết giờ sẽ mất lượt. Sau 30 lượt, ai nhiều máu
-          hơn thắng.
+          Bạn có 25 giây mỗi lượt. Sau 30 lượt, đội nhiều máu hơn thắng.
         </li>
       </ol>
       <button id="closeHelp">Đã hiểu, vào trận!</button>

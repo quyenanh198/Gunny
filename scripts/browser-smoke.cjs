@@ -23,8 +23,14 @@ const assert = require("node:assert/strict");
     await page.waitForFunction(
       () => document.querySelector("#characterChoices").children.length === 4,
     );
+    // Home screen, then the practice room, then the battle.
+    assert.equal(await page.locator("#home").isVisible(), true);
+    await page.locator("#playerName").fill("Kiểm thử");
+    await page.locator("#practice").click();
+    await page.waitForSelector("#room", { state: "visible" });
     assert.match(await page.locator("#assetStatus").innerText(), /4 nhân vật/);
-    assert.equal(await page.locator(".loadout button").count(), 10);
+    assert.equal(await page.locator("#characterChoices button").count(), 4);
+    assert.equal(await page.locator("#weaponChoices button").count(), 6);
     // Every character sheet contains four distinct frames in all four rows.
     assert.equal(
       await page.evaluate(async () => {
@@ -64,24 +70,23 @@ const assert = require("node:assert/strict");
     );
 
     for (const id of ["mochi", "hat-de", "bzz", "nemu"]) {
-      await page.locator(`[data-id="${id}"]`).click();
-      assert.equal(
-        await page.locator(`[data-id="${id}"]`).getAttribute("aria-pressed"),
-        "true",
-      );
+      const button = page.locator(`#characterChoices [data-id="${id}"]`);
+      await button.click();
+      assert.equal(await button.getAttribute("aria-pressed"), "true");
     }
     for (const id of ["carrot", "acorn", "honey", "bubble", "fish", "star"]) {
-      await page.locator(`[data-id="${id}"]`).click();
-      assert.equal(
-        await page.locator(`[data-id="${id}"]`).getAttribute("aria-pressed"),
-        "true",
-      );
+      const button = page.locator(`#weaponChoices [data-id="${id}"]`);
+      await button.click();
+      assert.equal(await button.getAttribute("aria-pressed"), "true");
     }
-    assert.equal(await page.locator("#name0").innerText(), "Nemu");
-    await page.locator("#restart").click();
-    assert.equal(await page.locator("#name0").innerText(), "Nemu");
-    await page.locator('[data-id="mochi"]').click();
-    await page.locator('[data-id="carrot"]').click();
+    await page.locator('#characterChoices [data-id="mochi"]').click();
+    await page.locator('#weaponChoices [data-id="carrot"]').click();
+    await page.locator("#startMatch").click();
+    await page.waitForSelector("#game", { state: "visible" });
+    // The HUD fills in on the first animation frame after the switch.
+    await page.waitForFunction(() =>
+      document.querySelector("#name0").textContent.includes("Kiểm thử"),
+    );
     if (process.env.SCREENSHOT_DIR)
       await page.screenshot({
         path: `${process.env.SCREENSHOT_DIR}/gunny-desktop.png`,
@@ -111,8 +116,11 @@ const assert = require("node:assert/strict");
     );
     await page.locator("#fire").focus();
     await page.keyboard.down("Space");
-    await page.waitForTimeout(1600);
-    assert.ok(parseInt(await page.locator("#powerValue").innerText()) > 30);
+    // Hold until the meter really passes a third, whatever the frame timing.
+    await page.waitForFunction(
+      () => parseInt(document.querySelector("#powerValue").textContent) > 30,
+      { timeout: 10000 },
+    );
     await page.keyboard.up("Space");
     await page.waitForFunction(
       () => !document.querySelector("#round").textContent.startsWith("LƯỢT 01"),
@@ -122,17 +130,24 @@ const assert = require("node:assert/strict");
       () => document.querySelector("#round").textContent.startsWith("LƯỢT 03"),
       { timeout: 15000 },
     );
-    await page.locator("#restart").click();
+    // Back to the room and into a fresh match.
+    await page.locator("#leaveMatch").click();
+    await page.waitForSelector("#room", { state: "visible" });
+    await page.locator("#startMatch").click();
+    await page.waitForSelector("#game", { state: "visible" });
+    await page.waitForFunction(() =>
+      document.querySelector("#round").textContent.startsWith("LƯỢT 01"),
+    );
     console.log("Turns passed");
     await page.locator("#help").click();
     const timer = await page.locator("#timer").innerText();
     const pausedImage = await page
-      .locator("#game")
+      .locator("#canvas")
       .evaluate((canvas) => canvas.toDataURL());
     await page.waitForTimeout(1100);
     assert.equal(await page.locator("#timer").innerText(), timer);
     assert.ok(
-      (await page.locator("#game").evaluate((canvas) => canvas.toDataURL())) ===
+      (await page.locator("#canvas").evaluate((canvas) => canvas.toDataURL())) ===
         pausedImage,
       "paused canvas must remain still",
     );
@@ -153,11 +168,11 @@ const assert = require("node:assert/strict");
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.waitForTimeout(50);
     const still = await page
-      .locator("#game")
+      .locator("#canvas")
       .evaluate((canvas) => canvas.toDataURL());
     await page.waitForTimeout(300);
     assert.ok(
-      (await page.locator("#game").evaluate((canvas) => canvas.toDataURL())) ===
+      (await page.locator("#canvas").evaluate((canvas) => canvas.toDataURL())) ===
         still,
       "reduced-motion canvas must remain still",
     );
@@ -172,13 +187,16 @@ const assert = require("node:assert/strict");
     await fallback.waitForFunction(() =>
       document.querySelector("#assetStatus").textContent.includes("dự phòng"),
     );
+    await fallback.locator("#practice").click();
+    await fallback.locator("#startMatch").click();
+    await fallback.waitForSelector("#game", { state: "visible" });
     await fallback.waitForFunction(
       () => !document.querySelector("#fire").disabled,
       { timeout: 5000 },
     );
     await fallback.close();
     console.log(
-      "PASS: 16 assets, 64 animation frames, 10 selections, restart, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
+      "PASS: 16 assets, 64 animation frames, home/room/battle screens, 10 selections, rematch, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
     );
   } finally {
     await browser.close();

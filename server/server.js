@@ -1,5 +1,6 @@
-// Gunny online server: serves the static game and runs authoritative matches
-// per room over WebSocket. One Node process, no database. Run: npm start
+// Gunny online server: serves the game and runs rooms. A room is a lobby until
+// the host starts it, then an authoritative Match ticking at the fixed step.
+// One Node process, no database. Run: npm start
 import http from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -21,69 +22,124 @@ const TYPES = {
 };
 const SNAPSHOT_MS = 50;
 const EMPTY_ROOM_TTL_MS = 60000;
-const rooms = new Map();
+const IDLE_SEAT_S = 1.5;
+export const rooms = new Map();
+let nextClientId = 1;
 
-const code = () => {
+const newCode = () => {
   let s = "";
   for (let i = 0; i < 4; i++) s += "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random() * 24)];
-  return rooms.has(s) ? code() : s;
+  return rooms.has(s) ? newCode() : s;
 };
 
 class Room {
   constructor(id) {
     this.id = id;
     this.clients = new Set();
-    this.match = new Match({ seed: Math.floor(Math.random() * 2 ** 31) });
-    this.seq = 0;
-    this.lastKeys = "";
-    this.emptySince = Date.now();
+    this.state = "lobby";
+    this.match = null;
+    this.order = [];
+    this.bots = [0, 1];
+    this.map = MAPS[0].id;
+    this.difficulty = "normal";
     this.terrainVersion = 0;
-    this.match.terrainDirty = true;
+    this.emptySince = Date.now();
+    this.last = Date.now();
+    this.acc = 0;
+    this.sinceSnapshot = 0;
+    this.idleSeat = 0;
+    // unref: an idle room must not keep the process alive on its own.
     this.timer = setInterval(() => this.tick(), 1000 / 60);
+    this.timer.unref();
+  }
+  get host() {
+    return [...this.clients].find((c) => c.host) || null;
+  }
+  teamPlayers(team) {
+    return [...this.clients].filter((c) => c.team === team);
+  }
+  teamSize(team) {
+    return this.teamPlayers(team).length + this.bots[team];
+  }
+  get canStart() {
+    const seated = [...this.clients].filter((c) => c.team !== null);
+    return this.teamSize(0) > 0 && this.teamSize(1) > 0 && seated.every((c) => c.ready || c.host);
+  }
+  promoteHost() {
+    if (this.host || !this.clients.size) return;
+    [...this.clients][0].host = true;
+  }
+  // Human actors are created team 0 first, so seat numbers follow this order.
+  seatOrder() {
+    return [...this.teamPlayers(0), ...this.teamPlayers(1)];
+  }
+  clientOfSeat(player) {
+    return this.order[player - 1] || null;
+  }
+  applyRoster() {
+    for (const a of this.match.actors) {
+      if (a.control !== "human") continue;
+      const c = this.clientOfSeat(a.player);
+      if (!c) continue;
+      a.skin = c.character;
+      a.weapon = c.weapon;
+      a.name = CHARACTERS.find((x) => x.id === c.character).name;
+      a.label = c.name;
+    }
+  }
+  start() {
+    if (!this.canStart) return false;
+    this.order = this.seatOrder();
+    this.match = new Match({
+      seed: Math.floor(Math.random() * 2 ** 31),
+      map: this.map,
+      difficulty: this.difficulty,
+      teams: [0, 1].map((t) => ({ humans: this.teamPlayers(t).length, bots: this.bots[t] })),
+    });
+    this.applyRoster();
+    this.terrainVersion++;
+    this.match.terrainDirty = false;
+    this.state = "playing";
     this.acc = 0;
     this.last = Date.now();
-    this.sinceSnapshot = 0;
-    this.skipWait = 0;
+    return true;
   }
-  get seats() {
-    return this.match.actors.filter((a) => a.control === "human").map((a) => a.player);
+  restart() {
+    this.match.reset();
+    this.applyRoster();
+    this.terrainVersion++;
+    this.match.terrainDirty = false;
   }
-  seatOwner(player) {
-    for (const c of this.clients) if (c.seat === player) return c;
-    return null;
-  }
-  assignSeats() {
-    const free = this.seats.filter((p) => !this.seatOwner(p));
-    for (const c of this.clients) {
-      if (c.seat !== null && !this.seats.includes(c.seat)) c.seat = null;
-      if (c.seat === null && free.length) c.seat = free.shift();
-    }
-    if (![...this.clients].some((c) => c.host) && this.clients.size) [...this.clients][0].host = true;
+  backToLobby() {
+    this.state = "lobby";
+    this.match = null;
+    for (const c of this.clients) c.ready = c.host;
   }
   tick() {
     const now = Date.now();
-    this.acc += Math.min((now - this.last) / 1000, 0.1);
+    if (this.state === "playing") {
+      this.acc += Math.min((now - this.last) / 1000, 0.1);
+      const m = this.match;
+      while (this.acc >= DT) {
+        // A seat whose player left forfeits its turn instead of stalling the match.
+        if (m.phase === "aim" && m.current.control === "human" && !this.clientOfSeat(m.current.player)) {
+          this.idleSeat += DT;
+          if (this.idleSeat > IDLE_SEAT_S) {
+            this.idleSeat = 0;
+            m.cancelCharge();
+            m.nextTurn();
+          }
+        } else this.idleSeat = 0;
+        m.update(DT);
+        this.acc -= DT;
+      }
+      if (m.terrainDirty) {
+        this.terrainVersion++;
+        m.terrainDirty = false;
+      }
+    }
+    this.sinceSnapshot += now - this.last;
     this.last = now;
-    const m = this.match;
-    while (this.acc >= DT) {
-      // A human seat with nobody connected forfeits its turn after a short pause.
-      if (m.phase === "aim" && m.current.control === "human" && !this.seatOwner(m.current.player)) {
-        this.skipWait += DT;
-        if (this.skipWait > 1.5) {
-          this.skipWait = 0;
-          m.cancelCharge();
-          m.nextTurn();
-        }
-      } else this.skipWait = 0;
-      m.update(DT);
-      this.acc -= DT;
-    }
-    if (m.terrainDirty) {
-      this.terrainVersion++;
-      m.terrainDirty = false;
-    }
-    this.sinceSnapshot += now - (this.snapshotAt || now);
-    this.snapshotAt = now;
     if (this.sinceSnapshot >= SNAPSHOT_MS) {
       this.sinceSnapshot = 0;
       this.broadcast();
@@ -91,55 +147,75 @@ class Room {
     if (!this.clients.size && now - this.emptySince > EMPTY_ROOM_TTL_MS) this.close();
   }
   snapshot(client) {
-    const m = this.match;
     const s = {
-      t: "state",
-      seq: ++this.seq,
-      room: this.id,
-      turn: m.turn,
-      round: m.round,
-      wind: m.wind,
-      time: m.time,
-      energy: m.energy,
-      phase: m.phase,
-      charge: m.charge,
-      charging: m.charging,
-      status: m.status,
-      cursor: m.cursor,
-      map: m.map.id,
-      teams: m.teams,
-      difficulty: m.difficulty.id,
-      terrainVersion: this.terrainVersion,
-      actors: m.actors.map((a) => ({
-        team: a.team,
-        control: a.control,
-        player: a.player,
-        x: a.x,
-        y: a.y,
-        hp: a.hp,
-        skin: a.skin,
-        weapon: a.weapon,
-        name: a.name,
-        angle: a.angle,
-        hurt: a.hurt,
-        anim: a.animation,
+      t: "room",
+      id: this.id,
+      state: this.state,
+      map: this.map,
+      difficulty: this.difficulty,
+      bots: this.bots,
+      canStart: this.canStart,
+      players: [...this.clients].map((c) => ({
+        id: c.id,
+        name: c.name,
+        team: c.team,
+        ready: c.ready,
+        host: c.host,
+        character: c.character,
+        weapon: c.weapon,
       })),
-      projectile: m.projectile
-        ? { x: m.projectile.x, y: m.projectile.y, vx: m.projectile.vx, vy: m.projectile.vy, age: m.projectile.age }
-        : null,
-      popups: m.popups,
-      blasts: m.blasts,
-      seats: this.seats.map((p) => {
-        const c = this.seatOwner(p);
-        return { player: p, name: c ? c.name : null };
-      }),
-      spectators: [...this.clients].filter((c) => c.seat === null).length,
-      you: { seat: client.seat, host: client.host },
+      you: {
+        id: client.id,
+        host: client.host,
+        team: client.team,
+        ready: client.ready,
+        character: client.character,
+        weapon: client.weapon,
+        player: this.state === "playing" ? this.order.indexOf(client) + 1 || null : null,
+      },
     };
-    if (client.terrainVersion !== this.terrainVersion) {
-      s.terrain = m.terrain.map((y) => Math.round(y * 10));
-      client.terrainVersion = this.terrainVersion;
-    }
+    if (this.state === "playing") {
+      const m = this.match;
+      s.match = {
+        turn: m.turn,
+        round: m.round,
+        wind: m.wind,
+        time: m.time,
+        energy: m.energy,
+        phase: m.phase,
+        charge: m.charge,
+        charging: m.charging,
+        status: m.status,
+        cursor: m.cursor,
+        map: m.map.id,
+        teams: m.teams,
+        terrainVersion: this.terrainVersion,
+        actors: m.actors.map((a) => ({
+          team: a.team,
+          control: a.control,
+          player: a.player ?? null,
+          label: a.label ?? null,
+          x: a.x,
+          y: a.y,
+          hp: a.hp,
+          skin: a.skin,
+          weapon: a.weapon,
+          name: a.name,
+          angle: a.angle,
+          hurt: a.hurt,
+          anim: a.animation,
+        })),
+        projectile: m.projectile
+          ? { x: m.projectile.x, y: m.projectile.y, vx: m.projectile.vx, vy: m.projectile.vy, age: m.projectile.age }
+          : null,
+        popups: m.popups,
+        blasts: m.blasts,
+      };
+      if (client.terrainVersion !== this.terrainVersion) {
+        s.match.terrain = m.terrain.map((y) => Math.round(y * 10));
+        client.terrainVersion = this.terrainVersion;
+      }
+    } else client.terrainVersion = -1;
     return s;
   }
   broadcast() {
@@ -148,21 +224,56 @@ class Room {
   join(client) {
     this.clients.add(client);
     this.emptySince = Infinity;
-    this.assignSeats();
-    client.terrainVersion = -1;
+    // Fill the emptier team so a fresh player can act right away.
+    client.team = this.state === "lobby" ? (this.teamPlayers(0).length <= this.teamPlayers(1).length ? 0 : 1) : null;
+    this.promoteHost();
     this.broadcast();
   }
   leave(client) {
     this.clients.delete(client);
-    client.seat = null;
-    this.assignSeats();
+    client.host = false;
+    this.promoteHost();
     if (!this.clients.size) this.emptySince = Date.now();
     else this.broadcast();
   }
   handle(client, msg) {
     const m = this.match,
-      mine = m.current.control === "human" && m.current.player === client.seat;
+      mine = this.state === "playing" && m.current.control === "human" && this.clientOfSeat(m.current.player) === client;
     switch (msg.t) {
+      case "team":
+        if (this.state !== "lobby") return;
+        client.team = [0, 1].includes(msg.team) ? msg.team : null;
+        client.ready = client.host;
+        break;
+      case "ready":
+        if (this.state !== "lobby") return;
+        client.ready = !!msg.value;
+        break;
+      case "loadout": {
+        if (msg.character && CHARACTERS.some((c) => c.id === msg.character)) client.character = msg.character;
+        if (msg.weapon && WEAPONS.some((w) => w.id === msg.weapon)) client.weapon = msg.weapon;
+        if (mine) m.setLoadout({ character: msg.character, weapon: msg.weapon });
+        break;
+      }
+      case "setup":
+        if (!client.host || this.state !== "lobby") return;
+        if (msg.map && MAPS.some((x) => x.id === msg.map)) this.map = msg.map;
+        if (msg.difficulty && DIFFICULTIES.some((d) => d.id === msg.difficulty)) this.difficulty = msg.difficulty;
+        if (Array.isArray(msg.bots)) this.bots = msg.bots.map((n) => Math.max(0, Math.min(MAX_TEAM, n | 0)));
+        break;
+      case "start":
+        if (!client.host || this.state !== "lobby") return;
+        this.start();
+        break;
+      case "restart":
+        if (!client.host || this.state !== "playing") return;
+        this.restart();
+        break;
+      case "lobby":
+        if (!client.host || this.state !== "playing") return;
+        this.backToLobby();
+        break;
+      // Gameplay input only counts on the sender's own turn.
       case "keys":
         if (!mine) return;
         m.keys.clear();
@@ -180,27 +291,10 @@ class Room {
       case "cancel":
         if (mine) m.cancelCharge();
         return;
-      case "loadout":
-        if (!mine) return;
-        if (msg.character && CHARACTERS.some((c) => c.id === msg.character)) m.setLoadout({ character: msg.character });
-        if (msg.weapon && WEAPONS.some((w) => w.id === msg.weapon)) m.setLoadout({ weapon: msg.weapon });
-        return;
-      case "setup":
-        if (!client.host) return;
-        if (msg.difficulty && DIFFICULTIES.some((d) => d.id === msg.difficulty)) m.setDifficulty(msg.difficulty);
-        if (msg.map && MAPS.some((x) => x.id === msg.map)) m.setMap(msg.map);
-        if (Array.isArray(msg.teams) && msg.teams.length === 2)
-          m.setTeams(msg.teams.map((t) => ({ humans: Math.min(MAX_TEAM, +t.humans || 0), bots: Math.min(MAX_TEAM, +t.bots || 0) })));
-        this.assignSeats();
-        this.broadcast();
-        return;
-      case "restart":
-        if (!client.host) return;
-        m.reset();
-        this.assignSeats();
-        this.broadcast();
+      default:
         return;
     }
+    this.broadcast();
   }
   close() {
     clearInterval(this.timer);
@@ -232,8 +326,18 @@ async function serveStatic(req, res) {
 export function createServer() {
   const server = http.createServer((req, res) => {
     if (req.url === "/api/rooms") {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify([...rooms.values()].map((r) => ({ id: r.id, players: r.clients.size, seats: r.seats.length }))));
+      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+      res.end(
+        JSON.stringify(
+          [...rooms.values()].map((r) => ({
+            id: r.id,
+            state: r.state,
+            players: r.clients.size,
+            teams: [r.teamSize(0), r.teamSize(1)],
+            map: r.map,
+          })),
+        ),
+      );
       return;
     }
     serveStatic(req, res);
@@ -241,13 +345,22 @@ export function createServer() {
   const wss = new WebSocketServer({ server, path: "/ws" });
   wss.on("connection", (ws, req) => {
     const params = new URL(req.url, "http://x").searchParams;
-    let id = (params.get("room") || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
-    if (!id || !rooms.has(id)) {
-      id = id && !rooms.has(id) ? id : code();
-      rooms.set(id, new Room(id));
-    }
+    const wanted = (params.get("room") || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+    // An unknown or empty code opens a new room, so an invite link always works.
+    const id = wanted && rooms.has(wanted) ? wanted : wanted || newCode();
+    if (!rooms.has(id)) rooms.set(id, new Room(id));
     const room = rooms.get(id);
-    const client = { ws, seat: null, host: false, name: (params.get("name") || "Khách").slice(0, 16), terrainVersion: -1 };
+    const client = {
+      id: nextClientId++,
+      ws,
+      team: null,
+      ready: false,
+      host: false,
+      character: "mochi",
+      weapon: "carrot",
+      name: (params.get("name") || "Khách").slice(0, 16).trim() || "Khách",
+      terrainVersion: -1,
+    };
     room.join(client);
     ws.on("message", (data) => {
       let msg;

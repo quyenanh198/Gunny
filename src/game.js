@@ -1,63 +1,273 @@
-import { WIDTH, HEIGHT, DT, step, collides, ROCK_Y } from "./physics.js";
+import { WIDTH, HEIGHT, DT, step, collides, ROCK_Y, MAPS } from "./physics.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
-import {
-  terrainLayer,
-  drawCharacter,
-  drawWeapon,
-  drawMuzzle,
-  drawBlast,
-} from "./sprites.js";
-import { Match, MAX_ROUNDS, MAX_TEAM, DIFFICULTIES, ammoOf } from "./match.js";
-import { MAPS } from "./physics.js";
-import { RemoteMatch } from "./net.js";
+import { terrainLayer, drawCharacter, drawWeapon, drawMuzzle, drawBlast } from "./sprites.js";
+import { MAX_ROUNDS, MAX_TEAM, DIFFICULTIES } from "./match.js";
+import { LocalSession } from "./session.js";
+import { OnlineSession } from "./net.js";
+
 const $ = (id) => document.getElementById(id),
-  canvas = $("game"),
+  canvas = $("canvas"),
   ctx = canvas.getContext("2d");
-const params = new URLSearchParams(location.search),
-  seed = params.get("seed"),
-  online = params.has("room");
-// ?room=ABCD joins (or creates) an online room; otherwise the match runs locally.
-const m = online
-  ? new RemoteMatch({ room: params.get("room"), name: params.get("name") })
-  : new Match({ seed: seed === null ? undefined : +seed });
-let images = new Map(),
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+let reducedMotion = motionPreference.matches;
+motionPreference.addEventListener("change", (e) => (reducedMotion = e.matches));
+
+let session = null,
+  images = new Map(),
   groundLayer = null,
   lastTurn = -1,
-  setupShown = "",
   last = 0,
   accumulator = 0,
   paused = false;
-const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
-let reducedMotion = motionPreference.matches;
-motionPreference.addEventListener(
-  "change",
-  (event) => (reducedMotion = event.matches),
-);
-function refreshGround() {
-  groundLayer = images.has("ground")
-    ? terrainLayer(images.get("ground"), m.originalTerrain, m.terrain)
-    : null;
+const match = () => (session && session.state === "playing" ? session.match : null);
+const screen = () => document.body.dataset.screen;
+const savedName = () => {
+  try {
+    return localStorage.getItem("gunny-name") || "";
+  } catch {
+    return "";
+  }
+};
+
+function setScreen(name) {
+  document.body.dataset.screen = name;
+  $("headerStatus").lastChild.textContent =
+    name === "home" ? " SẢNH CHỜ" : name === "room" ? ` PHÒNG ${session.id}` : ` ĐANG ĐẤU · PHÒNG ${session.id}`;
+  $("turnHint").textContent = name === "home" ? "Sảnh chờ" : name === "room" ? "Chuẩn bị" : "Vào trận";
+}
+
+// ---------------------------------------------------------------- home screen
+async function refreshRooms() {
+  const list = $("roomList");
+  try {
+    const rooms = await (await fetch("/api/rooms")).json();
+    list.replaceChildren();
+    if (!rooms.length) {
+      list.innerHTML = '<li class="empty">Chưa có phòng nào. Tạo một phòng mới nhé!</li>';
+      return;
+    }
+    for (const room of rooms) {
+      const li = document.createElement("li");
+      const map = MAPS.find((m) => m.id === room.map);
+      li.innerHTML = `<strong>${room.id}</strong><span>${map ? map.name : ""} · ${room.teams[0]} vs ${room.teams[1]} · ${
+        room.state === "playing" ? "đang đấu" : "chờ"
+      }</span>`;
+      const join = document.createElement("button");
+      join.type = "button";
+      join.className = "subtle";
+      join.textContent = "Vào";
+      join.onclick = () => joinRoom(room.id);
+      li.append(join);
+      list.append(li);
+    }
+  } catch {
+    list.innerHTML = '<li class="empty">Chế độ tĩnh: không có máy chủ, chỉ chơi luyện tập được.</li>';
+  }
+}
+
+function playerName() {
+  const name = $("playerName").value.trim() || "Khách";
+  try {
+    localStorage.setItem("gunny-name", name);
+  } catch {}
+  return name;
+}
+
+function joinRoom(code) {
+  $("homeError").textContent = "";
+  session = new OnlineSession({ room: code, name: playerName(), onUpdate: onSession });
+  setScreen("room");
+  updateRoom();
+}
+
+function startPractice() {
+  session = new LocalSession({ name: playerName() });
+  setScreen("room");
+  updateRoom();
+}
+
+$("joinForm").onsubmit = (e) => {
+  e.preventDefault();
+  const code = $("roomCode").value.trim().toUpperCase();
+  if (!/^[A-Z]{4}$/.test(code)) {
+    $("homeError").textContent = "Mã phòng gồm 4 chữ cái. Hoặc bấm Tạo phòng mới.";
+    return;
+  }
+  joinRoom(code);
+};
+$("newRoom").onclick = () => joinRoom("");
+$("practice").onclick = startPractice;
+$("refreshRooms").onclick = refreshRooms;
+
+// ---------------------------------------------------------------- room screen
+function onSession(s, was) {
+  if (s.state === "offline") {
+    $("homeError").textContent = s.error;
+    setScreen("home");
+    return;
+  }
+  if (s.state === "playing" && screen() !== "game") enterMatch();
+  else if (s.state === "lobby" && screen() === "game") setScreen("room");
+  if (screen() === "room") updateRoom();
+  if (was !== s.state) setScreen(screen());
+}
+
+function playerRow(p) {
+  const li = document.createElement("li");
+  li.className = p.id === session.you.id ? "me" : "";
+  const img = document.createElement("img");
+  img.src = assetURL(CHARACTERS.find((c) => c.id === p.character).file);
+  img.alt = "";
+  const text = document.createElement("span");
+  text.innerHTML = `<strong>${p.name}</strong><small>${CHARACTERS.find((c) => c.id === p.character).name} · ${
+    WEAPONS.find((w) => w.id === p.weapon).name
+  }</small>`;
+  const tag = document.createElement("b");
+  tag.textContent = p.host ? "CHỦ PHÒNG" : p.ready ? "SẴN SÀNG" : "CHỜ";
+  tag.className = p.ready || p.host ? "ok" : "";
+  li.append(img, text, tag);
+  return li;
+}
+
+function botRow(index) {
+  const li = document.createElement("li");
+  li.className = "bot";
+  li.innerHTML = `<span><strong>Bot ${index + 1}</strong><small>Máy điều khiển</small></span><b>BOT</b>`;
+  return li;
+}
+
+function updateRoom() {
+  const s = session;
+  $("roomTitle").textContent = s.online ? `Phòng ${s.id}` : "Luyện tập với bot";
+  $("roomHint").textContent = s.online
+    ? "Gửi link cho bạn bè. Chủ phòng bấm Bắt đầu khi mọi người sẵn sàng."
+    : "Chọn phe và nhân vật, rồi bấm Bắt đầu trận.";
+  document.body.classList.toggle("is-online", !!s.online);
+  document.body.classList.toggle("is-host", !!s.host);
+  if (s.online) {
+    const url = new URL(location.href);
+    url.search = `?room=${s.id}`;
+    $("roomLink").value = s.id ? url.href : "";
+  }
+  for (const team of [0, 1, null]) {
+    const list = $("teamList" + (team === null ? "Null" : team));
+    list.replaceChildren();
+    for (const p of s.players.filter((p) => p.team === team)) list.append(playerRow(p));
+    if (team !== null) {
+      for (let i = 0; i < s.bots[team]; i++) list.append(botRow(i));
+      $("teamCount" + team).textContent = `${s.teamSize(team)} thành viên`;
+    }
+  }
+  document.querySelectorAll(".team-join").forEach((b) => {
+    const team = b.dataset.join === "" ? null : +b.dataset.join;
+    b.setAttribute("aria-pressed", String(s.you.team === team));
+    b.disabled = team !== null && s.players.filter((p) => p.team === team).length >= MAX_TEAM && s.you.team !== team;
+  });
+  document.querySelectorAll("#characterChoices button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.id === s.you.character));
+  });
+  document.querySelectorAll("#weaponChoices button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.id === s.you.weapon));
+  });
+  $("map").value = s.map;
+  $("difficulty").value = s.difficulty;
+  $("bots0").value = s.bots[0];
+  $("bots1").value = s.bots[1];
+  for (const id of ["map", "difficulty", "bots0", "bots1"]) $(id).disabled = !s.host;
+  $("ready").setAttribute("aria-pressed", String(s.you.ready));
+  $("ready").textContent = s.you.ready ? "Đã sẵn sàng" : "Sẵn sàng";
+  $("ready").hidden = !s.online || s.you.team === null || s.host;
+  $("startMatch").hidden = !s.host;
+  $("startMatch").disabled = !s.canStart;
+  $("startHint").textContent = s.canStart
+    ? s.host
+      ? ""
+      : "Chờ chủ phòng bắt đầu…"
+    : "Mỗi đội cần ít nhất một thành viên và mọi người phải sẵn sàng.";
+}
+
+document.querySelectorAll(".team-join").forEach((b) => {
+  b.onclick = () => {
+    session.chooseTeam(b.dataset.join === "" ? null : +b.dataset.join);
+    updateRoom();
+  };
+});
+$("ready").onclick = () => {
+  session.setReady(!session.you.ready);
+  updateRoom();
+};
+$("startMatch").onclick = () => {
+  if (session.start() && !session.online) enterMatch();
+};
+$("leaveRoom").onclick = () => {
+  session.leave();
+  session = null;
+  setScreenHome();
+};
+$("copyLink").onclick = () => {
+  $("roomLink").select();
+  navigator.clipboard?.writeText($("roomLink").value);
+  $("copyLink").textContent = "Đã sao chép!";
+  setTimeout(() => ($("copyLink").textContent = "Sao chép link"), 1500);
+};
+for (const id of ["map", "difficulty", "bots0", "bots1"]) {
+  $(id).onchange = () => {
+    session.setSetup({
+      map: $("map").value,
+      difficulty: $("difficulty").value,
+      bots: [+$("bots0").value, +$("bots1").value],
+    });
+    updateRoom();
+  };
+}
+function setScreenHome() {
+  document.body.dataset.screen = "home";
+  $("headerStatus").lastChild.textContent = " SẢNH CHỜ";
+  $("turnHint").textContent = "Sảnh chờ";
+  history.replaceState(null, "", location.pathname);
+  refreshRooms();
+}
+
+// --------------------------------------------------------------- battle screen
+function enterMatch() {
+  lastTurn = -1;
+  groundLayer = null;
+  setScreen("game");
+  updateBattleLoadout();
+}
+$("leaveMatch").onclick = () => {
+  if (session.online && !session.host) return setScreenHome() || session.leave();
+  session.backToLobby();
+  setScreen("room");
+  updateRoom();
+};
+$("toLobby").onclick = $("leaveMatch").onclick;
+$("restart").onclick = () => session.restart();
+
+function refreshGround(m) {
+  groundLayer = images.has("ground") ? terrainLayer(images.get("ground"), m.originalTerrain, m.terrain) : null;
   m.terrainDirty = false;
 }
-// The actor a team card shows: the one acting now, else the next one to act.
-function teamFace(team) {
+function teamFace(m, team) {
   if (m.current.team === team) return m.current;
   const alive = m.alive(team);
   return alive[m.cursor[team] % alive.length] || m.actors.find((a) => a.team === team);
 }
-function sync() {
-  const { actors, phase, charging } = m;
+function labelOf(a) {
+  return a.label ? `${a.label} · ${a.name}` : a.name;
+}
+function sync(m) {
   for (const team of [0, 1]) {
-    const face = teamFace(team),
-      size = actors.filter((a) => a.team === team).length;
-    $("name" + team).textContent = face.name;
+    const face = teamFace(m, team),
+      size = m.actors.filter((a) => a.team === team).length;
+    $("name" + team).textContent = face.label || face.name;
     $("tag" + team).textContent =
-      face.control === "bot" ? "BOT" : face.player === 1 && size === 1 ? "BẠN" : `NGƯỜI ${face.player}`;
+      face.control === "bot" ? "BOT" : face.player === session.you.player ? "BẠN" : `NGƯỜI ${face.player}`;
     $("hp" + team).max = size * 100;
     $("hp" + team).value = m.teamHp(team);
     $("health" + team).textContent = `${m.teamHp(team)} / ${size * 100} HP`;
-    const img = $("avatar" + team);
-    const src = assetURL(CHARACTERS.find((c) => c.id === face.skin).file);
+    const img = $("avatar" + team),
+      src = assetURL(CHARACTERS.find((c) => c.id === face.skin).file);
     if (img.getAttribute("src") !== src) img.src = src;
     img.alt = face.name;
   }
@@ -76,48 +286,29 @@ function sync() {
   $("powerFill").style.width = m.charge + "%";
   $("status").textContent = m.status;
   const disabled = !m.playerCanAct || paused;
-  ["fire", "angle", "left", "right"].forEach(
-    (id) => ($(id).disabled = disabled),
-  );
-  document
-    .querySelectorAll(".loadout button")
-    .forEach((button) => (button.disabled = disabled || charging));
+  ["fire", "angle", "left", "right"].forEach((id) => ($(id).disabled = disabled));
+  document.querySelectorAll("#battleWeapons button").forEach((b) => {
+    b.disabled = disabled || m.charging;
+    b.setAttribute("aria-pressed", String(b.dataset.id === m.current.weapon));
+  });
+  $("battleHint").textContent = m.playerCanAct
+    ? "Đổi vũ khí trước khi bắn."
+    : `Đang chờ ${labelOf(m.current)}…`;
   $("turnHint").textContent =
-    phase === "over"
-      ? "Trận đấu kết thúc"
-      : m.current.control === "human"
-        ? `Lượt của ${m.current.name}`
-        : "Bot đang ngắm";
-  if (online) {
-    const seat = m.you.seat ? `GHẾ ${m.you.seat}` : "KHÁN GIẢ";
-    $("online").lastChild.textContent = m.ready
-      ? ` PHÒNG ${m.roomId} · ${seat}${m.you.host ? " · CHỦ PHÒNG" : ""}`
-      : " ĐANG KẾT NỐI…";
-    const setupLocked = !m.you.host;
-    for (const id of ["difficulty", "map", "humans0", "bots0", "humans1", "bots1"]) $(id).disabled = setupLocked;
-    $("restart").disabled = setupLocked;
-    $("roomInfo").textContent = m.ready
-      ? `Phòng ${m.roomId}: ${m.seats.map((s) => `ghế ${s.player} ${s.name ? s.name : "trống"}`).join(" · ")}${m.spectators ? ` · ${m.spectators} khán giả` : ""}`
-      : "";
-    // Setup selects mirror the server; a change is confirmed by the next snapshot.
-    const setup = JSON.stringify([m.teams, m.map.id, m.difficulty.id]);
-    if (m.ready && setupShown !== setup) {
-      setupShown = setup;
-      updateLoadout();
-      $("map").value = m.map.id;
-      $("difficulty").value = m.difficulty.id;
-    }
-    // The room code only exists once the server answers, so refresh the invite then.
-    if (m.ready && $("roomLink").dataset.room !== m.roomId) {
-      const share = new URL(location.href);
-      share.searchParams.set("room", m.roomId);
-      share.searchParams.delete("name");
-      $("roomLink").value = share.href;
-      $("roomLink").dataset.room = m.roomId;
-      $("roomCode").value = m.roomId;
-    }
+    m.phase === "over" ? "Trận đấu kết thúc" : m.current.control === "human" ? `Lượt của ${labelOf(m.current)}` : "Bot đang ngắm";
+  $("matchTag").textContent = session.online ? `PHÒNG ${session.id}` : "LUYỆN TẬP";
+  $("mapName").textContent = m.map.name;
+  $("mapLabel").textContent = m.map.name.toUpperCase();
+  $("versus").textContent = m.teams.map((t) => t.humans + t.bots).join(" VS ");
+  const over = m.phase === "over";
+  $("result").hidden = !over;
+  if (over) {
+    $("resultText").textContent = m.status;
+    $("restart").hidden = session.online && !session.host;
+    $("toLobby").textContent = session.online && !session.host ? "Rời phòng" : "Về phòng chờ";
   }
 }
+
 function ellipse(x, y, rx, ry, color) {
   ctx.fillStyle = color;
   ctx.beginPath();
@@ -131,7 +322,7 @@ function path(points, color) {
   ctx.closePath();
   ctx.fill();
 }
-function character(a, i) {
+function character(m, a, i) {
   const sprite = images.get(a.skin),
     active = m.turn === i && m.phase !== "over";
   ctx.save();
@@ -141,12 +332,7 @@ function character(a, i) {
   ctx.rotate((-m.tiltOf(a) * Math.PI) / 180);
   ctx.translate(-a.x, -a.y);
   if (sprite) {
-    const facing =
-      a.animation.state === "walk"
-        ? a.animation.moveDirection
-        : a.angle > 90
-          ? -1
-          : 1;
+    const facing = a.animation.state === "walk" ? a.animation.moveDirection : a.angle > 90 ? -1 : 1;
     drawCharacter(ctx, sprite, a, facing, active, {
       flash: a.hurt / 0.3,
       sheet: images.get(`${a.skin}-animation`),
@@ -155,9 +341,17 @@ function character(a, i) {
   } else {
     // Minimal stand-in when the sprite failed to load.
     ellipse(a.x, a.y, 25, 5, "#183a3e35");
-    ellipse(a.x, a.y - 40, 22, 40, a.color);
+    ellipse(a.x, a.y - 40, 22, 40, a.team ? "#ec9b6c" : "#7ebbc9");
     ellipse(a.x, a.y - 88, 24, 24, "#fff0d5");
-    if (active) path([[a.x - 7, a.y - 125], [a.x + 7, a.y - 125], [a.x, a.y - 116]], "#ffe3a0");
+    if (active)
+      path(
+        [
+          [a.x - 7, a.y - 125],
+          [a.x + 7, a.y - 125],
+          [a.x, a.y - 116],
+        ],
+        "#ffe3a0",
+      );
   }
   drawWeapon(ctx, images.get(a.weapon), a, a.angle, reducedMotion);
   drawMuzzle(ctx, a, a.angle, reducedMotion);
@@ -167,29 +361,27 @@ function character(a, i) {
   ctx.textAlign = "center";
   ctx.lineWidth = 4;
   ctx.strokeStyle = "#1c3b41";
-  ctx.strokeText(a.name, a.x, a.y - 134);
+  ctx.strokeText(a.label || a.name, a.x, a.y - 134);
   ctx.fillStyle = a.team === 0 ? "#d2ef9c" : "#ffb494";
-  ctx.fillText(a.name, a.x, a.y - 134);
+  ctx.fillText(a.label || a.name, a.x, a.y - 134);
 }
-function render() {
+function render(m) {
   const { actors, projectile, trail } = m;
   ctx.save();
   if (m.shake > 0 && !reducedMotion) {
     const s = (m.shake / 0.3) * 6;
     ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
   }
-  if (images.has("background")) {
-    ctx.drawImage(images.get("background"), 0, 0, WIDTH, HEIGHT);
-  } else {
+  if (images.has("background")) ctx.drawImage(images.get("background"), 0, 0, WIDTH, HEIGHT);
+  else {
     const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
     sky.addColorStop(0, "#a6d9df");
     sky.addColorStop(1, "#f2f3cc");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
   }
-  if (groundLayer) {
-    ctx.drawImage(groundLayer, 0, 0);
-  } else {
+  if (groundLayer) ctx.drawImage(groundLayer, 0, 0);
+  else {
     ctx.beginPath();
     ctx.moveTo(0, HEIGHT);
     m.terrain.forEach((y, x) => ctx.lineTo(x, y));
@@ -210,7 +402,7 @@ function render() {
     ctx.lineWidth = 15;
     ctx.stroke();
   }
-  actors.forEach(character);
+  actors.forEach((a, i) => character(m, a, i));
   if (m.playerCanAct) {
     const p = m.previewShot(m.charging ? m.charge : 50);
     for (let n = 0; n < 38; n++) {
@@ -220,9 +412,7 @@ function render() {
     }
   }
   const weaponColor = WEAPONS.find((w) => w.id === m.current.weapon).color;
-  trail.forEach((p, i) =>
-    ellipse(p.x, p.y, (3 * i) / trail.length, (3 * i) / trail.length, weaponColor + "bb"),
-  );
+  trail.forEach((p, i) => ellipse(p.x, p.y, (3 * i) / trail.length, (3 * i) / trail.length, weaponColor + "bb"));
   if (projectile) {
     ctx.save();
     ctx.translate(projectile.x, projectile.y);
@@ -231,9 +421,16 @@ function render() {
     ellipse(-3, -2, 3, 2.5, "#fff0b7");
     ctx.restore();
     if (projectile.y < 0) {
-      // Above the frame: marker below the scoreboard overlay plus height, so the shot stays trackable.
+      // Above the frame: marker below the scoreboard plus height, so the shot stays trackable.
       const x = Math.max(30, Math.min(WIDTH - 30, projectile.x));
-      path([[x - 12, 140], [x + 12, 140], [x, 120]], weaponColor);
+      path(
+        [
+          [x - 12, 140],
+          [x + 12, 140],
+          [x, 120],
+        ],
+        weaponColor,
+      );
       ctx.font = "800 26px 'Be Vietnam Pro', system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.lineWidth = 4;
@@ -268,23 +465,31 @@ function frame(now) {
   const elapsed = Math.min((now - last) / 1000, 0.1);
   last = now;
   accumulator += elapsed;
+  const m = match();
   while (accumulator >= DT) {
-    if (!paused) m.update(DT);
+    if (m && !paused) m.update(DT);
     accumulator -= DT;
   }
-  if (m.terrainDirty) refreshGround();
-  if (lastTurn !== m.turn) {
-    lastTurn = m.turn;
-    updateLoadout();
+  if (m && screen() === "game") {
+    if (m.terrainDirty || !groundLayer) refreshGround(m);
+    if (lastTurn !== m.turn) {
+      lastTurn = m.turn;
+      updateBattleLoadout();
+    }
+    render(m);
+    sync(m);
   }
-  render();
-  sync();
   requestAnimationFrame(frame);
 }
+
+// --------------------------------------------------------------------- input
+const active = () => screen() === "game" && match();
 const beginCharge = () => {
-  if (!paused) m.beginCharge();
+  if (!paused) active()?.beginCharge();
 };
 const release = () => {
+  const m = active();
+  if (!m) return;
   if (paused) m.cancelCharge();
   else m.release();
 };
@@ -294,30 +499,23 @@ $("fire").addEventListener("pointerdown", (e) => {
   beginCharge();
 });
 $("fire").addEventListener("pointerup", release);
-$("fire").addEventListener("pointercancel", () => m.cancelCharge());
+$("fire").addEventListener("pointercancel", () => active()?.cancelCharge());
 for (const id of ["left", "right"]) {
   $(id).addEventListener("pointerdown", (e) => {
     e.preventDefault();
     $(id).setPointerCapture(e.pointerId);
-    m.keys.add(id);
+    active()?.keys.add(id);
   });
-  $(id).addEventListener("pointerup", () => m.keys.delete(id));
-  $(id).addEventListener("pointercancel", () => m.keys.delete(id));
+  $(id).addEventListener("pointerup", () => active()?.keys.delete(id));
+  $(id).addEventListener("pointercancel", () => active()?.keys.delete(id));
 }
-$("angle").addEventListener("input", () => m.setAim(+$("angle").value));
-const keyMap = {
-  a: "left",
-  d: "right",
-  ArrowLeft: "left",
-  ArrowRight: "right",
-  ArrowUp: "up",
-  ArrowDown: "down",
-};
+$("angle").addEventListener("input", () => active()?.setAim(+$("angle").value));
+const keyMap = { a: "left", d: "right", ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
 window.addEventListener("keydown", (e) => {
-  if (paused || e.target.closest("input,button,select")) return;
+  if (paused || !active() || e.target.closest("input,button,select")) return;
   if (keyMap[e.key]) {
     e.preventDefault();
-    m.keys.add(keyMap[e.key]);
+    active().keys.add(keyMap[e.key]);
   }
   if (e.code === "Space") {
     e.preventDefault();
@@ -325,8 +523,8 @@ window.addEventListener("keydown", (e) => {
   }
 });
 window.addEventListener("keyup", (e) => {
-  if (keyMap[e.key]) m.keys.delete(keyMap[e.key]);
-  if (e.code === "Space") {
+  if (keyMap[e.key]) active()?.keys.delete(keyMap[e.key]);
+  if (e.code === "Space" && active()) {
     e.preventDefault();
     release();
   }
@@ -343,144 +541,107 @@ $("fire").addEventListener("keyup", (e) => {
     release();
   }
 });
-window.addEventListener("blur", () => m.cancelCharge());
+window.addEventListener("blur", () => active()?.cancelCharge());
 document.addEventListener("visibilitychange", () => {
   paused = document.hidden || $("guide").open;
-  m.cancelCharge();
+  active()?.cancelCharge();
 });
-$("restart").onclick = () => {
-  m.reset();
-  updateLoadout();
-};
-// Lobby: joining is a navigation so the page starts in online mode.
-const goOnline = (room) => {
-  const url = new URL(location.href);
-  url.searchParams.set("room", room);
-  url.searchParams.set("name", $("playerName").value.trim() || "Khách");
-  url.searchParams.delete("seed");
-  location.href = url;
-};
-$("joinRoom").onclick = () => goOnline($("roomCode").value.trim().toUpperCase());
-$("newRoom").onclick = () => goOnline("");
-$("roomCode").onkeydown = (e) => {
-  if (e.key === "Enter") $("joinRoom").click();
-};
 $("help").onclick = () => {
-  m.cancelCharge();
+  active()?.cancelCharge();
   paused = true;
   $("guide").showModal();
 };
 $("closeHelp").onclick = () => $("guide").close();
 $("guide").addEventListener("close", () => (paused = document.hidden));
-$("difficulty").onchange = () => m.setDifficulty($("difficulty").value);
-$("map").onchange = () => {
-  m.setMap($("map").value);
-  updateLoadout();
-};
-for (const id of ["humans0", "bots0", "humans1", "bots1"]) {
-  $(id).onchange = () => {
-    m.setTeams([
-      { humans: +$("humans0").value, bots: +$("bots0").value },
-      { humans: +$("humans1").value, bots: +$("bots1").value },
-    ]);
-    // Online, the selects follow the server's next snapshot instead.
-    if (!online) updateLoadout();
-  };
-}
-await start();
 
-// Loadout buttons follow the human whose turn it is, else the first human.
-function loadoutActor() {
-  return m.current.control === "human"
-    ? m.current
-    : m.actors.find((a) => a.control === "human") || m.current;
+// ------------------------------------------------------------------- loadouts
+function choiceButton(entry, kind) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.kind = kind;
+  button.dataset.id = entry.id;
+  const image = document.createElement("img");
+  image.src = assetURL(entry.file);
+  image.alt = "";
+  image.onerror = () => (image.hidden = true);
+  const name = document.createElement("span");
+  name.textContent = entry.name;
+  button.append(image, name);
+  if (entry.ammo) {
+    const desc = document.createElement("small");
+    desc.textContent = `${entry.desc} · Góc ${entry.ammo.angles[0]}-${entry.ammo.angles[1]}`;
+    button.append(desc);
+  }
+  return button;
 }
-function updateLoadout() {
-  $("mapName").textContent = m.map.name;
-  $("mapLabel").textContent = m.map.name.toUpperCase();
-  $("versus").textContent = m.teams.map((t) => t.humans + t.bots).join(" VS ");
-  const actor = loadoutActor(),
-    [lo] = ammoOf(actor).angles;
+function updateBattleLoadout() {
+  const m = match();
+  if (!m) return;
+  const [lo] = WEAPONS.find((w) => w.id === m.current.weapon).ammo.angles;
   $("angle").min = lo;
   $("angle").max = 180 - lo;
   $("tickMin").textContent = lo + "°";
   $("tickMax").textContent = 180 - lo + "°";
-  document.querySelectorAll(".loadout button").forEach((button) => {
-    const selected = button.dataset.kind === "character" ? actor.skin : actor.weapon;
-    button.setAttribute("aria-pressed", String(button.dataset.id === selected));
-  });
-  for (const [t, team] of m.teams.entries()) {
-    $("humans" + t).value = team.humans;
-    $("bots" + t).value = team.bots;
-  }
 }
-function buildLoadout() {
-  for (const [kind, entries] of [
-    ["character", CHARACTERS],
-    ["weapon", WEAPONS],
-  ]) {
-    for (const entry of entries) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.kind = kind;
-      button.dataset.id = entry.id;
-      const image = document.createElement("img");
-      image.src = assetURL(entry.file);
-      image.alt = "";
-      image.onerror = () => (image.hidden = true);
-      const name = document.createElement("span");
-      name.textContent = entry.name;
-      button.append(image, name);
-      if (entry.ammo) {
-        const desc = document.createElement("small");
-        desc.textContent = `${entry.desc} · Góc ${entry.ammo.angles[0]}-${entry.ammo.angles[1]}`;
-        button.append(desc);
-      }
-      button.onclick = () => {
-        if (paused) return;
-        if (m.setLoadout({ [kind]: entry.id })) updateLoadout();
-      };
-      $(kind + "Choices").append(button);
-    }
+function buildUI() {
+  for (const entry of CHARACTERS) {
+    const b = choiceButton(entry, "character");
+    b.onclick = () => {
+      session.setCharacter(entry.id);
+      updateRoom();
+    };
+    $("characterChoices").append(b);
   }
-  for (const id of ["humans0", "bots0", "humans1", "bots1"]) {
+  for (const entry of WEAPONS) {
+    const b = choiceButton(entry, "weapon");
+    b.onclick = () => {
+      session.setWeapon(entry.id);
+      updateRoom();
+    };
+    $("weaponChoices").append(b);
+    const battle = choiceButton(entry, "weapon");
+    battle.onclick = () => {
+      session.setWeapon(entry.id);
+      updateBattleLoadout();
+    };
+    $("battleWeapons").append(battle);
+  }
+  for (const [id, entries] of [
+    ["difficulty", DIFFICULTIES],
+    ["map", MAPS],
+  ])
+    for (const entry of entries) {
+      const option = document.createElement("option");
+      option.value = entry.id;
+      option.textContent = entry.name;
+      $(id).append(option);
+    }
+  for (const id of ["bots0", "bots1"])
     for (let n = 0; n <= MAX_TEAM; n++) {
       const option = document.createElement("option");
       option.value = n;
       option.textContent = n;
       $(id).append(option);
     }
-  }
-  for (const [select, entries, current] of [
-    ["difficulty", DIFFICULTIES, m.difficulty.id],
-    ["map", MAPS, m.map.id],
-  ]) {
-    for (const entry of entries) {
-      const option = document.createElement("option");
-      option.value = entry.id;
-      option.textContent = entry.name;
-      option.selected = entry.id === current;
-      $(select).append(option);
-    }
-  }
 }
+
 async function start() {
-  paused = true;
-  document.body.classList.toggle("online", online);
-  sync();
-  $("restart").disabled = true;
-  $("help").disabled = true;
-  $("status").textContent = "Đang tải sân đấu và sprite…";
+  buildUI();
+  $("playerName").value = savedName();
   const loaded = await loadAssets();
   images = loaded.images;
-  buildLoadout();
-  if (!online) m.reset();
-  updateLoadout();
   $("assetStatus").textContent = loaded.failed.length
     ? `Thiếu ${loaded.failed.length} hình — đang dùng hình dự phòng. Tải lại trang để thử lại.`
-    : "4 nhân vật · 6 vũ khí · Chọn trong lượt của bạn";
-  paused = document.hidden;
-  $("restart").disabled = false;
-  $("help").disabled = false;
+    : "4 nhân vật · 6 vũ khí · Chọn trước khi vào trận";
+  // An invite link prefills the code; a first-time visitor still names themselves.
+  const room = new URLSearchParams(location.search).get("room");
+  if (room) $("roomCode").value = room.toUpperCase();
+  if (room && savedName()) joinRoom(room.toUpperCase());
+  else {
+    refreshRooms();
+    if (room) $("homeError").textContent = "Nhập tên rồi bấm Vào phòng.";
+    $("playerName").focus();
+  }
   requestAnimationFrame(frame);
 }
+await start();

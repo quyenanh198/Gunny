@@ -7,9 +7,8 @@ Webgame bắn tọa độ theo lượt, lấy cảm hứng từ Gunny, với spr
 Cần Python 3 để chạy server, Node.js 20+ để kiểm tra.
 
 ```sh
-npm install        # chỉ cần cho server online và test server (gói ws)
-npm run dev        # offline, static, mở http://localhost:5173
-npm start          # server online kèm file tĩnh, mở http://localhost:8080
+npm install        # cài gói ws cho server
+npm start          # chạy game, mở http://localhost:8080
 npm test
 npm run check
 ```
@@ -18,14 +17,25 @@ Smoke test trình duyệt: cài Playwright rồi chạy `BROWSER_EXECUTABLE=/pat
 
 Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pages hoặc Nginx). Không có bước build, đường dẫn tương đối hỗ trợ subdirectory. Font Google là tùy chọn, có font hệ thống dự phòng.
 
+## Ba màn hình
+
+Game chạy trên một server Node nhỏ, không còn là trang tĩnh. Luồng chơi giống một game online hoàn chỉnh:
+
+1. **Sảnh chờ**: nhập tên, xem danh sách phòng đang mở, vào phòng bằng mã, tạo phòng mới, hoặc luyện tập với bot.
+2. **Phòng chờ**: chọn phe (Đội 1, Đội 2 hoặc khán giả), chọn nhân vật và vũ khí, bấm Sẵn sàng. Chủ phòng chỉnh bản đồ, độ khó, số bot mỗi đội rồi bấm Bắt đầu trận. Link mời nằm sẵn trong phòng.
+3. **Trận đấu**: sân đấu, bảng điều khiển và kho vũ khí đổi được trong lượt của mình. Hết trận có bảng kết quả: Chơi lại hoặc Về phòng chờ.
+
+Luyện tập với bot dùng chung màn phòng chờ nên chỉ có một giao diện cho cả hai chế độ; khác biệt duy nhất là không có link mời và không cần Sẵn sàng.
+
 ## Chơi online và host trên Mac mini
 
-Server là một tiến trình Node (`server/server.js`): serve file tĩnh và chạy `Match` cho từng phòng, client chỉ gửi input và nhận snapshot 20 lần mỗi giây qua WebSocket tại `/ws`. Không database, không tài khoản; phòng trống 60 giây thì xóa.
+`server/server.js` vừa serve file tĩnh vừa giữ trạng thái phòng: danh sách người chơi, phe, cờ sẵn sàng, cấu hình trận, và khi vào trận thì chạy `Match` theo bước cố định, gửi snapshot 20 lần mỗi giây qua WebSocket tại `/ws`. `GET /api/rooms` trả danh sách phòng cho màn sảnh. Không database, không tài khoản; phòng trống 60 giây thì tự xóa.
 
-- Tạo phòng: điền tên, bấm Tạo phòng mới. Trang chuyển sang `?room=ABCD`. Gửi link mời (ô link trên bảng) cho người khác.
-- Người vào sau nhận ghế người chơi còn trống theo thứ tự đội 1 rồi đội 2; hết ghế thì làm khán giả. Chủ phòng (người vào đầu, tự chuyển khi rời) chỉnh đội hình, bản đồ, độ khó và bấm Trận mới.
-- Ghế không có người thì lượt đó tự bỏ sau 1,5 giây.
+- Người vào phòng được xếp vào phe ít người hơn; có thể đổi phe hoặc chuyển sang khán giả trong phòng chờ.
+- Chủ phòng là người vào đầu tiên, rời phòng thì quyền chuyển cho người kế tiếp. Chỉ chủ phòng chỉnh cấu hình, bắt đầu, chơi lại và đưa cả phòng về phòng chờ.
+- Ghế của người đã thoát sẽ tự bỏ lượt sau 1,5 giây để trận không treo.
 - Bot chạy trên server nên mọi người thấy cùng một kết quả.
+- Mở link mời trên máy khác sẽ về màn sảnh với mã phòng điền sẵn để nhập tên; lần sau tên được nhớ nên vào thẳng phòng.
 
 Cài trên Mac mini (macOS, Node 20 trở lên, ví dụ `brew install node`):
 
@@ -54,7 +64,7 @@ Chơi từ ngoài mạng nhà: cách an toàn nhất là Tailscale trên Mac min
 - Giữ SPACE hoặc nút BẮN để tăng lực, thả để bắn. Lực tối đa được giữ ở 100%.
 - Gió hiển thị theo cấp 0 đến 10 (mỗi cấp 3 px/s² trong vật lý), mũi tên là chiều gió.
 - 4 bản đồ chọn trong bảng chuẩn bị, đổi bản đồ là trận mới: Đảo Gió Xanh (mặc định), Thung Lũng (gò giữa che tầm), Đồi Đôi (hai bên đứng cao, giữa trũng), Vực Sâu (khe giữa rơi là thua, chỉ bắn qua).
-- Đội hình: mỗi đội 0 đến 3 người và 0 đến 3 bot, ít nhất 1 thành viên. Nhiều người chơi thay phiên trên cùng máy (hot-seat), thanh trạng thái ghi tên người đến lượt; bảng chọn nhân vật và vũ khí áp cho người đang có lượt. Trong đội, các thành viên còn sống luân phiên; hai đội xen kẽ. Bot bắn kẻ địch gần nhất. Đội thua khi mọi thành viên hết máu. Chơi online qua server tự host, xem mục trên.
+- Đội hình: mỗi đội 0 đến 3 người và 0 đến 3 bot, ít nhất 1 thành viên. Thanh trạng thái ghi tên người đến lượt; kho vũ khí áp cho người đang có lượt. Trong đội, các thành viên còn sống luân phiên; hai đội xen kẽ. Bot bắn kẻ địch gần nhất. Đội thua khi mọi thành viên hết máu. Chơi online qua server tự host, xem mục trên.
 - Vị trí xuất phát ngẫu nhiên theo seed, đội 1 nửa trái, đội 2 nửa phải, cách nhau ít nhất 70 px, không đứng trên vực.
 - Độ khó bot chọn trong bảng chuẩn bị: Dễ, Vừa, Khó, khác nhau ở độ lệch ngắm và mật độ tìm kiếm. Áp dụng từ lượt bot kế tiếp.
 - Thêm `?seed=123` vào URL để trận lặp lại y hệt (gió, skin bot, độ lệch của bot), tiện tái hiện lỗi.
@@ -68,8 +78,9 @@ Chơi từ ngoài mạng nhà: cách an toàn nhất là Tailscale trên Mac min
 
 - `src/physics.js`: vật lý bước cố định 120 Hz, địa hình dạng heightmap, sát thương và tìm góc cho bot.
 - `src/match.js`: trạng thái và luật trận (lượt, timer, bắn, nổ, di chuyển, thắng thua, độ khó bot), không đụng DOM, có unit test. PRNG có seed để replay.
-- `src/game.js`: input, render Canvas và HUD; chỉ đọc và ghi vào `Match` hoặc `RemoteMatch`.
-- `src/net.js`: `RemoteMatch`, bản sao trạng thái từ server cho chế độ online, cùng giao diện với `Match`, tự nội suy đạn và hiệu ứng giữa hai snapshot.
+- `src/game.js`: điều hướng ba màn hình, input, render Canvas và HUD; chỉ đọc và ghi vào phiên chơi.
+- `src/session.js`: `LocalSession`, phiên luyện tập với bot, cùng giao diện với phiên online.
+- `src/net.js`: `OnlineSession` và `RemoteMatch`, bản sao phòng và trận từ server, tự nội suy đạn và hiệu ứng giữa hai snapshot.
 - `server/server.js`: server Node, phòng chơi, ghế, WebSocket, file tĩnh. `deploy/com.gunny.server.plist` cho launchd.
 - `style.css`: giao diện desktop/mobile và bảng chọn trang bị.
 - `src/assets.js`: danh mục 16 asset và cơ chế tải có fallback.
@@ -77,7 +88,7 @@ Chơi từ ngoài mạng nhà: cách an toàn nhất là Tailscale trên Mac min
 - `src/sprites.js`: vẽ sprite, lật hướng và cắt texture theo địa hình.
 - `assets/`: 4 sprite nhân vật, 6 sprite vũ khí, 2 ảnh môi trường; xem `assets/README.md`.
 - `tests/physics.test.js`: đối xứng quỹ đạo, gió, phá địa hình, sát thương, độ chính xác bot.
-- `tests/match.test.js`, `tests/server.test.js`: luật trận, đội hình, phòng online, ghế, quyền chủ phòng.
+- `tests/match.test.js`, `tests/session.test.js`, `tests/server.test.js`: luật trận, đội hình, phiên luyện tập, phòng online, quyền chủ phòng.
 
 ## Phạm vi v0.3
 
