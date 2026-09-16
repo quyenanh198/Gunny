@@ -381,3 +381,12 @@ Trong lúc làm bản online, `main` nhận thêm 4 commit từ session khác: 5
 - **Bỏ `label`**: roster đặt thẳng tên người chơi vào `actor.name`, nên HUD, tên trên canvas và câu thông báo khi bắn chỉ đọc một trường.
 - **Docker**: ảnh cũ là nginx phục vụ tĩnh, không còn đúng khi game cần server cho phòng và trận. Đổi sang `node:22-alpine` chạy `server/server.js`, giữ nguyên cổng 8080 và `/healthz` để hợp đồng với caddy phía trước không đổi; xóa `nginx.conf`. Proxy phải chuyển tiếp WebSocket trên `/ws`, nếu không chỉ còn chế độ luyện tập.
 - Kiểm chứng sau merge: 50 unit test, smoke test đầy đủ (27 asset, 5 map, ba màn hình, rematch), và kịch bản hai trình duyệt chơi online qua server.
+
+### 17. Đối chiếu với Gunbound và kiến trúc viết lại
+
+Hai tài liệu mới tách khỏi file này vì nội dung dài và có vòng đời riêng:
+
+- `docs/gunbound-review.md`: đọc Gunbound bản PC và bản mobile về gameplay và design, kèm 10 đề xuất chỉnh sửa xếp theo giá trị trên công sức, danh sách việc không nên làm, và rủi ro khi đổi sang hệ delay.
+- `ARCHITECTURE.md`: kiến trúc hiện tại (tầng, module, vòng đời, mô hình dữ liệu, giao thức, tính xác định), ba món nợ kiến trúc, kiến trúc mục tiêu với các seam cụ thể cho thứ tự lượt theo delay, bộ ba vũ khí mỗi nhân vật và item, cùng kế hoạch chuyển đổi năm giai đoạn.
+
+Kết luận ngắn: khác biệt lớn nhất giữa chúng ta và bản mẫu không phải số lượng nội dung, mà là **thứ tự lượt**. Xen kẽ cứng làm mọi phát bắn có giá như nhau; delay biến việc chọn vũ khí, dùng item và cả tốc độ suy nghĩ thành quyết định. Đề xuất làm giai đoạn A và B trước, vì mọi nội dung thêm sau đó sẽ được thiết kế cho đúng hệ.
