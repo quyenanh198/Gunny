@@ -8,6 +8,7 @@ import {
   drawBlast,
 } from "./sprites.js";
 import { Match, MAX_ROUNDS, DIFFICULTIES, ammoOf } from "./match.js";
+import { MAPS } from "./physics.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("game"),
   ctx = canvas.getContext("2d");
@@ -39,7 +40,10 @@ function sync() {
   });
   $("round").textContent = `LƯỢT ${String(m.round).padStart(2, "0")}/${MAX_ROUNDS}`;
   $("timer").textContent = Math.ceil(m.time);
-  $("wind").textContent = `GIÓ ${m.wind < 0 ? "←" : "→"} ${Math.abs(m.wind)}`;
+  // Wind is px/s² in physics (max 30); players see a 0..10 scale.
+  $("wind").textContent = m.wind
+    ? `GIÓ ${m.wind < 0 ? "←" : "→"} cấp ${Math.ceil(Math.abs(m.wind) / 3)}`
+    : "GIÓ LẶNG";
   $("energy").textContent = `${Math.ceil(m.energy)} / 100`;
   const tilt = Math.round(m.tiltOf(actors[0]));
   $("angle").value = actors[0].angle;
@@ -291,6 +295,10 @@ $("help").onclick = () => {
 $("closeHelp").onclick = () => $("guide").close();
 $("guide").addEventListener("close", () => (paused = document.hidden));
 $("difficulty").onchange = () => m.setDifficulty($("difficulty").value);
+$("map").onchange = () => {
+  m.setMap($("map").value);
+  updateLoadout();
+};
 await start();
 
 function updateLoadout() {
@@ -299,6 +307,8 @@ function updateLoadout() {
     img.src = assetURL(CHARACTERS.find((c) => c.id === actor.skin).file);
     img.alt = actor.name;
   }
+  $("mapName").textContent = m.map.name;
+  $("mapLabel").textContent = m.map.name.toUpperCase();
   const [lo] = ammoOf(m.actors[0]).angles;
   $("angle").min = lo;
   $("angle").max = 180 - lo;
@@ -339,12 +349,17 @@ function buildLoadout() {
       $(kind + "Choices").append(button);
     }
   }
-  for (const d of DIFFICULTIES) {
-    const option = document.createElement("option");
-    option.value = d.id;
-    option.textContent = d.name;
-    option.selected = d.id === m.difficulty.id;
-    $("difficulty").append(option);
+  for (const [select, entries, current] of [
+    ["difficulty", DIFFICULTIES, m.difficulty.id],
+    ["map", MAPS, m.map.id],
+  ]) {
+    for (const entry of entries) {
+      const option = document.createElement("option");
+      option.value = entry.id;
+      option.textContent = entry.name;
+      option.selected = entry.id === current;
+      $(select).append(option);
+    }
   }
 }
 async function start() {

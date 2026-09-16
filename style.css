@@ -104,7 +104,7 @@ h1 {
   letter-spacing: -1.2px;
   margin: 8px 0;
 }
-h1 span {
+h1 span + span {
   font-size: 11px;
   vertical-align: middle;
   border: 1px solid #ffffff35;
@@ -262,6 +262,11 @@ label b {
 label b small {
   font-size: 9px;
   color: #aec49c;
+}
+.setup {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
 }
 .difficulty select {
   font: inherit;

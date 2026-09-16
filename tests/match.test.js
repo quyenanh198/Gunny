@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Match, MAX_ROUNDS, TURN_TIME, DIFFICULTIES } from "../src/match.js";
-import { DT, HEIGHT, ENERGY } from "../src/physics.js";
+import { DT, HEIGHT, ENERGY, MAPS } from "../src/physics.js";
 
 const run = (m, seconds) => {
   for (let t = 0; t < seconds; t += DT) m.update(DT);
@@ -122,4 +122,15 @@ test("loadout changes are refused while charging or off turn", () => {
   assert.equal(m.actors[0].name, "Bzz");
   m.nextTurn();
   assert.equal(m.setLoadout({ weapon: "star" }), false);
+});
+
+test("changing the map restarts on that map's terrain", () => {
+  const m = new Match({ seed: 4 });
+  m.actors[1].hp = 5;
+  m.setMap("vuc-sau");
+  assert.equal(m.map.id, "vuc-sau");
+  assert.equal(m.actors[1].hp, 100);
+  assert.equal(m.terrain[600], HEIGHT);
+  assert.equal(m.round, 1);
+  assert.ok(MAPS.some((map) => map.id === "doi-doi"));
 });

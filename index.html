@@ -21,7 +21,7 @@
       <div class="heading">
         <div>
           <p class="eyebrow">MỘT PHÁT BẮN. NGÀN NIỀM VUI.</p>
-          <h1>Đảo Gió Xanh<span>01</span></h1>
+          <h1><span id="mapName">Đảo Gió Xanh</span><span>01</span></h1>
           <p>Chỉnh góc thật khéo. Thả một chút bất ngờ.</p>
         </div>
         <button id="restart" class="subtle">↻ Trận mới</button>
@@ -58,7 +58,9 @@
         <div class="status" id="status" role="status">
           Đến lượt bạn — ngắm và giữ để bắn!
         </div>
-        <div class="map-label">✧ ĐẢO GIÓ XANH <span>•</span> 1 VS 1</div>
+        <div class="map-label">
+          ✧ <span id="mapLabel">ĐẢO GIÓ XANH</span> <span>•</span> 1 VS 1
+        </div>
       </section>
       <section class="controls">
         <div class="move">
@@ -105,10 +107,16 @@
           <legend>VŨ KHÍ <span>Khác quỹ đạo, sức phá và sát thương</span></legend>
           <div id="weaponChoices" class="choices weapons"></div>
         </fieldset>
-        <fieldset class="difficulty">
-          <legend><label for="difficulty">ĐỘ KHÓ BOT</label></legend>
-          <select id="difficulty"></select>
-        </fieldset>
+        <div class="setup">
+          <fieldset class="difficulty">
+            <legend><label for="difficulty">ĐỘ KHÓ BOT</label></legend>
+            <select id="difficulty"></select>
+          </fieldset>
+          <fieldset class="difficulty">
+            <legend><label for="map">BẢN ĐỒ <span>Đổi là bắt đầu trận mới</span></label></legend>
+            <select id="map"></select>
+          </fieldset>
+        </div>
       </section>
       <footer>
         <span><i></i> <span id="turnHint">Lượt của bạn</span></span

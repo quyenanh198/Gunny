@@ -3,6 +3,7 @@ import {
   WIDTH,
   HEIGHT,
   makeTerrain,
+  MAPS,
   launch,
   step,
   collides,
@@ -46,8 +47,9 @@ export function mulberry32(seed) {
 export const ammoOf = (actor) => WEAPONS.find((w) => w.id === actor.weapon).ammo;
 
 export class Match {
-  constructor({ seed, character = "mochi", weapon = "carrot", difficulty = "normal" } = {}) {
+  constructor({ seed, character = "mochi", weapon = "carrot", difficulty = "normal", map = MAPS[0].id } = {}) {
     this.seed = seed;
+    this.map = MAPS.find((m) => m.id === map) || MAPS[0];
     this.character = character;
     this.weapon = weapon;
     this.difficulty = DIFFICULTIES.find((d) => d.id === difficulty) || DIFFICULTIES[1];
@@ -56,7 +58,7 @@ export class Match {
   }
   reset() {
     this.random = this.seed === undefined ? Math.random : mulberry32(this.seed);
-    this.terrain = makeTerrain();
+    this.terrain = makeTerrain(this.map);
     this.originalTerrain = [...this.terrain];
     this.terrainDirty = true;
     const player = CHARACTERS.find((c) => c.id === this.character);
@@ -123,6 +125,11 @@ export class Match {
     }
     this.keys.clear();
     return true;
+  }
+  // Changing the map restarts the match.
+  setMap(id) {
+    this.map = MAPS.find((m) => m.id === id) || this.map;
+    this.reset();
   }
   setDifficulty(id) {
     this.difficulty = DIFFICULTIES.find((d) => d.id === id) || this.difficulty;
