@@ -6,10 +6,6 @@ import {
   launch,
   step,
   collides,
-  crater,
-  damage,
-  fallDamage,
-  botShot,
   BODY_OFFSET,
   HIT_RADIUS,
   slopeAngle,
@@ -22,33 +18,25 @@ import {
 import { CHARACTERS, WEAPONS } from "./assets.js";
 import { createAnimation, playAnimation, advanceAnimation } from "./animation.js";
 import { MAPS } from "./maps.js";
+import { resolveExplosion, combatLoadout, gainSs } from "./core/combat.js";
+import { chooseBotAction, chooseBotShot } from "./core/bot.js";
+import { TurnQueue } from "./core/turn-queue.js";
+import {
+  MAX_ROUNDS,
+  TURN_TIME,
+  START_HP,
+  MAX_TEAM,
+  DIFFICULTIES,
+  mulberry32,
+  normaliseRoster,
+} from "./core/match-config.js";
 
-export const MAX_ROUNDS = 30;
-export const TURN_TIME = 25;
-export const START_HP = 100;
-export const MAX_TEAM = 3;
-export const DIFFICULTIES = [
-  { id: "easy", name: "Dễ", angleJitter: 10, powerJitter: 14, angleStep: 6, powerStep: 4 },
-  { id: "normal", name: "Vừa", angleJitter: 5, powerJitter: 8, angleStep: 3, powerStep: 2 },
-  { id: "hard", name: "Khó", angleJitter: 2, powerJitter: 3, angleStep: 3, powerStep: 2 },
-];
+export { MAX_ROUNDS, TURN_TIME, START_HP, MAX_TEAM, DIFFICULTIES, mulberry32 };
 // Spawn columns per team: left half and right half of the island.
 const SIDES = [
   [40, 540],
   [660, 1160],
 ];
-
-// Small seeded PRNG so a match can be replayed (?seed=123).
-export function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 export const ammoOf = (actor) => WEAPONS.find((w) => w.id === actor.weapon).ammo;
 
@@ -81,20 +69,7 @@ export class Match {
   // Normalise a lobby roster: clamp team sizes, fill names/skins/weapons, keep a
   // team from being empty (a lone bot steps in, as setTeams does).
   static normaliseRoster(roster) {
-    const skinIds = CHARACTERS.map((c) => c.id),
-      weaponIds = WEAPONS.map((w) => w.id);
-    let humans = 0;
-    return [0, 1].map((t) => {
-      const members = (Array.isArray(roster?.[t]) ? roster[t] : []).slice(0, MAX_TEAM).map((member) => {
-        const control = member?.control === "bot" ? "bot" : "human";
-        const skin = skinIds.includes(member?.skin) ? member.skin : null;
-        const weapon = weaponIds.includes(member?.weapon) ? member.weapon : null;
-        const typed = typeof member?.name === "string" ? member.name.trim().slice(0, 16) : "";
-        if (control === "human") humans++;
-        return { control, skin, weapon, name: typed || (control === "human" ? `Người ${humans}` : "") };
-      });
-      return members.length ? members : [{ control: "bot", skin: null, weapon: null, name: "" }];
-    });
+    return normaliseRoster(roster);
   }
   setRoster(roster, { reset = true } = {}) {
     this.roster = Match.normaliseRoster(roster);
@@ -139,6 +114,7 @@ export class Match {
           control: human ? "human" : "bot",
           x: spawns[i],
           hp: START_HP,
+          ss: 0,
           skin,
           name: member.name || CHARACTERS.find((c) => c.id === skin).name,
           weapon: member.weapon || (human ? this.weapon : "acorn"),
@@ -153,7 +129,8 @@ export class Match {
       });
     });
     this.cursor = [0, 0];
-    this.turn = this.actors.findIndex((a) => a.team === 0);
+    this.turnQueue = new TurnQueue(this.actors);
+    this.turn = this.turnQueue.current;
     this.cursor[0] = 1;
     this.round = 1;
     this.wind = this.randomWind();
@@ -162,6 +139,10 @@ export class Match {
     this.phase = "aim";
     this.projectile = null;
     this.charge = 0;
+    this.shotType = "s1";
+    this.item = null;
+    this.pendingDelay = 100;
+    this.stats = this.actors.map(() => ({ shots: 0, hits: 0, damage: 0, terrainDamage: 0, totalDelay: 0 }));
     this.charging = false;
     this.wait = this.current.control === "bot" ? 1.1 : 0;
     this.particles = [];
@@ -186,7 +167,7 @@ export class Match {
     return picked;
   }
   randomWind() {
-    return Math.round((this.random() - 0.5) * 60);
+    return Math.round((this.random() * 2 - 1) * this.map.windRange);
   }
   tiltOf(actor) {
     return slopeAngle(this.terrain, actor.x);
@@ -258,6 +239,12 @@ export class Match {
   setDifficulty(id) {
     this.difficulty = DIFFICULTIES.find((d) => d.id === id) || this.difficulty;
   }
+  setAction({ shot, item }) {
+    if (this.phase !== "aim" || this.charging) return false;
+    if (["s1", "s2", "ss"].includes(shot)) this.shotType = shot;
+    if ([null, "power", "blood", "teleport", "dual"].includes(item)) this.item = item;
+    return true;
+  }
   beginCharge() {
     if (this.playerCanAct && !this.charging) {
       this.charging = true;
@@ -275,12 +262,21 @@ export class Match {
   }
   shoot(angle, power) {
     const actor = this.current,
-      ammo = ammoOf(actor);
+      ammo = ammoOf(actor),
+      rules = combatLoadout(this.shotType, this.item, actor.ss);
+    rules.craterScale /= this.map.groundHardness;
+    actor.ss -= rules.ssCost;
+    actor.hp = Math.max(1, actor.hp - rules.hpCost);
     angle = clampAngle(angle, ammo.angles);
     actor.angle = angle;
     playAnimation(actor.animation, "shoot");
     this.charging = false;
     this.projectile = launch(actor, launchAngle(angle, this.tiltOf(actor)), power, ammo);
+    this.projectile.rules = rules;
+    this.projectile.shooter = this.turn;
+    this.pendingDelay = rules.delay + Math.round((TURN_TIME - this.time) * 2);
+    this.stats[this.turn].shots++;
+    this.stats[this.turn].totalDelay += this.pendingDelay;
     this.trail = [];
     this.phase = "flight";
     // Naming the shooter matters once several people share one match.
@@ -296,14 +292,24 @@ export class Match {
   }
   explode(p) {
     this.blasts.push({ x: p.x, y: p.y, age: 0 });
-    crater(this.terrain, p.x, p.y, p.ammo.craterWidth, p.ammo.craterDepth);
+    const before = [...this.terrain];
+    const hits = resolveExplosion(this.terrain, this.actors, p, p.rules);
+    const shooter = this.actors[p.shooter];
+    const dealt = hits.reduce((sum, hit, index) => sum + (this.actors[index].team !== shooter.team ? hit : 0), 0);
+    shooter.ss = gainSs(shooter.ss, dealt);
+    this.stats[p.shooter].damage += dealt;
+    this.stats[p.shooter].terrainDamage += this.terrain.reduce((sum, y, index) => sum + Math.max(0, y - before[index]), 0);
+    if (dealt) this.stats[p.shooter].hits++;
+    hits.forEach((hit, index) => {
+      if (index !== p.shooter) this.actors[index].ss = gainSs(this.actors[index].ss, Math.ceil(hit / 2));
+    });
+    if (p.rules.teleport) {
+      shooter.x = Math.max(25, Math.min(WIDTH - 26, p.x));
+      shooter.y = this.terrain[Math.floor(shooter.x)];
+    }
     this.terrainDirty = true;
-    for (const a of this.actors) {
-      if (a.hp <= 0) continue;
-      const floor = this.terrain[Math.floor(a.x)];
-      const hit = damage(a, p.x, p.y, p.ammo) + fallDamage(floor - a.y);
-      a.hp = Math.max(0, a.hp - hit);
-      a.y = floor;
+    for (const [i, a] of this.actors.entries()) {
+      const hit = hits[i];
       if (hit > 0) {
         a.hurt = 0.3;
         playAnimation(a.animation, "hurt");
@@ -355,12 +361,8 @@ export class Match {
             : `Hết lượt! ${this.teamName(1)} nhiều máu hơn, thắng. ↻ Thử lại nhé!`;
       return;
     }
-    // Teams alternate; within a team the living members rotate.
-    const team = 1 - this.current.team,
-      members = this.alive(team);
-    const next = members[this.cursor[team] % members.length];
-    this.cursor[team]++;
-    this.turn = this.actors.indexOf(next);
+    this.turn = this.turnQueue.complete(this.turn, this.pendingDelay, (index) => this.actors[index].hp > 0);
+    this.cursor[this.current.team]++;
     this.round++;
     this.time = TURN_TIME;
     this.energy = ENERGY;
@@ -368,6 +370,9 @@ export class Match {
     this.phase = "aim";
     this.wait = 1.1;
     this.charge = 0;
+    this.shotType = "s1";
+    this.item = null;
+    this.pendingDelay = 180;
     this.charging = false;
     this.keys.clear();
     this.status = this.turnMessage();
@@ -425,21 +430,8 @@ export class Match {
       } else {
         this.wait -= dt;
         if (this.wait <= 0) {
-          // Nearest living enemy.
-          const enemies = this.alive(1 - a.team);
-          const target = enemies.reduce((best, e) =>
-            Math.abs(e.x - a.x) < Math.abs(best.x - a.x) ? e : best,
-          );
-          const shot = botShot(
-            a,
-            target,
-            this.wind,
-            this.terrain,
-            this.random,
-            ammoOf(a),
-            this.tiltOf(a),
-            this.difficulty,
-          );
+          this.setAction(chooseBotAction(a, this.difficulty));
+          const shot = chooseBotShot(this, a, ammoOf(a));
           this.shoot(shot.angle, shot.power);
         }
       }

@@ -1017,10 +1017,28 @@ body[data-screen="game"] main {
   flex-direction: column;
   /* a flex item with auto margins shrinks to its content; take the full width */
   width: 100%;
-  padding: 12px 16px 14px;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
 }
 body[data-screen="game"] footer {
   display: none;
+}
+.room-chat {
+  margin-top: 12px;
+}
+.room-chat ul {
+  max-height: 140px;
+  overflow: auto;
+}
+.room-chat form {
+  display: flex;
+  gap: 8px;
+}
+.room-chat input {
+  flex: 1;
 }
 #game {
   height: 100%;
@@ -1057,6 +1075,11 @@ body[data-screen="game"] .arena {
 body[data-screen="game"] canvas {
   width: 100%;
   height: 100%;
+}
+body[data-screen="game"] button,
+body[data-screen="game"] input[type="range"] {
+  min-height: 44px;
+  touch-action: manipulation;
 }
 #leaveMatch {
   position: absolute;
@@ -1130,14 +1153,47 @@ body[data-screen="game"] canvas {
 }
 body[data-screen="game"] .controls {
   flex: 0 0 auto;
-  grid-template-columns: auto 1.2fr 1.2fr auto 150px;
+  grid-template-columns: auto 1.2fr 1.2fr auto auto 150px;
   gap: 18px;
   padding: 14px 18px;
   margin-top: 0;
 }
+.combat-options > div {
+  display: flex;
+  gap: 4px;
+}
+.combat-options button {
+  min-width: 44px;
+}
+.combat-options select {
+  width: 100%;
+  min-height: 32px;
+}
+.combat-options small {
+  display: block;
+  max-width: 190px;
+  overflow: hidden;
+  color: #aec49c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 body[data-screen="game"] #fire {
   font-size: 19px;
   padding: 12px;
+}
+.aim-fine {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.aim-fine button {
+  min-width: 44px;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+#rotateHint {
+  display: none;
 }
 /* Short screens: trade chrome for arena. */
 @media (max-height: 620px) {
@@ -1152,8 +1208,8 @@ body[data-screen="game"] #fire {
     padding: 10px 12px;
   }
   .rack button {
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
   }
   .rack button img {
     width: 28px;
@@ -1170,6 +1226,9 @@ body[data-screen="game"] #fire {
     padding: 12px;
   }
   body[data-screen="game"] .controls .rack {
+    grid-column: 1 / -1;
+  }
+  body[data-screen="game"] .combat-options {
     grid-column: 1 / -1;
   }
   .map-label {
@@ -1203,7 +1262,7 @@ body[data-screen="game"] #fire {
     height: 28px;
   }
   body[data-screen="game"] .player strong {
-    font-size: 9px;
+    font-size: 12px;
   }
   body[data-screen="game"] .player strong small {
     font-size: 6px;
@@ -1215,7 +1274,7 @@ body[data-screen="game"] #fire {
     margin: 4px 0 2px;
   }
   body[data-screen="game"] .player > div > span {
-    font-size: 6px;
+    font-size: 12px;
   }
   body[data-screen="game"] .turn {
     padding: 3px 8px;
@@ -1253,7 +1312,23 @@ body[data-screen="game"] #fire {
     white-space: nowrap;
   }
   body[data-screen="game"] .controls {
-    grid-template-columns: auto 1.1fr 1.1fr auto 130px;
+    grid-template-columns: auto 1.1fr 1.1fr auto auto 130px;
+  }
+}
+@media (max-width: 599px) and (orientation: portrait) {
+  body[data-screen="game"] #rotateHint {
+    display: block;
+    position: fixed;
+    z-index: 5;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(6px, env(safe-area-inset-bottom));
+    margin: 0;
+    padding: 6px 10px;
+    border-radius: 999px;
+    color: #f5f1cf;
+    background: #143937dc;
+    font-size: 12px;
+    pointer-events: none;
   }
 }
 /* Phone portrait: the scoreboard already sits above the canvas, so the arena

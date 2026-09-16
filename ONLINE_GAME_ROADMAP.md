@@ -86,6 +86,8 @@ Hoàn thành khi:
 
 Mục tiêu: giảm rủi ro trước khi thêm gameplay.
 
+**Trạng thái: hoàn thành.** Logic trận, UI, server và content đã được tách theo ranh giới trên; các entry point công khai, protocol, gameplay và layout được giữ nguyên. Chi tiết xác minh nằm trong `HANDOFF.md`.
+
 - Tách `match.js`: `combat.js`, `bot.js`, `turn-queue.js` placeholder, `match.js` điều phối.
 - Tách `game.js`: screen controller, renderer, HUD, input adapters.
 - Tách `server/server.js`: HTTP bootstrap, `RoomManager`, `Room`, connection validation.
@@ -101,6 +103,8 @@ Hoàn thành khi:
 ### Giai đoạn 2 — Protocol online bền vững
 
 Mục tiêu: chịu được mạng thật, tab nền, Wi-Fi chập chờn và client lỗi.
+
+**Trạng thái: đang thực hiện.** Protocol v1, validation, sequence/ack/tick/version, heartbeat, rate limit và reconnect giữ ghế 30 giây đã có; network simulation và đánh giá snapshot delta còn lại.
 
 - Thêm `protocolVersion`, schema validation cho mọi message.
 - Mỗi input có `clientSeq`; snapshot có `serverTick`, `lastAckSeq`, `roomVersion`.
@@ -122,6 +126,8 @@ Hoàn thành khi:
 
 Mục tiêu: hình ảnh mượt nhưng server vẫn authoritative.
 
+**Trạng thái: đang thực hiện.** Client đã buffer snapshot 120 ms, nội suy actor/projectile, snap correction lớn, đếm timer từ snapshot server và resync khi reconnect; kiểm thử latency/jitter thực tế còn lại.
+
 - Buffer snapshot 100–150 ms; nội suy actor/projectile theo `serverTick`.
 - Client prediction chỉ cho thao tác cục bộ ít rủi ro: aim, charge UI, nút di chuyển.
 - Server reconciliation cho vị trí; sửa mềm dưới ngưỡng, snap khi sai lớn.
@@ -138,6 +144,8 @@ Hoàn thành khi:
 ### Giai đoạn 4 — Responsive cross-platform
 
 Mục tiêu: desktop, tablet, mobile chơi được; không chỉ “co nhỏ desktop”.
+
+**Trạng thái: đang thực hiện.** Canvas đã dùng DPR tối đa 2, layout có safe-area/touch target 44 px, aim ±0,5°/±1°, pointer cancel/orientation handling và portrait hint; browser viewport matrix/60 FPS còn cần xác minh.
 
 #### Layout chung
 
@@ -187,6 +195,8 @@ Hoàn thành khi:
 
 Mục tiêu: tạo chiều sâu trước khi thêm nhiều nội dung.
 
+**Trạng thái: đang thực hiện.** Delay queue, S1/S2/SS, SS gauge, bốn item, map profile, match stats và bot action theo delay đã có; character-specific shot behavior và balance simulation còn lại.
+
 - Thay xen kẽ cứng bằng `TurnQueue` theo delay.
 - Thời gian suy nghĩ, loại shot, item cùng cộng delay trên server.
 - HUD luôn hiển thị 5–8 lượt kế tiếp.
@@ -207,6 +217,8 @@ Hoàn thành khi:
 
 Mục tiêu: người chơi vào trận nhanh, ở lại được, không cần hệ thống quá lớn.
 
+**Trạng thái: sẵn sàng beta ở phạm vi RAM hiện tại.** Quick Join, chat giới hạn/rate limit, ready/kick/host, spectator snapshot và lịch sử 10 trận trong RAM đã có; UI mute còn lại.
+
 - Quick Join theo phòng còn ghế; private room bằng mã vẫn giữ.
 - Chat phòng/trận với mute, rate limit, giới hạn độ dài.
 - Ready check, kick bởi host trước trận, chuyển host ổn định.
@@ -223,6 +235,8 @@ Hoàn thành khi:
 ### Giai đoạn 7 — Production trên Mac mini
 
 Mục tiêu: chạy ổn định cho vài chục người.
+
+**Trạng thái: sẵn sàng staging.** Health/readiness/metrics, graceful shutdown, structured bootstrap log, runbook và load-smoke đã có; ngưỡng tick p95 cần đo trên Mac mini đích.
 
 - HTTPS/WSS qua Caddy hoặc Cloudflare Tunnel; xác minh WebSocket upgrade.
 - Process supervision: launchd hoặc Docker restart policy; graceful shutdown.
@@ -285,4 +299,3 @@ Không gộp refactor toàn bộ, reconnect và hệ delay vào cùng PR.
 - Không scroll trong battle; touch không kẹt charge/move sau orientation change.
 - Server chịu tải mục tiêu với tick p95 đạt ngưỡng.
 - Có log, health check, rollback và thông báo khi server mất kết nối.
-
