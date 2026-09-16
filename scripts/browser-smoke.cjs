@@ -88,7 +88,7 @@ const assert = require("node:assert/strict");
     ]) {
       await page.locator(`[data-map="${id}"]`).click();
       assert.match(
-        await page.locator("#mapTitle").innerText(),
+        await page.locator("#mapName").innerText(),
         new RegExp(name),
       );
       assert.equal(
@@ -113,7 +113,7 @@ const assert = require("node:assert/strict");
     assert.equal(await page.locator("#powerValue").innerText(), "0%");
     assert.equal(await page.locator("#round").innerText(), "LƯỢT 01");
     await page.locator("#restart").click();
-    assert.match(await page.locator("#mapTitle").innerText(), /Death Valley/);
+    assert.match(await page.locator("#mapName").innerText(), /Death Valley/);
     await page.locator('[data-map="sky"]').click();
     await page.locator("#restart").click();
     assert.equal(await page.locator("#name0").innerText(), "Nemu");

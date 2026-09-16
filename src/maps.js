@@ -12,6 +12,7 @@ export const MAPS = [
     ground: "ground",
     preview: "environment/sky-islands.webp",
     spawns: [205, 980],
+    spawnZones: [[40, 540], [660, 1160]],
     createTerrain: makeTerrain,
   },
   {
@@ -23,6 +24,7 @@ export const MAPS = [
     ground: "candy-ground",
     preview: "environment/candy-valley.webp",
     spawns: [205, 980],
+    spawnZones: [[90, 470], [730, 1110]],
     createTerrain: () =>
       Array.from(
         { length: WIDTH },
@@ -42,6 +44,7 @@ export const MAPS = [
     ground: "moon-ground",
     preview: "environment/moonlit-grove.webp",
     spawns: [180, 1010],
+    spawnZones: [[70, 480], [760, 1130]],
     createTerrain: () =>
       Array.from(
         { length: WIDTH },
@@ -61,6 +64,7 @@ export const MAPS = [
     ground: "death-ground",
     preview: "environment/death-valley.webp",
     spawns: [170, 1030],
+    spawnZones: [[60, 430], [770, 1140]],
     createTerrain: () =>
       Array.from(
         { length: WIDTH },
@@ -81,6 +85,7 @@ export const MAPS = [
     ground: "celestial-ground",
     preview: "environment/celestial-stars.webp",
     spawns: [205, 990],
+    spawnZones: [[70, 470], [730, 1130]],
     createTerrain: () =>
       Array.from(
         { length: WIDTH },

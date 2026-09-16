@@ -21,15 +21,15 @@
       <div class="heading">
         <div>
           <p class="eyebrow">MỘT PHÁT BẮN. NGÀN NIỀM VUI.</p>
-          <h1 id="mapTitle">Đảo Gió Xanh<span id="mapNumber">01</span></h1>
+          <h1><span id="mapName">Đảo Gió Xanh</span><span id="mapNumber">01</span></h1>
           <p id="mapDescription">Đồi cỏ thoai thoải giữa những tầng mây.</p>
         </div>
         <button id="restart" class="subtle">↻ Trận mới</button>
       </div>
       <section class="map-picker" aria-label="Chọn bản đồ">
         <div class="map-picker-label">
-          <strong>CHỌN SÂN ĐẤU</strong
-          ><span>Đổi bản đồ sẽ bắt đầu trận mới</span>
+          <span>CHỌN SÂN ĐẤU</span>
+          <strong>Đổi map sẽ bắt đầu trận mới</strong>
         </div>
         <div id="mapChoices"></div>
       </section>
@@ -38,7 +38,7 @@
           <div class="player">
             <img class="avatar" id="avatar0" alt="Mochi" />
             <div>
-              <strong><span id="name0">Mochi</span> <small>BẠN</small></strong
+              <strong><span id="name0">Mochi</span> <small id="tag0">BẠN</small></strong
               ><progress id="hp0" max="100" value="100"></progress
               ><span id="health0">100 / 100 HP</span>
             </div>
@@ -49,7 +49,7 @@
           </div>
           <div class="player enemy">
             <div>
-              <strong><span id="name1">Hạt Dẻ</span> <small>BOT</small></strong
+              <strong><span id="name1">Hạt Dẻ</span> <small id="tag1">BOT</small></strong
               ><progress id="hp1" max="100" value="100"></progress
               ><span id="health1">100 / 100 HP</span>
             </div>
@@ -65,7 +65,10 @@
         <div class="status" id="status" role="status">
           Đến lượt bạn — ngắm và giữ để bắn!
         </div>
-        <div class="map-label" id="mapLabel">✧ ĐẢO GIÓ XANH • 1 VS 1</div>
+        <div class="map-label">
+          ✧ <span id="mapLabel">ĐẢO GIÓ XANH</span> <span>•</span>
+          <span id="versus">1 VS 1</span>
+        </div>
       </section>
       <section class="controls">
         <div class="move">
@@ -112,10 +115,23 @@
           <legend>VŨ KHÍ <span>Khác quỹ đạo, sức phá và sát thương</span></legend>
           <div id="weaponChoices" class="choices weapons"></div>
         </fieldset>
-        <fieldset class="difficulty">
-          <legend><label for="difficulty">ĐỘ KHÓ BOT</label></legend>
-          <select id="difficulty"></select>
-        </fieldset>
+        <div class="setup">
+          <fieldset class="difficulty">
+            <legend><label for="difficulty">ĐỘ KHÓ BOT</label></legend>
+            <select id="difficulty"></select>
+          </fieldset>
+          <fieldset class="difficulty">
+            <legend><label for="map">BẢN ĐỒ <span>Đổi là bắt đầu trận mới</span></label></legend>
+            <select id="map"></select>
+          </fieldset>
+          <fieldset class="difficulty teams">
+            <legend>ĐỘI HÌNH <span>Người chơi thay phiên trên cùng máy · Đổi là trận mới</span></legend>
+            <label for="humans0">Đội 1 người</label><select id="humans0"></select>
+            <label for="bots0">bot</label><select id="bots0"></select>
+            <label for="humans1">Đội 2 người</label><select id="humans1"></select>
+            <label for="bots1">bot</label><select id="bots1"></select>
+          </fieldset>
+        </div>
       </section>
       <footer>
         <span><i></i> <span id="turnHint">Lượt của bạn</span></span
@@ -130,6 +146,11 @@
         hoặc phải.
       </p>
       <ol>
+        <li>
+          Mỗi đội tối đa 3 thành viên, người hoặc bot. Nhiều người chơi thay phiên
+          trên cùng máy theo tên hiện ở thanh trạng thái. Vị trí xuất phát ngẫu
+          nhiên trong nửa sân của đội.
+        </li>
         <li>
           Dùng A/D hoặc nút mũi tên để di chuyển. Mỗi lượt có 100 năng lượng,
           lên dốc tốn nhiều hơn, dốc quá 45° thì không leo được.

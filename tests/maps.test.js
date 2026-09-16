@@ -8,6 +8,7 @@ import {
   simulate,
   damage,
   crater,
+  DEFAULT_AMMO,
 } from "../src/physics.js";
 
 test("original map stays unchanged and new maps have distinct safe terrain", () => {
@@ -36,7 +37,15 @@ test("both players can land damaging shots on every map with headwind or tailwin
         const actor = actors[side],
           target = actors[1 - side];
         const shot = botShot(actor, target, wind, terrain, () => 0.5);
-        const hit = simulate(actor, shot.angle, shot.power, wind, terrain);
+        const hit = simulate(
+          actor,
+          shot.angle,
+          shot.power,
+          wind,
+          terrain,
+          DEFAULT_AMMO,
+          target,
+        );
         assert.ok(
           damage(target, hit.x, hit.y) > 20,
           `${map.id} wind ${wind} side ${side}`,

@@ -22,6 +22,10 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 - A/D hoặc nút trái/phải: di chuyển. Mỗi lượt có 100 năng lượng, đi ngang hoặc xuống dốc tốn 1 mỗi pixel, lên dốc tốn thêm 2 lần độ dốc (tan), dốc quá 45° không leo được. Đứng trong hố sâu thì phải bắn ra chứ không trèo được.
 - ↑/↓ hoặc thanh trượt: góc 10–170°. 45° hướng phải, 135° hướng trái. Mỗi vũ khí có dải góc riêng (cối hạt dẻ chỉ 45–85°); kéo vào vùng cấm quanh 90° sẽ nhảy sang hướng ngược lại. Đứng trên dốc thì góc thật cộng thêm độ dốc (tối đa 20°), HUD hiển thị phần cộng thêm; góc thật không bao giờ vượt qua 90° sang hướng ngược lại.
 - Giữ SPACE hoặc nút BẮN để tăng lực, thả để bắn. Lực tối đa được giữ ở 100%.
+- Gió hiển thị theo cấp 0 đến 10 (mỗi cấp 3 px/s² trong vật lý), mũi tên là chiều gió.
+- 5 bản đồ chọn bằng thẻ preview hoặc danh sách trong bảng chuẩn bị; đổi bản đồ là trận mới: Đảo Gió Xanh, Thung Lũng Kẹo, Đêm Nấm Phát Sáng, Death Valley và Thiên Tinh. Mỗi map có background, texture đất, heightmap và vùng xuất phát riêng.
+- Đội hình: mỗi đội 0 đến 3 người và 0 đến 3 bot, ít nhất 1 thành viên. Nhiều người chơi thay phiên trên cùng máy (hot-seat), thanh trạng thái ghi tên người đến lượt; bảng chọn nhân vật và vũ khí áp cho người đang có lượt. Trong đội, các thành viên còn sống luân phiên; hai đội xen kẽ. Bot bắn kẻ địch gần nhất. Đội thua khi mọi thành viên hết máu. Chưa có chơi online, cần server, ngoài phạm vi repo.
+- Vị trí xuất phát ngẫu nhiên theo seed trong vùng an toàn riêng của từng map, cách nhau ít nhất 70 px và không đứng trên vực.
 - Độ khó bot chọn trong bảng chuẩn bị: Dễ, Vừa, Khó, khác nhau ở độ lệch ngắm và mật độ tìm kiếm. Áp dụng từ lượt bot kế tiếp.
 - Thêm `?seed=123` vào URL để trận lặp lại y hệt (gió, skin bot, độ lệch của bot), tiện tái hiện lỗi.
 - Mỗi lượt 25 giây, hết giờ mất lượt. Tối đa 30 lượt, sau đó ai nhiều máu hơn thắng, bằng nhau thì hòa. Bot tự ngắm theo địa hình và gió, có độ lệch nhẹ.

@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Match, MAX_ROUNDS, TURN_TIME, DIFFICULTIES } from "../src/match.js";
+import { Match, MAX_ROUNDS, TURN_TIME, DIFFICULTIES, MAX_TEAM } from "../src/match.js";
 import { DT, HEIGHT, ENERGY } from "../src/physics.js";
+import { MAPS } from "../src/maps.js";
 
 const run = (m, seconds) => {
   for (let t = 0; t < seconds; t += DT) m.update(DT);
@@ -28,7 +29,10 @@ test("switching maps resets the match on that map and preserves the loadout", ()
   m.round = 8;
   assert.equal(m.setMap("death"), true);
   assert.equal(m.map.id, "death");
-  assert.deepEqual(m.actors.map((actor) => actor.x), m.map.spawns);
+  for (const actor of m.actors) {
+    const [lo, hi] = m.map.spawnZones[actor.team];
+    assert.ok(actor.x >= lo && actor.x <= hi);
+  }
   assert.equal(m.actors[0].skin, "nemu");
   assert.equal(m.actors[0].weapon, "star");
   assert.equal(m.round, 1);
@@ -136,4 +140,64 @@ test("loadout changes are refused while charging or off turn", () => {
   assert.equal(m.actors[0].name, "Bzz");
   m.nextTurn();
   assert.equal(m.setLoadout({ weapon: "star" }), false);
+});
+
+test("changing the map restarts on that map's terrain", () => {
+  const m = new Match({ seed: 4 });
+  m.actors[1].hp = 5;
+  m.setMap("death");
+  assert.equal(m.map.id, "death");
+  assert.equal(m.actors[1].hp, 100);
+  assert.deepEqual(m.terrain, m.map.createTerrain());
+  assert.equal(m.round, 1);
+  assert.ok(MAPS.some((map) => map.id === "celestial"));
+});
+
+test("spawns are random per seed, on the team's side, spaced and on ground", () => {
+  const a = new Match({ seed: 11 }),
+    b = new Match({ seed: 12 });
+  assert.notEqual(a.actors[0].x, b.actors[0].x);
+  const big = new Match({ seed: 3, teams: [{ humans: 1, bots: 2 }, { humans: 0, bots: 3 }], map: "celestial" });
+  assert.equal(big.actors.length, 6);
+  for (const actor of big.actors) {
+    assert.ok(actor.team === 0 ? actor.x < 600 : actor.x > 600);
+    assert.ok(actor.y < HEIGHT - 60, "not over the pit");
+    for (const other of big.actors) if (other !== actor && other.team === actor.team) assert.ok(Math.abs(other.x - actor.x) >= 70);
+  }
+});
+
+test("teams alternate and living members rotate; humans and bots mix", () => {
+  const m = new Match({ seed: 5, teams: [{ humans: 2, bots: 1 }, { humans: 1, bots: 1 }] });
+  assert.deepEqual(m.actors.map((a) => a.control), ["human", "human", "bot", "human", "bot"]);
+  assert.equal(m.current.player, 1);
+  assert.match(m.status, /người 1/);
+  const order = [];
+  for (let i = 0; i < 6; i++) {
+    order.push(m.turn);
+    m.nextTurn();
+  }
+  assert.deepEqual(order, [0, 3, 1, 4, 2, 3]);
+  m.actors[3].hp = 0;
+  m.nextTurn();
+  assert.equal(m.turn, 4, "dead members are skipped");
+  m.setTeams([{ humans: 0, bots: 0 }, { humans: 5, bots: 0 }]);
+  assert.deepEqual(m.teams, [{ humans: 0, bots: 1 }, { humans: MAX_TEAM, bots: 0 }]);
+  assert.equal(m.current.control, "bot");
+});
+
+test("a team loses only when every member is down", () => {
+  const m = new Match({ seed: 5, teams: [{ humans: 1, bots: 1 }, { humans: 0, bots: 2 }] });
+  m.actors[2].hp = 0;
+  assert.equal(m.checkWinner(), false);
+  m.actors[3].hp = 0;
+  assert.equal(m.checkWinner(), true);
+  assert.match(m.status, /Chiến thắng! Đội 1/);
+});
+
+test("bots shoot the nearest living enemy and never target the dead", () => {
+  const m = new Match({ seed: 6, teams: [{ humans: 0, bots: 1 }, { humans: 0, bots: 2 }] });
+  m.actors[1].hp = 0;
+  run(m, 1.2);
+  assert.equal(m.phase, "flight");
+  assert.equal(m.current, m.actors[0]);
 });

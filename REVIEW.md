@@ -308,9 +308,9 @@ Gameplay, theo mức ảnh hưởng:
 2. **Trận có thể kéo dài vô hạn.** Đã làm: `MAX_ROUNDS = 30` trong `game.js`, `nextTurn()` kết thúc trận khi hết lượt, ai nhiều máu hơn thắng, bằng nhau hòa. HUD hiện `LƯỢT 03/30`. Hết giờ vẫn mất lượt như cũ.
 3. **Đi bộ lên vách thẳng đứng.** Đã làm: `ENERGY = 100` mỗi lượt. `moveCost(terrain, x, dir)` trong `physics.js` trả năng lượng mỗi pixel: 1 khi phẳng hoặc xuống dốc, `1 + 2 · tan(dốc)` khi lên dốc, `Infinity` khi dốc lên quá `MAX_CLIMB = 45` độ thì `move()` không đi. Dốc đo bằng `groundSlope()` không cap, cửa sổ 12 px. Hệ quả cố ý và đúng thể loại: hố cà rốt 34 x 62 và hố cối 72 x 44 có vách gần thẳng đứng ở mép, đứng dưới đáy thì đi được trong lòng hố nhưng không trèo ra, phải bắn từ trong hố. Hố mật ong, bong bóng nông thì trèo ra được. Kiểm chứng bằng script: đứng trong hố, đi phải 1 giây tốn 94 năng lượng, kẹt ở vách.
 4. **Nghiêng cộng góc có thể bắn ngược hướng.** Đã làm cả hai: `MAX_TILT` hạ xuống 20, và `launchAngle(aim, tilt)` giữ góc thật cùng phía với góc chọn, tối đa 89 khi bắn phải, tối thiểu 91 khi bắn trái. Dùng chung ở `shoot()`, đường ngắm và bot. Dốc xuống vẫn hạ góc thật xuống dưới góc chọn, kể cả âm, nghĩa là bắn góc thấp trên dốc xuống có thể nổ ngay chân mình. Cố ý, tự trừng phạt.
-5. **Gió hiển thị số thô** `GIÓ ← 24` là px/s², người chơi không có cảm giác. Đổi sang thang 1 đến 10 hoặc số mũi tên, giữ giá trị thật trong logic.
-6. **Bot nhắm vào chân.** `botShot()` đo sai số tới `target.y` là chân, trong khi tâm sát thương là `y - BODY_OFFSET`. Chênh 20 px vẫn trong `HIT_RADIUS` nên chưa sai, nhưng nếu tăng `BODY_OFFSET` hoặc giảm `HIT_RADIUS` thì bot mất trúng trực tiếp.
-7. **Chỉ có một bản đồ**, `makeTerrain()` là hai hàm sin cố định. Thêm seed và vài profile địa hình sẽ đổi meta rõ rệt, nhưng test bot phải chạy trên nhiều map.
+5. **Gió hiển thị số thô.** Đã làm: HUD hiện `GIÓ → cấp 7`, cấp = ceil(|wind| / 3), 0 đến 10, `GIÓ LẶNG` khi 0. Vật lý vẫn dùng px/s².
+6. **Bot nhắm vào chân.** Đã làm: `botShot()` đo sai số tới `y - BODY_OFFSET`. Quan trọng hơn, `simulate()` nhận `target` và dừng khi đạn đi qua thân trong `HIT_RADIUS`, đúng như `Match.update()` cho nổ khi chạm người. Trước đây bot sim đạn xuyên qua người tới đất nên đánh giá sai những cú bắn thẳng vào thân. Test bot phải truyền `target` vào `simulate` cho khớp.
+7. **Chỉ có một bản đồ.** Đã làm: `MAPS` trong `maps.js` định nghĩa 5 sân đấu, gồm background, texture đất, heightmap và vùng spawn. `Match.setMap()` bắt đầu trận mới. Test: mọi map có địa hình hữu hạn, trơn, phá hủy độc lập; bot bắn trúng cả hai chiều dưới gió ngược và gió xuôi.
 
 Code và kiểm thử:
 
@@ -325,3 +325,14 @@ Asset, chờ model thiết kế:
 
 14. Sprite đạn 32x32 và pose `fire`, `hurt`, `win` như mục 6. Khi có sprite đạn, mũi tên chỉ đạn trên khung nên dùng chính sprite đó thu nhỏ.
 15. Ranh giới đá đang là dải tô màu. Nếu texture mới có lớp đá rõ ở đúng 45% dưới thì bỏ dải tô, chỉ giữ vạch.
+
+### 13. Đội hình, hot-seat và vị trí xuất phát ngẫu nhiên
+
+- Giả định đã nêu với người dùng: repo static không backend, nên "nhiều user cùng chơi" làm dạng hot-seat trên cùng máy. `Match` thuần, không DOM, nên lớp mạng sau này chỉ cần đồng bộ input (góc, lực, di chuyển) và seed; không cần viết lại luật.
+- `Match` nhận `teams: [{humans, bots}, {humans, bots}]`, mỗi đội tối đa `MAX_TEAM = 3`, đội trống tự thêm 1 bot. Actor có `team`, `control` (`human` hoặc `bot`), `player` (số thứ tự người). `current` là actor đang có lượt; mọi input, loadout, đường ngắm áp cho `current`.
+- Lượt: hai đội xen kẽ, trong đội các thành viên còn sống luân phiên bằng `cursor[team]`. Chết thì bỏ qua. Đội thua khi hết thành viên. Hết 30 lượt so tổng HP đội.
+- Bot bắn kẻ địch còn sống gần nhất theo trục x. Bắn nhầm đồng đội vẫn ăn sát thương, giống Gunny.
+- Spawn: `spawnColumns(team, n)` random trong `spawnZones` của map, cách nhau ít nhất 70 px, loại cột có `terrain[x] >= HEIGHT - 60`. Theo seed nên replay được. Thử 200 lần rồi rơi về chia đều.
+- HUD: hai thẻ điểm là hai đội, HP là tổng đội, ảnh và tên là người đang có lượt hoặc người sẽ có lượt tiếp theo của đội đó. Trên canvas thêm tên trên đầu mỗi nhân vật, màu theo đội, vì 6 nhân vật với 4 skin sẽ có trùng skin.
+- Kiểm chứng bằng script 3 vs 3: đội 1 hai người một bot, đội 2 ba bot. Lượt đi đúng người 1, bot địch, người 2. Không tràn ngang ở 390 px.
+- Chưa làm: chọn tên hoặc skin riêng cho người 2 và 3 trước trận, hiện họ nhận skin ngẫu nhiên và đổi được trong lượt của mình bằng bảng chọn. Chưa có lệnh bỏ lượt.
