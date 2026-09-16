@@ -325,3 +325,14 @@ Asset, chờ model thiết kế:
 
 14. Sprite đạn 32x32 và pose `fire`, `hurt`, `win` như mục 6. Khi có sprite đạn, mũi tên chỉ đạn trên khung nên dùng chính sprite đó thu nhỏ.
 15. Ranh giới đá đang là dải tô màu. Nếu texture mới có lớp đá rõ ở đúng 45% dưới thì bỏ dải tô, chỉ giữ vạch.
+
+### 13. Đội hình, hot-seat và vị trí xuất phát ngẫu nhiên
+
+- Giả định đã nêu với người dùng: repo static không backend, nên "nhiều user cùng chơi" làm dạng hot-seat trên cùng máy. `Match` thuần, không DOM, nên lớp mạng sau này chỉ cần đồng bộ input (góc, lực, di chuyển) và seed; không cần viết lại luật.
+- `Match` nhận `teams: [{humans, bots}, {humans, bots}]`, mỗi đội tối đa `MAX_TEAM = 3`, đội trống tự thêm 1 bot. Actor có `team`, `control` (`human` hoặc `bot`), `player` (số thứ tự người). `current` là actor đang có lượt; mọi input, loadout, đường ngắm áp cho `current`.
+- Lượt: hai đội xen kẽ, trong đội các thành viên còn sống luân phiên bằng `cursor[team]`. Chết thì bỏ qua. Đội thua khi hết thành viên. Hết 30 lượt so tổng HP đội.
+- Bot bắn kẻ địch còn sống gần nhất theo trục x. Bắn nhầm đồng đội vẫn ăn sát thương, giống Gunny.
+- Spawn: `spawnColumns(team, n)` random trong nửa sân của đội (40 đến 540 và 660 đến 1160), cách nhau ít nhất 70 px, loại cột có `terrain[x] >= HEIGHT - 60` để không đứng trên vực. Theo seed nên replay được. Thử 200 lần rồi rơi về chia đều.
+- HUD: hai thẻ điểm là hai đội, HP là tổng đội, ảnh và tên là người đang có lượt hoặc người sẽ có lượt tiếp theo của đội đó. Trên canvas thêm tên trên đầu mỗi nhân vật, màu theo đội, vì 6 nhân vật với 4 skin sẽ có trùng skin.
+- Kiểm chứng bằng script 3 vs 3: đội 1 hai người một bot, đội 2 ba bot. Lượt đi đúng người 1, bot địch, người 2. Không tràn ngang ở 390 px.
+- Chưa làm: chọn tên hoặc skin riêng cho người 2 và 3 trước trận, hiện họ nhận skin ngẫu nhiên và đổi được trong lượt của mình bằng bảng chọn. Chưa có lệnh bỏ lượt.

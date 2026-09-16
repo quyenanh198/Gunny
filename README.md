@@ -24,6 +24,8 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 - Giữ SPACE hoặc nút BẮN để tăng lực, thả để bắn. Lực tối đa được giữ ở 100%.
 - Gió hiển thị theo cấp 0 đến 10 (mỗi cấp 3 px/s² trong vật lý), mũi tên là chiều gió.
 - 4 bản đồ chọn trong bảng chuẩn bị, đổi bản đồ là trận mới: Đảo Gió Xanh (mặc định), Thung Lũng (gò giữa che tầm), Đồi Đôi (hai bên đứng cao, giữa trũng), Vực Sâu (khe giữa rơi là thua, chỉ bắn qua).
+- Đội hình: mỗi đội 0 đến 3 người và 0 đến 3 bot, ít nhất 1 thành viên. Nhiều người chơi thay phiên trên cùng máy (hot-seat), thanh trạng thái ghi tên người đến lượt; bảng chọn nhân vật và vũ khí áp cho người đang có lượt. Trong đội, các thành viên còn sống luân phiên; hai đội xen kẽ. Bot bắn kẻ địch gần nhất. Đội thua khi mọi thành viên hết máu. Chưa có chơi online, cần server, ngoài phạm vi repo.
+- Vị trí xuất phát ngẫu nhiên theo seed, đội 1 nửa trái, đội 2 nửa phải, cách nhau ít nhất 70 px, không đứng trên vực.
 - Độ khó bot chọn trong bảng chuẩn bị: Dễ, Vừa, Khó, khác nhau ở độ lệch ngắm và mật độ tìm kiếm. Áp dụng từ lượt bot kế tiếp.
 - Thêm `?seed=123` vào URL để trận lặp lại y hệt (gió, skin bot, độ lệch của bot), tiện tái hiện lỗi.
 - Mỗi lượt 25 giây, hết giờ mất lượt. Tối đa 30 lượt, sau đó ai nhiều máu hơn thắng, bằng nhau thì hòa. Bot tự ngắm theo địa hình và gió, có độ lệch nhẹ.

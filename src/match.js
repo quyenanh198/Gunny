@@ -1,4 +1,5 @@
 // Match state and rules. No DOM, no canvas: game.js renders this and feeds input.
+// Two teams, each a mix of humans (hot-seat on one device) and bots.
 import {
   WIDTH,
   HEIGHT,
@@ -26,10 +27,16 @@ import { createAnimation, playAnimation, advanceAnimation } from "./animation.js
 export const MAX_ROUNDS = 30;
 export const TURN_TIME = 25;
 export const START_HP = 100;
+export const MAX_TEAM = 3;
 export const DIFFICULTIES = [
   { id: "easy", name: "Dễ", angleJitter: 10, powerJitter: 14, angleStep: 6, powerStep: 4 },
   { id: "normal", name: "Vừa", angleJitter: 5, powerJitter: 8, angleStep: 3, powerStep: 2 },
   { id: "hard", name: "Khó", angleJitter: 2, powerJitter: 3, angleStep: 3, powerStep: 2 },
+];
+// Spawn columns per team: left half and right half of the island.
+const SIDES = [
+  [40, 540],
+  [660, 1160],
 ];
 
 // Small seeded PRNG so a match can be replayed (?seed=123).
@@ -47,11 +54,22 @@ export function mulberry32(seed) {
 export const ammoOf = (actor) => WEAPONS.find((w) => w.id === actor.weapon).ammo;
 
 export class Match {
-  constructor({ seed, character = "mochi", weapon = "carrot", difficulty = "normal", map = MAPS[0].id } = {}) {
+  constructor({
+    seed,
+    character = "mochi",
+    weapon = "carrot",
+    difficulty = "normal",
+    map = MAPS[0].id,
+    teams = [
+      { humans: 1, bots: 0 },
+      { humans: 0, bots: 1 },
+    ],
+  } = {}) {
     this.seed = seed;
-    this.map = MAPS.find((m) => m.id === map) || MAPS[0];
     this.character = character;
     this.weapon = weapon;
+    this.teams = teams;
+    this.map = MAPS.find((m) => m.id === map) || MAPS[0];
     this.difficulty = DIFFICULTIES.find((d) => d.id === difficulty) || DIFFICULTIES[1];
     this.keys = new Set();
     this.reset();
@@ -61,20 +79,44 @@ export class Match {
     this.terrain = makeTerrain(this.map);
     this.originalTerrain = [...this.terrain];
     this.terrainDirty = true;
-    const player = CHARACTERS.find((c) => c.id === this.character);
-    const others = CHARACTERS.filter((c) => c.id !== this.character);
-    const bot = others[Math.floor(this.random() * others.length)];
-    this.actors = [
-      { x: 205, hp: START_HP, color: "#7ebbc9", name: player.name, skin: player.id, weapon: this.weapon, angle: 45 },
-      { x: 980, hp: START_HP, color: "#ec9b6c", name: bot.name, skin: bot.id, weapon: "acorn", angle: 135 },
-    ];
-    for (const a of this.actors) {
-      a.y = this.terrain[Math.floor(a.x)];
-      a.hurt = 0;
-      a.walking = false;
-      a.animation = createAnimation();
-    }
-    this.turn = 0;
+    this.actors = [];
+    let humanIndex = 0;
+    const usedSkins = [];
+    const pickSkin = () => {
+      const fresh = CHARACTERS.filter((c) => !usedSkins.includes(c.id));
+      const pool = fresh.length ? fresh : CHARACTERS;
+      const skin = pool[Math.floor(this.random() * pool.length)].id;
+      usedSkins.push(skin);
+      return skin;
+    };
+    this.teams.forEach((team, t) => {
+      const spawns = this.spawnColumns(t, team.humans + team.bots);
+      for (let i = 0; i < team.humans + team.bots; i++) {
+        const human = i < team.humans;
+        // The first human keeps the loadout chosen in the setup panel.
+        const skin = human && humanIndex === 0 ? this.character : pickSkin();
+        if (human && humanIndex === 0) usedSkins.push(skin);
+        const a = {
+          team: t,
+          control: human ? "human" : "bot",
+          x: spawns[i],
+          hp: START_HP,
+          skin,
+          name: CHARACTERS.find((c) => c.id === skin).name,
+          weapon: human ? this.weapon : "acorn",
+          angle: t === 0 ? 45 : 135,
+          hurt: 0,
+          walking: false,
+          animation: createAnimation(),
+        };
+        if (human) a.player = ++humanIndex;
+        a.y = this.terrain[Math.floor(a.x)];
+        this.actors.push(a);
+      }
+    });
+    this.cursor = [0, 0];
+    this.turn = this.actors.findIndex((a) => a.team === 0);
+    this.cursor[0] = 1;
     this.round = 1;
     this.wind = this.randomWind();
     this.time = TURN_TIME;
@@ -83,15 +125,27 @@ export class Match {
     this.projectile = null;
     this.charge = 0;
     this.charging = false;
-    this.wait = 0;
+    this.wait = this.current.control === "bot" ? 1.1 : 0;
     this.particles = [];
     this.blasts = [];
     this.trail = [];
     this.popups = [];
     this.shake = 0;
     this.keys.clear();
-    this.setAim(45);
-    this.status = "Đến lượt bạn — ngắm và giữ để bắn!";
+    for (const a of this.actors) if (a.control === "human") this.setAim(a.angle, a);
+    this.status = this.turnMessage();
+  }
+  // Random columns on the team's side with spacing, never over a pit.
+  spawnColumns(team, count) {
+    const [lo, hi] = SIDES[team],
+      picked = [];
+    for (let tries = 0; picked.length < count && tries < 200; tries++) {
+      const x = Math.round(lo + this.random() * (hi - lo));
+      const safe = this.terrain[x] < HEIGHT - 60 && picked.every((p) => Math.abs(p - x) >= 70);
+      if (safe) picked.push(x);
+    }
+    while (picked.length < count) picked.push(lo + Math.round(((picked.length + 1) * (hi - lo)) / (count + 1)));
+    return picked;
   }
   randomWind() {
     return Math.round((this.random() - 0.5) * 60);
@@ -99,36 +153,63 @@ export class Match {
   tiltOf(actor) {
     return slopeAngle(this.terrain, actor.x);
   }
-  get playerCanAct() {
-    return this.turn === 0 && this.phase === "aim";
+  get current() {
+    return this.actors[this.turn];
   }
-  // Player aim, kept inside the weapon's range; see settleAim for the dead zone.
-  setAim(value) {
-    const a = this.actors[0];
-    a.angle = settleAim(value, a.angle, ammoOf(a).angles);
-    return a.angle;
+  get playerCanAct() {
+    return this.current.control === "human" && this.phase === "aim";
+  }
+  alive(team) {
+    return this.actors.filter((a) => a.team === team && a.hp > 0);
+  }
+  teamHp(team) {
+    return this.actors.filter((a) => a.team === team).reduce((s, a) => s + a.hp, 0);
+  }
+  teamName(team) {
+    const members = this.actors.filter((a) => a.team === team);
+    return members.length === 1 ? members[0].name : `Đội ${team + 1}`;
+  }
+  turnMessage() {
+    const a = this.current;
+    if (a.control === "bot") return `${a.name} đang ngắm…`;
+    const who = this.actors.filter((b) => b.control === "human").length > 1 ? ` (${a.name}, người ${a.player})` : "";
+    return `Đến lượt bạn${who} — ngắm và giữ để bắn!`;
+  }
+  // Aim of a human actor, kept inside the weapon's range; see settleAim for the dead zone.
+  setAim(value, actor = this.current) {
+    actor.angle = settleAim(value, actor.angle, ammoOf(actor).angles);
+    return actor.angle;
   }
   // Loadout changes are cosmetic mid-turn except the weapon's angle range.
   setLoadout({ character, weapon }) {
     if (!this.playerCanAct || this.charging) return false;
-    const a = this.actors[0];
+    const a = this.current;
     if (character) {
-      this.character = character;
+      if (a.player === 1) this.character = character;
       a.skin = character;
       a.name = CHARACTERS.find((c) => c.id === character).name;
       a.animation = createAnimation();
     }
     if (weapon) {
-      this.weapon = weapon;
+      if (a.player === 1) this.weapon = weapon;
       a.weapon = weapon;
-      this.setAim(a.angle);
+      this.setAim(a.angle, a);
     }
     this.keys.clear();
     return true;
   }
-  // Changing the map restarts the match.
+  // Changing the map or the team makeup restarts the match.
   setMap(id) {
     this.map = MAPS.find((m) => m.id === id) || this.map;
+    this.reset();
+  }
+  setTeams(teams) {
+    const clamp = (n) => Math.max(0, Math.min(MAX_TEAM, n | 0));
+    this.teams = teams.map(({ humans, bots }) => {
+      const h = clamp(humans),
+        b = clamp(bots);
+      return { humans: h, bots: h + b ? b : 1 };
+    });
     this.reset();
   }
   setDifficulty(id) {
@@ -142,7 +223,7 @@ export class Match {
   }
   release() {
     if (!this.charging) return;
-    if (this.playerCanAct) this.shoot(this.actors[0].angle, this.charge);
+    if (this.playerCanAct) this.shoot(this.current.angle, this.charge);
     else this.charging = false;
   }
   cancelCharge() {
@@ -150,7 +231,7 @@ export class Match {
     this.keys.clear();
   }
   shoot(angle, power) {
-    const actor = this.actors[this.turn],
+    const actor = this.current,
       ammo = ammoOf(actor);
     angle = clampAngle(angle, ammo.angles);
     actor.angle = angle;
@@ -159,11 +240,11 @@ export class Match {
     this.projectile = launch(actor, launchAngle(angle, this.tiltOf(actor)), power, ammo);
     this.trail = [];
     this.phase = "flight";
-    this.status = this.turn ? "Cẩn thận! Đạn đang tới…" : "Một phát bắn đầy hy vọng!";
+    this.status = actor.control === "bot" ? "Cẩn thận! Đạn đang tới…" : "Một phát bắn đầy hy vọng!";
   }
-  // Launch angle the player's shot would use right now, for the aim preview.
+  // Launch the current human's shot would use right now, for the aim preview.
   previewShot(power) {
-    const a = this.actors[0];
+    const a = this.current;
     return launch(a, launchAngle(a.angle, this.tiltOf(a)), power, ammoOf(a));
   }
   explode(p) {
@@ -171,6 +252,7 @@ export class Match {
     crater(this.terrain, p.x, p.y, p.ammo.craterWidth, p.ammo.craterDepth);
     this.terrainDirty = true;
     for (const a of this.actors) {
+      if (a.hp <= 0) continue;
       const floor = this.terrain[Math.floor(a.x)];
       const hit = damage(a, p.x, p.y, p.ammo) + fallDamage(floor - a.y);
       a.hp = Math.max(0, a.hp - hit);
@@ -201,12 +283,12 @@ export class Match {
   }
   move(dir, dt) {
     if (!this.playerCanAct || this.energy <= 0 || this.charging) return;
-    const a = this.actors[0],
+    const a = this.current,
       cost = moveCost(this.terrain, a.x, dir);
     if (cost === Infinity) return;
     const distance = Math.min(this.energy / cost, 65 * dt),
       x = Math.max(25, Math.min(WIDTH - 26, a.x + dir * distance));
-    if (Math.abs(x - this.actors[1].x) < 45) return;
+    if (this.actors.some((b) => b !== a && b.hp > 0 && Math.abs(x - b.x) < 45)) return;
     this.energy -= Math.abs(x - a.x) * cost;
     a.walking = Math.abs(x - a.x) > 0.001;
     if (a.walking) a.animation.moveDirection = dir;
@@ -217,16 +299,21 @@ export class Match {
     if (this.round >= MAX_ROUNDS) {
       this.phase = "over";
       this.charging = false;
-      const [a, b] = this.actors;
+      const [a, b] = [this.teamHp(0), this.teamHp(1)];
       this.status =
-        a.hp === b.hp
+        a === b
           ? "Hết lượt, hòa! ↻ Thử một trận nữa?"
-          : a.hp > b.hp
-            ? `Hết lượt! ${a.name} nhiều máu hơn, thắng! ✦`
-            : `Hết lượt! ${b.name} nhiều máu hơn, thắng. ↻ Thử lại nhé!`;
+          : a > b
+            ? `Hết lượt! ${this.teamName(0)} nhiều máu hơn, thắng! ✦`
+            : `Hết lượt! ${this.teamName(1)} nhiều máu hơn, thắng. ↻ Thử lại nhé!`;
       return;
     }
-    this.turn = 1 - this.turn;
+    // Teams alternate; within a team the living members rotate.
+    const team = 1 - this.current.team,
+      members = this.alive(team);
+    const next = members[this.cursor[team] % members.length];
+    this.cursor[team]++;
+    this.turn = this.actors.indexOf(next);
     this.round++;
     this.time = TURN_TIME;
     this.energy = ENERGY;
@@ -236,22 +323,20 @@ export class Match {
     this.charge = 0;
     this.charging = false;
     this.keys.clear();
-    this.status = this.turn
-      ? `${this.actors[1].name} đang ngắm…`
-      : "Đến lượt bạn — ngắm và giữ để bắn!";
+    this.status = this.turnMessage();
   }
   checkWinner() {
     for (const a of this.actors) if (a.y > HEIGHT - 20) a.hp = 0;
-    if (!this.actors.some((a) => a.hp <= 0)) return false;
+    const dead = [0, 1].map((t) => this.alive(t).length === 0);
+    if (!dead[0] && !dead[1]) return false;
     this.phase = "over";
     this.charging = false;
-    const [a, b] = this.actors;
     this.status =
-      a.hp <= 0 && b.hp <= 0
+      dead[0] && dead[1]
         ? "Hòa rồi! ↻ Thử một trận nữa?"
-        : b.hp <= 0
-          ? `Chiến thắng! ${a.name} làm được rồi! ✦`
-          : `${b.name} thắng! ↻ Thử lại nhé!`;
+        : dead[1]
+          ? `Chiến thắng! ${this.teamName(0)} làm được rồi! ✦`
+          : `${this.teamName(1)} thắng! ↻ Thử lại nhé!`;
     return true;
   }
   update(dt) {
@@ -282,9 +367,9 @@ export class Match {
         this.nextTurn();
         return;
       }
-      if (this.turn === 0) {
-        const keys = this.keys,
-          a = this.actors[0];
+      const a = this.current;
+      if (a.control === "human") {
+        const keys = this.keys;
         if (keys.has("left")) this.move(-1, dt);
         if (keys.has("right")) this.move(1, dt);
         if (keys.has("up")) this.setAim(a.angle + 45 * dt);
@@ -293,15 +378,19 @@ export class Match {
       } else {
         this.wait -= dt;
         if (this.wait <= 0) {
-          const [bot, player] = [this.actors[1], this.actors[0]];
+          // Nearest living enemy.
+          const enemies = this.alive(1 - a.team);
+          const target = enemies.reduce((best, e) =>
+            Math.abs(e.x - a.x) < Math.abs(best.x - a.x) ? e : best,
+          );
           const shot = botShot(
-            bot,
-            player,
+            a,
+            target,
             this.wind,
             this.terrain,
             this.random,
-            ammoOf(bot),
-            this.tiltOf(bot),
+            ammoOf(a),
+            this.tiltOf(a),
             this.difficulty,
           );
           this.shoot(shot.angle, shot.power);
@@ -315,6 +404,7 @@ export class Match {
       const direct = this.actors.some(
         (a, i) =>
           i !== this.turn &&
+          a.hp > 0 &&
           Math.hypot(a.x - p.x, a.y - BODY_OFFSET - p.y) < HIT_RADIUS,
       );
       if (collides(p, this.terrain) || direct) this.explode(p);

@@ -7,7 +7,7 @@ import {
   drawMuzzle,
   drawBlast,
 } from "./sprites.js";
-import { Match, MAX_ROUNDS, DIFFICULTIES, ammoOf } from "./match.js";
+import { Match, MAX_ROUNDS, MAX_TEAM, DIFFICULTIES, ammoOf } from "./match.js";
 import { MAPS } from "./physics.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("game"),
@@ -16,6 +16,7 @@ const seed = new URLSearchParams(location.search).get("seed");
 const m = new Match({ seed: seed === null ? undefined : +seed });
 let images = new Map(),
   groundLayer = null,
+  lastTurn = -1,
   last = 0,
   accumulator = 0,
   paused = false;
@@ -31,13 +32,28 @@ function refreshGround() {
     : null;
   m.terrainDirty = false;
 }
+// The actor a team card shows: the one acting now, else the next one to act.
+function teamFace(team) {
+  if (m.current.team === team) return m.current;
+  const alive = m.alive(team);
+  return alive[m.cursor[team] % alive.length] || m.actors.find((a) => a.team === team);
+}
 function sync() {
-  const { actors, turn, phase, charging } = m;
-  actors.forEach((a, i) => {
-    $("name" + i).textContent = a.name;
-    $("hp" + i).value = a.hp;
-    $("health" + i).textContent = `${a.hp} / 100 HP`;
-  });
+  const { actors, phase, charging } = m;
+  for (const team of [0, 1]) {
+    const face = teamFace(team),
+      size = actors.filter((a) => a.team === team).length;
+    $("name" + team).textContent = face.name;
+    $("tag" + team).textContent =
+      face.control === "bot" ? "BOT" : face.player === 1 && size === 1 ? "BẠN" : `NGƯỜI ${face.player}`;
+    $("hp" + team).max = size * 100;
+    $("hp" + team).value = m.teamHp(team);
+    $("health" + team).textContent = `${m.teamHp(team)} / ${size * 100} HP`;
+    const img = $("avatar" + team);
+    const src = assetURL(CHARACTERS.find((c) => c.id === face.skin).file);
+    if (img.getAttribute("src") !== src) img.src = src;
+    img.alt = face.name;
+  }
   $("round").textContent = `LƯỢT ${String(m.round).padStart(2, "0")}/${MAX_ROUNDS}`;
   $("timer").textContent = Math.ceil(m.time);
   // Wind is px/s² in physics (max 30); players see a 0..10 scale.
@@ -45,14 +61,14 @@ function sync() {
     ? `GIÓ ${m.wind < 0 ? "←" : "→"} cấp ${Math.ceil(Math.abs(m.wind) / 3)}`
     : "GIÓ LẶNG";
   $("energy").textContent = `${Math.ceil(m.energy)} / 100`;
-  const tilt = Math.round(m.tiltOf(actors[0]));
-  $("angle").value = actors[0].angle;
-  $("angleValue").firstChild.textContent = Math.round(actors[0].angle) + "° ";
+  const tilt = Math.round(m.tiltOf(m.current));
+  $("angle").value = m.current.angle;
+  $("angleValue").firstChild.textContent = Math.round(m.current.angle) + "° ";
   $("tiltValue").textContent = tilt ? `${tilt > 0 ? "+" : ""}${tilt}° dốc` : "";
   $("powerValue").textContent = Math.round(m.charge) + "%";
   $("powerFill").style.width = m.charge + "%";
   $("status").textContent = m.status;
-  const disabled = turn !== 0 || phase !== "aim" || paused;
+  const disabled = !m.playerCanAct || paused;
   ["fire", "angle", "left", "right"].forEach(
     (id) => ($(id).disabled = disabled),
   );
@@ -62,8 +78,8 @@ function sync() {
   $("turnHint").textContent =
     phase === "over"
       ? "Trận đấu kết thúc"
-      : turn === 0
-        ? "Lượt của bạn"
+      : m.current.control === "human"
+        ? `Lượt của ${m.current.name}`
         : "Bot đang ngắm";
 }
 function ellipse(x, y, rx, ry, color) {
@@ -83,6 +99,7 @@ function character(a, i) {
   const sprite = images.get(a.skin),
     active = m.turn === i && m.phase !== "over";
   ctx.save();
+  if (a.hp <= 0) ctx.globalAlpha = 0.45;
   // Stand perpendicular to the slope; the weapon inherits the tilt, matching launch().
   ctx.translate(a.x, a.y);
   ctx.rotate((-m.tiltOf(a) * Math.PI) / 180);
@@ -109,9 +126,17 @@ function character(a, i) {
   drawWeapon(ctx, images.get(a.weapon), a, a.angle, reducedMotion);
   drawMuzzle(ctx, a, a.angle, reducedMotion);
   ctx.restore();
+  // Name tag so teams of several actors stay readable.
+  ctx.font = "800 20px 'Be Vietnam Pro', system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#1c3b41";
+  ctx.strokeText(a.name, a.x, a.y - 134);
+  ctx.fillStyle = a.team === 0 ? "#d2ef9c" : "#ffb494";
+  ctx.fillText(a.name, a.x, a.y - 134);
 }
 function render() {
-  const { actors, turn, phase, projectile, trail } = m;
+  const { actors, projectile, trail } = m;
   ctx.save();
   if (m.shake > 0 && !reducedMotion) {
     const s = (m.shake / 0.3) * 6;
@@ -150,7 +175,7 @@ function render() {
     ctx.stroke();
   }
   actors.forEach(character);
-  if (turn === 0 && phase === "aim") {
+  if (m.playerCanAct) {
     const p = m.previewShot(m.charging ? m.charge : 50);
     for (let n = 0; n < 38; n++) {
       step(p, m.wind, 0.025);
@@ -158,7 +183,7 @@ function render() {
       if (n % 4 === 0) ellipse(p.x, p.y, 2.5, 2.5, "#ffffefaa");
     }
   }
-  const weaponColor = WEAPONS.find((w) => w.id === actors[turn].weapon).color;
+  const weaponColor = WEAPONS.find((w) => w.id === m.current.weapon).color;
   trail.forEach((p, i) =>
     ellipse(p.x, p.y, (3 * i) / trail.length, (3 * i) / trail.length, weaponColor + "bb"),
   );
@@ -212,6 +237,10 @@ function frame(now) {
     accumulator -= DT;
   }
   if (m.terrainDirty) refreshGround();
+  if (lastTurn !== m.turn) {
+    lastTurn = m.turn;
+    updateLoadout();
+  }
   render();
   sync();
   requestAnimationFrame(frame);
@@ -299,26 +328,41 @@ $("map").onchange = () => {
   m.setMap($("map").value);
   updateLoadout();
 };
+for (const id of ["humans0", "bots0", "humans1", "bots1"]) {
+  $(id).onchange = () => {
+    m.setTeams([
+      { humans: +$("humans0").value, bots: +$("bots0").value },
+      { humans: +$("humans1").value, bots: +$("bots1").value },
+    ]);
+    updateLoadout();
+  };
+}
 await start();
 
+// Loadout buttons follow the human whose turn it is, else the first human.
+function loadoutActor() {
+  return m.current.control === "human"
+    ? m.current
+    : m.actors.find((a) => a.control === "human") || m.current;
+}
 function updateLoadout() {
-  for (const [index, actor] of m.actors.entries()) {
-    const img = $("avatar" + index);
-    img.src = assetURL(CHARACTERS.find((c) => c.id === actor.skin).file);
-    img.alt = actor.name;
-  }
   $("mapName").textContent = m.map.name;
   $("mapLabel").textContent = m.map.name.toUpperCase();
-  const [lo] = ammoOf(m.actors[0]).angles;
+  $("versus").textContent = m.teams.map((t) => t.humans + t.bots).join(" VS ");
+  const actor = loadoutActor(),
+    [lo] = ammoOf(actor).angles;
   $("angle").min = lo;
   $("angle").max = 180 - lo;
   $("tickMin").textContent = lo + "°";
   $("tickMax").textContent = 180 - lo + "°";
   document.querySelectorAll(".loadout button").forEach((button) => {
-    const selected =
-      button.dataset.kind === "character" ? m.character : m.weapon;
+    const selected = button.dataset.kind === "character" ? actor.skin : actor.weapon;
     button.setAttribute("aria-pressed", String(button.dataset.id === selected));
   });
+  for (const [t, team] of m.teams.entries()) {
+    $("humans" + t).value = team.humans;
+    $("bots" + t).value = team.bots;
+  }
 }
 function buildLoadout() {
   for (const [kind, entries] of [
@@ -347,6 +391,14 @@ function buildLoadout() {
         if (m.setLoadout({ [kind]: entry.id })) updateLoadout();
       };
       $(kind + "Choices").append(button);
+    }
+  }
+  for (const id of ["humans0", "bots0", "humans1", "bots1"]) {
+    for (let n = 0; n <= MAX_TEAM; n++) {
+      const option = document.createElement("option");
+      option.value = n;
+      option.textContent = n;
+      $(id).append(option);
     }
   }
   for (const [select, entries, current] of [

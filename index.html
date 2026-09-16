@@ -31,7 +31,7 @@
           <div class="player">
             <img class="avatar" id="avatar0" alt="Mochi" />
             <div>
-              <strong><span id="name0">Mochi</span> <small>BẠN</small></strong
+              <strong><span id="name0">Mochi</span> <small id="tag0">BẠN</small></strong
               ><progress id="hp0" max="100" value="100"></progress
               ><span id="health0">100 / 100 HP</span>
             </div>
@@ -42,7 +42,7 @@
           </div>
           <div class="player enemy">
             <div>
-              <strong><span id="name1">Hạt Dẻ</span> <small>BOT</small></strong
+              <strong><span id="name1">Hạt Dẻ</span> <small id="tag1">BOT</small></strong
               ><progress id="hp1" max="100" value="100"></progress
               ><span id="health1">100 / 100 HP</span>
             </div>
@@ -59,7 +59,8 @@
           Đến lượt bạn — ngắm và giữ để bắn!
         </div>
         <div class="map-label">
-          ✧ <span id="mapLabel">ĐẢO GIÓ XANH</span> <span>•</span> 1 VS 1
+          ✧ <span id="mapLabel">ĐẢO GIÓ XANH</span> <span>•</span>
+          <span id="versus">1 VS 1</span>
         </div>
       </section>
       <section class="controls">
@@ -116,6 +117,13 @@
             <legend><label for="map">BẢN ĐỒ <span>Đổi là bắt đầu trận mới</span></label></legend>
             <select id="map"></select>
           </fieldset>
+          <fieldset class="difficulty teams">
+            <legend>ĐỘI HÌNH <span>Người chơi thay phiên trên cùng máy · Đổi là trận mới</span></legend>
+            <label for="humans0">Đội 1 người</label><select id="humans0"></select>
+            <label for="bots0">bot</label><select id="bots0"></select>
+            <label for="humans1">Đội 2 người</label><select id="humans1"></select>
+            <label for="bots1">bot</label><select id="bots1"></select>
+          </fieldset>
         </div>
       </section>
       <footer>
@@ -131,6 +139,11 @@
         hoặc phải.
       </p>
       <ol>
+        <li>
+          Mỗi đội tối đa 3 thành viên, người hoặc bot. Nhiều người chơi thay phiên
+          trên cùng máy theo tên hiện ở thanh trạng thái. Vị trí xuất phát ngẫu
+          nhiên trong nửa sân của đội.
+        </li>
         <li>
           Dùng A/D hoặc nút mũi tên để di chuyển. Mỗi lượt có 100 năng lượng,
           lên dốc tốn nhiều hơn, dốc quá 45° thì không leo được.

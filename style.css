@@ -268,6 +268,14 @@ label b small {
   gap: 32px;
   flex-wrap: wrap;
 }
+.teams label {
+  display: inline;
+  font-size: 10px;
+  margin: 0 6px 0 0;
+}
+.teams select {
+  margin-right: 14px;
+}
 .difficulty select {
   font: inherit;
   font-size: 12px;
