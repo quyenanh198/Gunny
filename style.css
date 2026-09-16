@@ -257,6 +257,20 @@ label {
 label b {
   font-size: 16px;
   color: #e4f4c4;
+  white-space: nowrap;
+}
+label b small {
+  font-size: 9px;
+  color: #aec49c;
+}
+.difficulty select {
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: #ffffff08;
+  border: 1px solid #ffffff25;
+  border-radius: 8px;
+  padding: 8px 12px;
 }
 label span {
   font-size: 9px;
@@ -383,10 +397,11 @@ dialog li {
   .heading p:last-child {
     font-size: 10px;
   }
+  /* Canvas is only ~190px tall on phones; keep the HUD out of it. */
   .scoreboard {
-    top: 8px;
-    left: 8px;
-    right: 8px;
+    position: static;
+    padding: 8px;
+    background: #102b33;
   }
   .player {
     padding: 7px;
@@ -551,6 +566,11 @@ dialog li {
   width: 62px;
   height: 48px;
 }
+.weapons small {
+  font-size: 8px;
+  color: #94ada5;
+  line-height: 1.5;
+}
 .loadout button:disabled {
   opacity: 0.65;
 }
@@ -596,6 +616,9 @@ dialog li {
   }
   .weapons img {
     width: 56px;
+  }
+  .weapons small {
+    font-size: 7px;
   }
   .loadout legend span {
     font-size: 8px;

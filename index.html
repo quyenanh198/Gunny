@@ -69,7 +69,7 @@
       </section>
       <section class="controls">
         <div class="move">
-          <label>DI CHUYỂN <span id="energy">60 / 60</span></label>
+          <label>DI CHUYỂN <span id="energy">100 / 100</span></label>
           <div>
             <button id="left" aria-label="Di chuyển trái">←</button
             ><button id="right" aria-label="Di chuyển phải">→</button
@@ -77,7 +77,8 @@
           </div>
         </div>
         <div class="aim">
-          <label for="angle">GÓC BẮN <b id="angleValue">45°</b></label
+          <label for="angle"
+            >GÓC BẮN <b id="angleValue">45° <small id="tiltValue"></small></b></label
           ><input
             id="angle"
             type="range"
@@ -87,7 +88,8 @@
             value="45"
           />
           <div class="ticks">
-            <span>10°</span><span>90°</span><span>170°</span>
+            <span id="tickMin">10°</span><span>90°</span
+            ><span id="tickMax">170°</span>
           </div>
         </div>
         <div class="power">
@@ -107,8 +109,12 @@
           <div id="characterChoices" class="choices characters"></div>
         </fieldset>
         <fieldset>
-          <legend>VŨ KHÍ <span>Cùng chỉ số, khác diện mạo</span></legend>
+          <legend>VŨ KHÍ <span>Khác quỹ đạo, sức phá và sát thương</span></legend>
           <div id="weaponChoices" class="choices weapons"></div>
+        </fieldset>
+        <fieldset class="difficulty">
+          <legend><label for="difficulty">ĐỘ KHÓ BOT</label></legend>
+          <select id="difficulty"></select>
         </fieldset>
       </section>
       <footer>
@@ -125,14 +131,19 @@
       </p>
       <ol>
         <li>
-          Dùng A/D hoặc nút mũi tên để di chuyển. Mỗi lượt có 60 năng lượng.
+          Dùng A/D hoặc nút mũi tên để di chuyển. Mỗi lượt có 100 năng lượng,
+          lên dốc tốn nhiều hơn, dốc quá 45° thì không leo được.
         </li>
         <li>Kéo thanh góc: 45° bắn phải, 135° bắn trái. ↑/↓ cũng chỉnh góc.</li>
         <li>Giữ SPACE hoặc nút BẮN, thả ở lực mong muốn.</li>
         <li>
-          Nổ gần đối thủ gây sát thương và khoét đất. Rơi khỏi đảo sẽ thua!
+          Nổ gần đối thủ gây sát thương và khoét đất. Tụt xuống hố sâu cũng
+          mất máu. Rơi khỏi đảo sẽ thua!
         </li>
-        <li>Bạn có 25 giây mỗi lượt. Hết giờ sẽ mất lượt.</li>
+        <li>
+          Bạn có 25 giây mỗi lượt. Hết giờ sẽ mất lượt. Sau 30 lượt, ai nhiều máu
+          hơn thắng.
+        </li>
       </ol>
       <button id="closeHelp">Đã hiểu, vào trận!</button>
     </dialog>

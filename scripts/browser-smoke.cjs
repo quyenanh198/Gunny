@@ -152,11 +152,11 @@ const assert = require("node:assert/strict");
     assert.ok(parseInt(await page.locator("#powerValue").innerText()) > 30);
     await page.keyboard.up("Space");
     await page.waitForFunction(
-      () => document.querySelector("#round").textContent !== "LƯỢT 01",
+      () => !document.querySelector("#round").textContent.startsWith("LƯỢT 01"),
       { timeout: 15000 },
     );
     await page.waitForFunction(
-      () => document.querySelector("#round").textContent === "LƯỢT 03",
+      () => document.querySelector("#round").textContent.startsWith("LƯỢT 03"),
       { timeout: 15000 },
     );
     await page.locator("#restart").click();
@@ -200,13 +200,19 @@ const assert = require("node:assert/strict");
     );
     assert.deepEqual(errors, []);
     // Failed image requests fall back to playable procedural artwork.
+    // A second page can start hidden, which pauses the game and throttles
+    // requestAnimationFrame, so the HUD only enables once it is in front.
     const fallback = await browser.newPage();
     await fallback.route("**/assets/**", (route) => route.abort());
     await fallback.goto(process.env.GAME_URL || "http://127.0.0.1:5173");
+    await fallback.bringToFront();
     await fallback.waitForFunction(() =>
       document.querySelector("#assetStatus").textContent.includes("dự phòng"),
     );
-    assert.equal(await fallback.locator("#fire").isEnabled(), true);
+    await fallback.waitForFunction(
+      () => !document.querySelector("#fire").disabled,
+      { timeout: 5000 },
+    );
     await fallback.close();
     console.log(
       "PASS: 24 assets, 5 maps, 64 animation frames, 10 selections, map reset, restart, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",

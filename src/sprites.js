@@ -1,5 +1,5 @@
 import { animationFrame, recoilOffset } from "./animation.js";
-import { WIDTH, HEIGHT } from "./physics.js";
+import { WIDTH, HEIGHT, ROCK_Y } from "./physics.js";
 
 // Rebuild only after terrain changes, not for every animation frame.
 // Texture stays fixed to the original soil; craters reveal soil, not new grass.
@@ -23,6 +23,14 @@ export function terrainLayer(image, original, current) {
     );
     c.clearRect(x, 0, 1, current[x]);
   }
+  // Rock band. source-atop only tints pixels the texture already covers.
+  c.globalCompositeOperation = "source-atop";
+  c.fillStyle = "#2a2438";
+  c.globalAlpha = 0.42;
+  c.fillRect(0, ROCK_Y, WIDTH, HEIGHT - ROCK_Y);
+  c.globalAlpha = 0.7;
+  c.fillStyle = "#9a90a8";
+  c.fillRect(0, ROCK_Y, WIDTH, 3);
   return layer;
 }
 
@@ -32,8 +40,7 @@ export function drawCharacter(
   actor,
   facing,
   active,
-  sheet = null,
-  reducedMotion = false,
+  { flash = 0, sheet = null, reducedMotion = false } = {},
 ) {
   const height = 112;
   const width = (height * image.width) / image.height;
@@ -44,25 +51,34 @@ export function drawCharacter(
   ctx.ellipse(0, 0, 25, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.scale(facing, 1);
-  if (sheet) {
-    const { row, column } = animationFrame(actor.animation, reducedMotion);
-    const cellW = sheet.width / 4,
-      cellH = sheet.height / 4;
-    // 184/192 is the common foot baseline in every normalized cell.
-    const size = 128;
-    ctx.drawImage(
-      sheet,
-      column * cellW,
-      row * cellH,
-      cellW,
-      cellH,
-      -size / 2,
-      (-size * 184) / 192,
-      size,
-      size,
-    );
-  } else {
-    ctx.drawImage(image, -width / 2, -height + 1, width, height);
+  const draw = () => {
+    if (sheet) {
+      const { row, column } = animationFrame(actor.animation, reducedMotion);
+      const cellW = sheet.width / 4,
+        cellH = sheet.height / 4;
+      // 184/192 is the common foot baseline in every normalized cell.
+      const size = 128;
+      ctx.drawImage(
+        sheet,
+        column * cellW,
+        row * cellH,
+        cellW,
+        cellH,
+        -size / 2,
+        (-size * 184) / 192,
+        size,
+        size,
+      );
+    } else {
+      ctx.drawImage(image, -width / 2, -height + 1, width, height);
+    }
+  };
+  draw();
+  // "lighter" only brightens the sprite's own pixels, so the flash needs no mask.
+  if (flash > 0) {
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = flash;
+    draw();
   }
   ctx.restore();
   if (active) {

@@ -6,7 +6,7 @@
 - `weapons/`: carrot, acorn, honey, bubble, fish, star; transparent PNG.
 - `environment/`: five opaque backgrounds plus five destructible-ground textures: Sky Islands, Candy Valley, Moonlit Mushroom Grove, Death Valley and Celestial Stars.
 
-PNG sprites have a four-pixel transparent gutter. Runtime render uses feet at the actor anchor and mirrors sprites for left aim. The PNGs serve as HUD portraits and fallback sprites. Animated rendering uses the four WebP sheets in `animations/`. Weapons are cosmetic variants with identical physics and damage.
+PNG sprites have a four-pixel transparent gutter. Runtime render uses feet at the actor anchor and mirrors sprites for left aim. The PNGs serve as HUD portraits and fallback sprites. Animated rendering uses the four WebP sheets in `animations/`. Each weapon carries its own `ammo` parameters in `src/assets.js` (gravity, wind drift, crater width and depth, damage, angle range).
 
 `src/assets.js` is the runtime manifest and asset loader. Relative URLs support a hosted subdirectory. Image failure/timeout falls back to procedural artwork. The terrain texture is drawn against the original heightmap, then clipped against the live heightmap, so craters do not regrow grass.
 
