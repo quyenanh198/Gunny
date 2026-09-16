@@ -21,11 +21,18 @@
       <div class="heading">
         <div>
           <p class="eyebrow">MỘT PHÁT BẮN. NGÀN NIỀM VUI.</p>
-          <h1>Đảo Gió Xanh<span>01</span></h1>
-          <p>Chỉnh góc thật khéo. Thả một chút bất ngờ.</p>
+          <h1 id="mapTitle">Đảo Gió Xanh<span id="mapNumber">01</span></h1>
+          <p id="mapDescription">Đồi cỏ thoai thoải giữa những tầng mây.</p>
         </div>
         <button id="restart" class="subtle">↻ Trận mới</button>
       </div>
+      <section class="map-picker" aria-label="Chọn bản đồ">
+        <div class="map-picker-label">
+          <strong>CHỌN SÂN ĐẤU</strong
+          ><span>Đổi bản đồ sẽ bắt đầu trận mới</span>
+        </div>
+        <div id="mapChoices"></div>
+      </section>
       <section class="arena" aria-label="Sân đấu">
         <div class="scoreboard">
           <div class="player">
@@ -58,7 +65,7 @@
         <div class="status" id="status" role="status">
           Đến lượt bạn — ngắm và giữ để bắn!
         </div>
-        <div class="map-label">✧ ĐẢO GIÓ XANH <span>•</span> 1 VS 1</div>
+        <div class="map-label" id="mapLabel">✧ ĐẢO GIÓ XANH • 1 VS 1</div>
       </section>
       <section class="controls">
         <div class="move">
@@ -107,7 +114,7 @@
       <footer>
         <span><i></i> <span id="turnHint">Lượt của bạn</span></span
         ><span>↑ ↓ chỉnh góc <b>·</b> A D di chuyển <b>·</b> SPACE bắn</span
-        ><span>CHIBI ARENA / v0.3</span>
+        ><span>CHIBI ARENA / v0.5</span>
       </footer>
     </main>
     <dialog id="guide">

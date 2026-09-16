@@ -30,15 +30,16 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 - `src/physics.js`: vật lý bước cố định 120 Hz, địa hình dạng heightmap, sát thương và tìm góc cho bot.
 - `src/game.js`: trạng thái trận, input, render Canvas; HUD là HTML dễ tương tác bằng bàn phím.
 - `style.css`: giao diện desktop/mobile và bảng chọn trang bị.
-- `src/assets.js`: danh mục 16 asset và cơ chế tải có fallback.
+- `src/assets.js`: danh mục 24 asset và cơ chế tải có fallback.
+- `src/maps.js`: cấu hình 5 bản đồ, điểm xuất phát và heightmap riêng.
 - `src/animation.js`: trạng thái, thời lượng khung hình và recoil độc lập với vật lý.
 - `src/sprites.js`: vẽ sprite, lật hướng và cắt texture theo địa hình.
-- `assets/`: 4 sprite nhân vật, 6 sprite vũ khí, 2 ảnh môi trường; xem `assets/README.md`.
+- `assets/`: 4 sprite nhân vật, 6 sprite vũ khí, 4 sprite sheet và 10 ảnh môi trường; xem `assets/README.md`.
 - `tests/physics.test.js`: đối xứng quỹ đạo, gió, phá địa hình, sát thương, độ chính xác bot.
 
-## Phạm vi v0.3
+## Phạm vi v0.5
 
-Đấu tập 1v1 với bot, một bản đồ, 4 nhân vật và 6 diện mạo vũ khí có thể chọn. Sprite PNG riêng, background và texture sân đấu WebP. Các vũ khí cùng chỉ số. Mỗi nhân vật có 16 khung hình: đứng chờ, đi bộ, bắn và trúng đạn. Vũ khí có recoil/chớp nòng; vụ nổ có vòng xung kích. Animation dừng cùng trận và hỗ trợ prefers-reduced-motion. Chưa có PvP online, tài khoản, âm thanh, trang bị hay nâng cấp. Địa hình là heightmap nên có hố nhưng chưa có hang hoặc phần đất nhô độc lập. Không sử dụng mã nguồn, hình ảnh hoặc âm thanh của Gunny gốc.
+Đấu tập 1v1 với bot trên 5 bản đồ: Đảo Gió Xanh, Thung Lũng Kẹo, Đêm Nấm Phát Sáng, Death Valley và Thiên Tinh. Mỗi map có background, vật liệu đất, điểm xuất phát và địa hình phá hủy riêng. Có 4 nhân vật và 6 diện mạo vũ khí cùng chỉ số. Mỗi nhân vật có 16 khung hình: đứng chờ, đi bộ, bắn và trúng đạn. Vũ khí có recoil/chớp nòng; vụ nổ có vòng xung kích. Animation dừng cùng trận và hỗ trợ prefers-reduced-motion. Chưa có PvP online, tài khoản, âm thanh, trang bị hay nâng cấp. Địa hình là heightmap nên có hố nhưng chưa có hang hoặc phần đất nhô độc lập. Không sử dụng mã nguồn, hình ảnh hoặc âm thanh của Gunny gốc.
 
 ## Kiểm tra giao diện (tùy chọn)
 

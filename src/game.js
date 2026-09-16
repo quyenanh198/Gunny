@@ -2,7 +2,6 @@ import {
   WIDTH,
   HEIGHT,
   DT,
-  makeTerrain,
   launch,
   step,
   collides,
@@ -10,6 +9,7 @@ import {
   damage,
   botShot,
 } from "./physics.js";
+import { MAPS } from "./maps.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
 import {
   createAnimation,
@@ -54,21 +54,34 @@ motionPreference.addEventListener(
   (event) => (reducedMotion = event.matches),
 );
 let blasts = [];
+let activeMap = MAPS[0];
 let selectedCharacter = "mochi",
   selectedWeapon = "carrot";
 function refreshGround() {
-  groundLayer = images.has("ground")
-    ? terrainLayer(images.get("ground"), originalTerrain, terrain)
+  groundLayer = images.has(activeMap.ground)
+    ? terrainLayer(images.get(activeMap.ground), originalTerrain, terrain)
     : null;
 }
 const randomWind = () => Math.round((Math.random() - 0.5) * 60);
 function reset() {
-  terrain = makeTerrain();
+  terrain = activeMap.createTerrain();
+  $("mapTitle").firstChild.nodeValue = activeMap.name;
+  $("mapNumber").textContent = activeMap.number;
+  $("mapDescription").textContent = activeMap.description;
+  $("mapLabel").textContent = `✧ ${activeMap.name.toUpperCase()} • 1 VS 1`;
+  document
+    .querySelectorAll(".map-card")
+    .forEach((button) =>
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.map === activeMap.id),
+      ),
+    );
   originalTerrain = [...terrain];
   refreshGround();
   actors = [
-    { x: 205, hp: 100, color: "#7ebbc9", name: "Mochi" },
-    { x: 980, hp: 100, color: "#ec9b6c", name: "Hạt Dẻ" },
+    { x: activeMap.spawns[0], hp: 100, color: "#7ebbc9", name: "Mochi" },
+    { x: activeMap.spawns[1], hp: 100, color: "#ec9b6c", name: "Hạt Dẻ" },
   ];
   actors[0].skin = selectedCharacter;
   actors[0].weapon = selectedWeapon;
@@ -431,8 +444,8 @@ function character(a, i) {
   ctx.restore();
 }
 function render() {
-  if (images.has("background")) {
-    ctx.drawImage(images.get("background"), 0, 0, WIDTH, HEIGHT);
+  if (images.has(activeMap.background)) {
+    ctx.drawImage(images.get(activeMap.background), 0, 0, WIDTH, HEIGHT);
   } else {
     const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
     sky.addColorStop(0, "#a6d9df");
@@ -720,6 +733,7 @@ async function start() {
   const loaded = await loadAssets();
   images = loaded.images;
   buildLoadout();
+  buildMapChoices();
   reset();
   updateLoadout();
   $("assetStatus").textContent = loaded.failed.length
@@ -729,4 +743,28 @@ async function start() {
   $("restart").disabled = false;
   $("help").disabled = false;
   requestAnimationFrame(frame);
+}
+
+function buildMapChoices() {
+  for (const map of MAPS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "map-card";
+    button.dataset.map = map.id;
+    button.setAttribute("aria-label", `Bắt đầu trận tại ${map.name}`);
+    const image = document.createElement("img");
+    image.src = assetURL(map.preview);
+    image.alt = "";
+    image.onerror = () => (image.hidden = true);
+    const title = document.createElement("strong");
+    title.textContent = `${map.number} · ${map.name}`;
+    button.append(image, title);
+    button.onclick = () => {
+      if (paused || activeMap.id === map.id) return;
+      activeMap = map;
+      reset();
+      updateLoadout();
+    };
+    $("mapChoices").append(button);
+  }
 }

@@ -38,6 +38,14 @@ export const WEAPONS = [
   { id: "star", name: "Ná sao", file: "weapons/star.png", color: "#fff08e" },
 ];
 export const ENVIRONMENT = [
+  { id: "candy-background", file: "environment/candy-valley.webp" },
+  { id: "candy-ground", file: "environment/cake-ground.webp" },
+  { id: "moon-background", file: "environment/moonlit-grove.webp" },
+  { id: "moon-ground", file: "environment/moss-ground.webp" },
+  { id: "death-background", file: "environment/death-valley.webp" },
+  { id: "death-ground", file: "environment/death-ground.webp" },
+  { id: "celestial-background", file: "environment/celestial-stars.webp" },
+  { id: "celestial-ground", file: "environment/celestial-ground.webp" },
   { id: "background", file: "environment/sky-islands.webp" },
   { id: "ground", file: "environment/grass-earth.webp" },
 ];

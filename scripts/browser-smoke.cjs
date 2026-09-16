@@ -78,6 +78,43 @@ const assert = require("node:assert/strict");
       );
     }
     assert.equal(await page.locator("#name0").innerText(), "Nemu");
+    assert.equal(await page.locator(".map-card").count(), 5);
+    for (const [id, name] of [
+      ["candy", "Thung Lũng Kẹo"],
+      ["moon", "Đêm Nấm Phát Sáng"],
+      ["death", "Death Valley"],
+      ["celestial", "Thiên Tinh"],
+      ["sky", "Đảo Gió Xanh"],
+    ]) {
+      await page.locator(`[data-map="${id}"]`).click();
+      assert.match(
+        await page.locator("#mapTitle").innerText(),
+        new RegExp(name),
+      );
+      assert.equal(
+        await page.locator(`[data-map="${id}"]`).getAttribute("aria-pressed"),
+        "true",
+      );
+      assert.equal(await page.locator("#health0").innerText(), "100 / 100 HP");
+      assert.equal(await page.locator("#name0").innerText(), "Nemu");
+      if (process.env.SCREENSHOT_DIR && ["death", "celestial"].includes(id)) {
+        await page.screenshot({
+          path: `${process.env.SCREENSHOT_DIR}/map-${id}.png`,
+          fullPage: true,
+        });
+      }
+    }
+    // Switching maps during charge resets projectile, power and turn state.
+    await page.locator("#fire").focus();
+    await page.keyboard.down("Space");
+    await page.waitForTimeout(150);
+    await page.locator('[data-map="death"]').click();
+    await page.keyboard.up("Space");
+    assert.equal(await page.locator("#powerValue").innerText(), "0%");
+    assert.equal(await page.locator("#round").innerText(), "LƯỢT 01");
+    await page.locator("#restart").click();
+    assert.match(await page.locator("#mapTitle").innerText(), /Death Valley/);
+    await page.locator('[data-map="sky"]').click();
     await page.locator("#restart").click();
     assert.equal(await page.locator("#name0").innerText(), "Nemu");
     await page.locator('[data-id="mochi"]').click();
@@ -172,7 +209,7 @@ const assert = require("node:assert/strict");
     assert.equal(await fallback.locator("#fire").isEnabled(), true);
     await fallback.close();
     console.log(
-      "PASS: 16 assets, 64 animation frames, 10 selections, restart, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
+      "PASS: 24 assets, 5 maps, 64 animation frames, 10 selections, map reset, restart, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
     );
   } finally {
     await browser.close();
