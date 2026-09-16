@@ -1,5 +1,9 @@
 export function bindBattleInput({ $, getActive, getPaused, setPaused }) {
-const active = getActive;
+// Normalise here: getActive() must be a match or nullish for every `active()?.` below to
+// stay safe. A caller that returns e.g. `false` (falsy but not nullish) would make `?.`
+// evaluate the property access anyway and throw on the resulting undefined call — this bit
+// us once via `screen() === "game" && match()`, so guard against it here too.
+const active = () => getActive() || null;
 const beginCharge = () => {
   if (!getPaused()) active()?.beginCharge();
 };

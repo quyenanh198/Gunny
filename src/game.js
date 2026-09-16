@@ -28,7 +28,7 @@ let session = null,
 const match = () => (session && session.state === "playing" ? session.match : null);
 const screens = createScreenController({ $, getSession: () => session });
 const screen = screens.get;
-const active = () => screen() === "game" && match();
+const active = () => (screen() === "game" ? match() : null);
 bindBattleInput({
   $,
   getActive: active,
