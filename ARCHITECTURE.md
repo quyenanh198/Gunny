@@ -107,6 +107,36 @@ Client nội suy giữa hai snapshot bằng chính `physics.step`, nên đạn b
 - Hiệu ứng (particle, rung, trail) dùng `Math.random` tự do vì không ảnh hưởng luật.
 - Animation tiến theo cùng bước cố định, nên tạm dừng là đóng băng cả trận lẫn hình.
 
+## 7b. Hợp đồng bố cục
+
+Màn trận đấu là ứng dụng, không phải trang nội dung, nên nó khóa theo viewport:
+
+- `body[data-screen="game"]` cao đúng `100dvh`, `overflow: hidden`. Sảnh và phòng chờ vẫn cuộn bình thường vì chúng là trang nội dung.
+- Chiều dọc chia làm ba: header, `.stage` co giãn, `.controls` cao tự nhiên. Chỉ `.stage` nhận phần còn lại.
+- Khung tranh `.frame` giữ đúng tỉ lệ 1200x620 và lớn nhất có thể trong `.stage`.
+
+Kích thước khung do JavaScript tính, không do CSS. Lý do: yêu cầu "lớn nhất có thể mà vẫn đúng tỉ lệ" tạo phụ thuộc vòng trong CSS, vì bề rộng khung phụ thuộc chiều cao còn lại, mà chiều cao còn lại lại phụ thuộc bề rộng của chính nó qua `fit-content`. Đã thử `aspect-ratio` trên khung và để canvas tự co như ảnh; cả hai cho khung 1200x856, tức là ảnh bị kéo giãn 1,4 thay vì 1,94.
+
+```js
+// game.js
+function fitStage()   // scale = min(rộngKhả dụng / 1200, caoKhả dụng / 620)
+new ResizeObserver(fitStage).observe(stage);
+```
+
+Quan sát `.stage` chứ không nghe `resize` của cửa sổ, vì thanh điều khiển có thể xuống dòng và đổi phần chỗ còn lại sau khi `resize` đã bắn. Mọi lớp phủ HUD đặt trong `.frame` nên luôn dính đúng mép tranh; bảng điểm nằm ngoài khung, đè lên tranh trên màn rộng và xếp phía trên tranh trên điện thoại.
+
+Số đo sau khi làm, không màn hình nào phải cuộn:
+
+| Màn hình | Canvas trước | Canvas sau | Cuộn trước |
+|---|---|---|---|
+| 1920x1080 | 633 px | 665 px | 205 px |
+| 1440x900 | 633 px | 665 px | 385 px |
+| 1366x768 | 633 px | 544 px | 517 px |
+| Điện thoại dọc 390x844 | 187 px | 191 px | 301 px |
+| Điện thoại ngang 844x390 | 388 px | 244 px | 751 px |
+
+Smoke test kiểm tra lại ở bốn kích thước: không cuộn dọc, không tràn ngang, tỉ lệ khung lệch dưới 2%, và toàn bộ khung nằm trong viewport.
+
 ## 8. Nợ kiến trúc
 
 Ba món, xếp theo mức cản trở:

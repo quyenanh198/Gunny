@@ -997,3 +997,304 @@ body:not(.is-online) #copyLink {
     padding: 16px 6px 6px;
   }
 }
+
+/* ------------------------------------------------- battle fits the viewport */
+/* Gunbound keeps a match inside one screen; so does this one. Only the battle
+   screen locks to the viewport — the lobby and the room are documents. */
+body[data-screen="game"] {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+body[data-screen="game"] header {
+  flex: 0 0 auto;
+}
+body[data-screen="game"] main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* a flex item with auto margins shrinks to its content; take the full width */
+  width: 100%;
+  padding: 12px 16px 14px;
+}
+body[data-screen="game"] footer {
+  display: none;
+}
+#game {
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+body[data-screen="game"] #game {
+  display: flex;
+}
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  /* center, not stretch: on phones the arena is only as tall as its content */
+  align-items: center;
+}
+/* The frame is sized in JS (fitStage) because CSS alone cannot resolve
+   "as large as fits, exact 1200x620 ratio" without a circular dependency
+   between the canvas and its wrapper. Everything here just follows the frame,
+   so the HUD overlays always land exactly on the picture. */
+body[data-screen="game"] .arena {
+  width: fit-content;
+  max-width: 100%;
+  border: 0;
+  box-shadow:
+    0 0 0 4px #ffffff12,
+    0 18px 50px #0003;
+}
+.frame {
+  position: relative;
+}
+body[data-screen="game"] canvas {
+  width: 100%;
+  height: 100%;
+}
+#leaveMatch {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 1;
+  padding: 8px 12px;
+  font-size: 10px;
+  background: #143937d0;
+}
+.map-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 62%;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.map-label b {
+  font-size: 11px;
+  color: #cfed9a;
+}
+.map-label strong {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+.map-label #mapDescription {
+  text-transform: none;
+  letter-spacing: 0;
+  color: #dfe8c9c0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-label span {
+  margin: 0;
+}
+/* Weapons sit in the control bar, icon only: no second scrolling section. */
+.rack > div {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rack button {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #ffffff18;
+  border-radius: 10px;
+  background: #ffffff06;
+}
+.rack button img {
+  width: 34px;
+  height: 30px;
+  object-fit: contain;
+}
+.rack button span,
+.rack button small {
+  display: none;
+}
+.rack button[aria-pressed="true"] {
+  background: #cfe79717;
+  border-color: #d2ef9c;
+  box-shadow: inset 0 0 0 1px #d2ef9c;
+}
+.rack label span {
+  color: #aec49c;
+}
+body[data-screen="game"] .controls {
+  flex: 0 0 auto;
+  grid-template-columns: auto 1.2fr 1.2fr auto 150px;
+  gap: 18px;
+  padding: 14px 18px;
+  margin-top: 0;
+}
+body[data-screen="game"] #fire {
+  font-size: 19px;
+  padding: 12px;
+}
+/* Short screens: trade chrome for arena. */
+@media (max-height: 620px) {
+  body[data-screen="game"] header {
+    height: 52px;
+  }
+  body[data-screen="game"] main {
+    padding: 8px 10px 10px;
+  }
+  body[data-screen="game"] .controls {
+    gap: 12px;
+    padding: 10px 12px;
+  }
+  .rack button {
+    width: 38px;
+    height: 38px;
+  }
+  .rack button img {
+    width: 28px;
+    height: 24px;
+  }
+}
+@media (max-width: 760px) {
+  body[data-screen="game"] main {
+    padding: 8px 10px 10px;
+  }
+  body[data-screen="game"] .controls {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 12px;
+  }
+  body[data-screen="game"] .controls .rack {
+    grid-column: 1 / -1;
+  }
+  .map-label {
+    max-width: 52%;
+  }
+  .map-label #mapDescription {
+    display: none;
+  }
+  #leaveMatch {
+    right: 8px;
+    bottom: 8px;
+    padding: 6px 9px;
+    font-size: 9px;
+  }
+}
+
+/* The HUD scales with the arena, and the arena follows the screen height, so
+   short screens (laptops, phones held sideways) need the compact HUD too. */
+@media (max-height: 560px) {
+  body[data-screen="game"] .scoreboard {
+    top: 6px;
+    left: 8px;
+    right: 8px;
+  }
+  body[data-screen="game"] .player {
+    padding: 5px 7px;
+    gap: 6px;
+  }
+  body[data-screen="game"] .avatar {
+    width: 22px;
+    height: 28px;
+  }
+  body[data-screen="game"] .player strong {
+    font-size: 9px;
+  }
+  body[data-screen="game"] .player strong small {
+    font-size: 6px;
+    margin-left: 4px;
+  }
+  body[data-screen="game"] .player progress {
+    width: 72px;
+    height: 4px;
+    margin: 4px 0 2px;
+  }
+  body[data-screen="game"] .player > div > span {
+    font-size: 6px;
+  }
+  body[data-screen="game"] .turn {
+    padding: 3px 8px;
+  }
+  body[data-screen="game"] .turn strong {
+    font-size: 16px;
+  }
+  body[data-screen="game"] .turn > span,
+  body[data-screen="game"] .turn small {
+    font-size: 6px;
+    padding: 2px 5px;
+    letter-spacing: 0.5px;
+  }
+  /* the bottom line belongs to the caption and the exit, so the status sits
+     just above it instead of colliding with them */
+  body[data-screen="game"] .status {
+    bottom: 24px;
+    font-size: 8px;
+    padding: 5px 10px;
+  }
+  body[data-screen="game"] .map-label {
+    bottom: 6px;
+    left: 8px;
+    max-width: 40%;
+  }
+  body[data-screen="game"] .map-label #mapDescription,
+  body[data-screen="game"] .map-label #versus,
+  body[data-screen="game"] .map-label #matchTag {
+    display: none;
+  }
+  body[data-screen="game"] .controls label,
+  body[data-screen="game"] .controls .ticks span,
+  body[data-screen="game"] .move small,
+  body[data-screen="game"] .power > small {
+    white-space: nowrap;
+  }
+  body[data-screen="game"] .controls {
+    grid-template-columns: auto 1.1fr 1.1fr auto 130px;
+  }
+}
+/* Phone portrait: the scoreboard already sits above the canvas, so the arena
+   caption moves to the top edge and keeps clear of the status pill. */
+@media (max-width: 760px) {
+  body[data-screen="game"] .map-label {
+    top: 8px;
+    bottom: auto;
+    left: 10px;
+    max-width: 60%;
+    white-space: nowrap;
+  }
+  body[data-screen="game"] .map-label #versus,
+  body[data-screen="game"] .map-label #matchTag {
+    display: none;
+  }
+}
+
+/* Phones stack the scoreboard above the picture, so the arena grows with its
+   content and only the picture keeps the 1200x620 ratio. */
+@media (max-width: 760px) {
+  body[data-screen="game"] .status {
+    top: 8px;
+    bottom: auto;
+  }
+  body[data-screen="game"] .map-label {
+    top: auto;
+    bottom: 6px;
+  }
+}
+
+/* A phone held sideways has no height to spare: the brand bar goes, the match
+   keeps it. The room name still shows in the arena caption. */
+@media (max-height: 450px) {
+  body[data-screen="game"] header {
+    display: none;
+  }
+  body[data-screen="game"] main {
+    padding: 6px 8px 8px;
+  }
+  body[data-screen="game"] #game {
+    gap: 6px;
+  }
+}

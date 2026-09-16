@@ -159,21 +159,9 @@
       </section>
 
       <section id="game" class="screen" aria-label="Trận đấu">
-        <div class="heading">
-          <div>
-            <p class="eyebrow" id="matchTag">TRẬN ĐẤU</p>
-            <h1>
-              <span id="mapName">Đảo Gió Xanh</span
-              ><span id="mapNumber">01</span>
-            </h1>
-            <p id="mapDescription">Đồi cỏ thoai thoải giữa những tầng mây.</p>
-          </div>
-          <button id="leaveMatch" class="subtle" type="button">
-            ← Về phòng chờ
-          </button>
-        </div>
-        <section class="arena" aria-label="Sân đấu">
-          <div class="scoreboard">
+        <div class="stage" id="stage">
+          <section class="arena" aria-label="Sân đấu">
+          <div class="scoreboard" id="scoreboard">
             <div class="player">
               <img class="avatar" id="avatar0" alt="" />
               <div>
@@ -199,6 +187,7 @@
               <img class="avatar" id="avatar1" alt="" />
             </div>
           </div>
+          <div class="frame" id="frame">
           <canvas
             id="canvas"
             width="1200"
@@ -209,9 +198,15 @@
             Đến lượt bạn — ngắm và giữ để bắn!
           </div>
           <div class="map-label">
-            ✧ <span id="mapLabel">ĐẢO GIÓ XANH</span> <span>•</span>
-            <span id="versus">1 VS 1</span>
+            <b id="mapNumber">01</b> <strong id="mapName">Đảo Gió Xanh</strong>
+            <span id="mapDescription">
+              Đồi cỏ thoai thoải giữa những tầng mây.</span
+            >
+            <span id="versus">1 VS 1</span> <span id="matchTag">LUYỆN TẬP</span>
           </div>
+          <button id="leaveMatch" class="subtle" type="button">
+            ← Phòng chờ
+          </button>
           <div class="result" id="result" hidden>
             <p id="resultText">Kết thúc</p>
             <div>
@@ -223,7 +218,9 @@
               </button>
             </div>
           </div>
-        </section>
+          </div>
+          </section>
+        </div>
         <section class="controls">
           <div class="move">
             <label>DI CHUYỂN <span id="energy">100 / 100</span></label>
@@ -255,14 +252,11 @@
             <div class="power-track"><div id="powerFill"></div></div>
             <small>Giữ để tăng lực · Thả để bắn</small>
           </div>
-          <button id="fire">BẮN! <small>GIỮ SPACE / CHẠM</small></button>
-        </section>
-        <section class="loadout battle-loadout" aria-label="Đổi vũ khí">
-          <div class="loadout-heading">
-            <h2>Kho vũ khí</h2>
-            <p id="battleHint">Đổi vũ khí trong lượt của bạn.</p>
+          <div class="rack" aria-label="Đổi vũ khí">
+            <label>VŨ KHÍ <span id="battleHint"></span></label>
+            <div id="battleWeapons"></div>
           </div>
-          <div id="battleWeapons" class="choices weapons"></div>
+          <button id="fire">BẮN! <small>GIỮ SPACE / CHẠM</small></button>
         </section>
       </section>
 

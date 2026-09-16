@@ -390,3 +390,11 @@ Hai tài liệu mới tách khỏi file này vì nội dung dài và có vòng �
 - `ARCHITECTURE.md`: kiến trúc hiện tại (tầng, module, vòng đời, mô hình dữ liệu, giao thức, tính xác định), ba món nợ kiến trúc, kiến trúc mục tiêu với các seam cụ thể cho thứ tự lượt theo delay, bộ ba vũ khí mỗi nhân vật và item, cùng kế hoạch chuyển đổi năm giai đoạn.
 
 Kết luận ngắn: khác biệt lớn nhất giữa chúng ta và bản mẫu không phải số lượng nội dung, mà là **thứ tự lượt**. Xen kẽ cứng làm mọi phát bắn có giá như nhau; delay biến việc chọn vũ khí, dùng item và cả tốc độ suy nghĩ thành quyết định. Đề xuất làm giai đoạn A và B trước, vì mọi nội dung thêm sau đó sẽ được thiết kế cho đúng hệ.
+
+### 18. Màn trận đấu vừa khít viewport
+
+Phản hồi từ người dùng: Gunbound gói mọi thứ trong một màn hình, còn màn chơi của chúng ta giống một game Flash nhúng, cuộn lên xuống được. Đo lại thì đúng: canvas cố định 633 px bất kể màn hình, laptop 1366x768 phải cuộn 517 px, điện thoại ngang 751 px.
+
+Đã sửa: màn trận đấu khóa `100dvh`, chia header, sân đấu co giãn, thanh điều khiển; kho vũ khí gộp vào thanh điều khiển dưới dạng dải biểu tượng nên không còn khối thứ hai; tên map, mô tả, tỉ số đội và tên phòng dồn vào dải chú thích trong sân; nút về phòng chờ thành nút nổi trong sân. Kích thước khung tính bằng `fitStage` và theo dõi bằng `ResizeObserver`, xem mục 7b của `ARCHITECTURE.md` để biết vì sao CSS thuần không làm được.
+
+Ba lỗi phát hiện khi làm: canvas bị kéo giãn trên điện thoại vì bảng điểm nằm trong khung tỉ lệ (tách `.frame` riêng); vùng trống dưới sân do flex kéo giãn (`align-items: center`); và smoke test đo sớm hơn một nhịp bố cục (chờ theo điều kiện thay vì chờ theo thời gian).

@@ -102,8 +102,41 @@ const assert = require("node:assert/strict");
     await page.waitForFunction(() =>
       document.querySelector("#name0").textContent.includes("Kiểm thử"),
     );
-    assert.match(await page.locator("#mapName").innerText(), /Death Valley/);
+    // The arena caption is styled uppercase, so compare case-insensitively.
+    assert.match(await page.locator("#mapName").innerText(), /death valley/i);
     assert.equal(await page.locator("#health0").innerText(), "100 / 100 HP");
+    // A match must fit the window at any height: no page scrolling, ever.
+    const fits = () =>
+      page.evaluate(() => {
+        const doc = document.documentElement;
+        const frame = document.querySelector(".frame").getBoundingClientRect();
+        return {
+          overflowY: doc.scrollHeight - innerHeight,
+          overflowX: doc.scrollWidth - innerWidth,
+          ratio: frame.width / frame.height,
+          visible: frame.top >= 0 && frame.bottom <= innerHeight + 1,
+        };
+      });
+    for (const [w, h] of [
+      [1920, 1080],
+      [1366, 768],
+      [1024, 640],
+    ]) {
+      await page.setViewportSize({ width: w, height: h });
+      // The frame is resized from a ResizeObserver, so let the layout settle.
+      await page
+        .waitForFunction(
+          () => document.documentElement.scrollHeight - innerHeight <= 1,
+          { timeout: 3000 },
+        )
+        .catch(() => {});
+      const box = await fits();
+      assert.ok(box.overflowY <= 1, `${w}x${h} scrolls ${box.overflowY}px`);
+      assert.ok(box.overflowX <= 1, `${w}x${h} overflows ${box.overflowX}px`);
+      assert.ok(Math.abs(box.ratio - 1200 / 620) < 0.02, `${w}x${h} stretches the arena`);
+      assert.ok(box.visible, `${w}x${h} hides part of the arena`);
+    }
+    await page.setViewportSize({ width: 1440, height: 1200 });
     if (process.env.SCREENSHOT_DIR)
       await page.screenshot({
         path: `${process.env.SCREENSHOT_DIR}/map-death.png`,
@@ -184,11 +217,23 @@ const assert = require("node:assert/strict");
     );
     await page.locator("#closeHelp").click();
     await page.setViewportSize({ width: 390, height: 844 });
-    assert.equal(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > innerWidth,
-      ),
-      false,
+    await page
+      .waitForFunction(
+        () => document.documentElement.scrollHeight - innerHeight <= 1,
+        { timeout: 3000 },
+      )
+      .catch(() => {});
+    assert.deepEqual(
+      await page.evaluate(() => {
+        const doc = document.documentElement;
+        const frame = document.querySelector(".frame").getBoundingClientRect();
+        return {
+          wide: doc.scrollWidth > innerWidth,
+          tall: doc.scrollHeight > innerHeight + 1,
+          stretched: Math.abs(frame.width / frame.height - 1200 / 620) > 0.02,
+        };
+      }),
+      { wide: false, tall: false, stretched: false },
     );
     if (process.env.SCREENSHOT_DIR)
       await page.screenshot({
@@ -227,7 +272,7 @@ const assert = require("node:assert/strict");
     );
     await fallback.close();
     console.log(
-      "PASS: 27 assets, 5 maps, 80 animation frames, home/room/battle screens, 12 selections, rematch, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
+      "PASS: 27 assets, 5 maps, 80 animation frames, home/room/battle screens, 12 selections, rematch, crater pixels, player/bot turns, pause freezes animation, reduced motion, viewport fit at four sizes, mobile layout, asset fallback.",
     );
   } finally {
     await browser.close();

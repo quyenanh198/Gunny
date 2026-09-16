@@ -61,7 +61,17 @@ Thông tin sống còn nằm ở ba chỗ cố định: gió ở giữa trên, m
 
 Bài học rút ra: khi chuyển một game ngắm bắn sang màn cảm ứng, đừng thay kỹ năng bằng tự động. Cái người chơi muốn là **độ chính xác của thao tác** (kéo được đúng 1 độ, thả đúng lúc), không phải máy ngắm hộ. Trợ giúp nên là đường dự đoán và nút tinh chỉnh, không phải auto-aim.
 
-### 2.3 Vòng lặp phiên chơi và kiếm tiền
+### 2.3 Một trận nằm gọn trong một màn hình
+
+Gunbound không bao giờ bắt người chơi cuộn trang trong trận. Sân đấu, máu hai bên, gió, đồng hồ và bảng điều khiển cùng nằm trong khung cửa sổ; cửa sổ nhỏ thì mọi thứ co lại chứ không đẩy nhau xuống dưới.
+
+Lý do không chỉ là thẩm mỹ. Trong game bắn tọa độ, người chơi đọc gió, nhìn địa hình, ước lượng khoảng cách rồi mới chỉnh góc. Nếu phải cuộn để thấy nút bắn thì mỗi lượt có thêm một thao tác thừa, và khi đồng hồ chạy thì thao tác thừa đó là thua thiệt thật.
+
+Game của chúng ta trước lần sửa này vi phạm đúng điểm ấy: canvas cố định cao 633 pixel bất kể màn hình, nên trên laptop 1366x768 trang cao 1285 pixel, phải cuộn 517 pixel mới thấy hết; điện thoại xoay ngang phải cuộn 751 pixel. Cảm giác đúng như một game Flash nhúng trong trang web, không phải một game.
+
+Nguyên tắc rút ra: **màn trận đấu khóa theo viewport, màn sảnh và phòng chờ thì không.** Sảnh và phòng là trang nội dung, cuộn là bình thường. Trận đấu là ứng dụng, cuộn là lỗi.
+
+### 2.4 Vòng lặp phiên chơi và kiếm tiền
 
 Avatar lấy từ gacha, gắn thêm gem, cho chỉ số cộng thêm lên mobile. Người chơi phàn nàn giá gói cao. Đây là chỗ nên tránh: khi vật phẩm trả tiền cộng thẳng vào chỉ số chiến đấu, kỹ năng ngắm bị pha loãng và người chơi mới đọc được điều đó rất nhanh.
 
@@ -102,6 +112,7 @@ Nên tránh:
 | 8 | Nút tinh chỉnh góc theo bước 0,5 độ và nhớ lực lần bắn trước | Khắc phục đúng điểm bản mobile bị chê | `game.js` controls | Thấp |
 | 9 | Bảng tổng kết cuối trận: sát thương gây ra, số phát trúng, delay trung bình | Cho người chơi thấy mình giỏi lên | `Match.stats` | Thấp |
 | 10 | Đặt tính cách cho từng map: biên độ gió, độ cứng đất, khoảng cách hai bên | Map thành một phần của meta | `maps.js` | Thấp |
+| 11 | Màn trận đấu vừa khít viewport, không cuộn. Đã làm | Mỗi thao tác thừa trong lượt là thua thiệt khi đồng hồ chạy | `fitStage` trong `game.js` | Thấp |
 
 ### 4.2 Không nên làm
 

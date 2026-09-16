@@ -240,6 +240,9 @@ function enterMatch() {
   groundLayer = null;
   setScreen("game");
   updateBattleLoadout();
+  fitStage();
+  // The scoreboard height settles after the first paint of the new screen.
+  requestAnimationFrame(fitStage);
 }
 $("leaveMatch").onclick = () => {
   if (session.online && !session.host) return setScreenHome() || session.leave();
@@ -249,6 +252,22 @@ $("leaveMatch").onclick = () => {
 };
 $("toLobby").onclick = $("leaveMatch").onclick;
 $("restart").onclick = () => session.restart();
+
+// As large as fits, never stretched: the arena keeps the 1200x620 ratio and the
+// scoreboard, when it sits above the picture on phones, gets its height first.
+function fitStage() {
+  if (screen() !== "game") return;
+  const box = $("stage").getBoundingClientRect(),
+    board = $("scoreboard"),
+    above = getComputedStyle(board).position === "static" ? board.offsetHeight : 0,
+    scale = Math.max(0, Math.min(box.width / WIDTH, (box.height - above) / HEIGHT));
+  $("frame").style.width = `${Math.floor(WIDTH * scale)}px`;
+  $("frame").style.height = `${Math.floor(HEIGHT * scale)}px`;
+}
+// Watch the stage itself: the control bar can rewrap and change the space left
+// over, which a plain resize listener would measure one layout pass too early.
+new ResizeObserver(fitStage).observe($("stage"));
+window.addEventListener("orientationchange", fitStage);
 
 function refreshGround(m) {
   groundLayer = images.has(m.map.ground)
@@ -297,16 +316,13 @@ function sync(m) {
     b.disabled = disabled || m.charging;
     b.setAttribute("aria-pressed", String(b.dataset.id === m.current.weapon));
   });
-  $("battleHint").textContent = m.playerCanAct
-    ? "Đổi vũ khí trước khi bắn."
-    : `Đang chờ ${m.current.name}…`;
+  $("battleHint").textContent = m.playerCanAct ? "" : `chờ ${m.current.name}…`;
   $("turnHint").textContent =
     m.phase === "over" ? "Trận đấu kết thúc" : m.current.control === "human" ? `Lượt của ${m.current.name}` : "Bot đang ngắm";
   $("matchTag").textContent = session.online ? `PHÒNG ${session.id}` : "LUYỆN TẬP";
   $("mapName").textContent = m.map.name;
   $("mapNumber").textContent = m.map.number;
   $("mapDescription").textContent = m.map.description;
-  $("mapLabel").textContent = m.map.name.toUpperCase();
   $("versus").textContent = m.teams.map((t) => t.humans + t.bots).join(" VS ");
   const over = m.phase === "over";
   $("result").hidden = !over;
@@ -609,6 +625,8 @@ function buildUI() {
     };
     $("weaponChoices").append(b);
     const battle = choiceButton(entry, "weapon");
+    battle.title = `${entry.name} · ${entry.desc}`;
+    battle.setAttribute("aria-label", entry.name);
     battle.onclick = () => {
       session.setWeapon(entry.id);
       updateBattleLoadout();
