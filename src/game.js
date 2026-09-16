@@ -8,7 +8,7 @@ import {
   drawBlast,
 } from "./sprites.js";
 import { Match, MAX_ROUNDS, MAX_TEAM, DIFFICULTIES, ammoOf } from "./match.js";
-import { MAPS } from "./physics.js";
+import { MAPS } from "./maps.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("game"),
   ctx = canvas.getContext("2d");
@@ -27,8 +27,8 @@ motionPreference.addEventListener(
   (event) => (reducedMotion = event.matches),
 );
 function refreshGround() {
-  groundLayer = images.has("ground")
-    ? terrainLayer(images.get("ground"), m.originalTerrain, m.terrain)
+  groundLayer = images.has(m.map.ground)
+    ? terrainLayer(images.get(m.map.ground), m.originalTerrain, m.terrain)
     : null;
   m.terrainDirty = false;
 }
@@ -142,8 +142,8 @@ function render() {
     const s = (m.shake / 0.3) * 6;
     ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
   }
-  if (images.has("background")) {
-    ctx.drawImage(images.get("background"), 0, 0, WIDTH, HEIGHT);
+  if (images.has(m.map.background)) {
+    ctx.drawImage(images.get(m.map.background), 0, 0, WIDTH, HEIGHT);
   } else {
     const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
     sky.addColorStop(0, "#a6d9df");
@@ -326,6 +326,7 @@ $("guide").addEventListener("close", () => (paused = document.hidden));
 $("difficulty").onchange = () => m.setDifficulty($("difficulty").value);
 $("map").onchange = () => {
   m.setMap($("map").value);
+  refreshGround();
   updateLoadout();
 };
 for (const id of ["humans0", "bots0", "humans1", "bots1"]) {
@@ -347,7 +348,15 @@ function loadoutActor() {
 }
 function updateLoadout() {
   $("mapName").textContent = m.map.name;
+  $("mapNumber").textContent = m.map.number;
+  $("mapDescription").textContent = m.map.description;
   $("mapLabel").textContent = m.map.name.toUpperCase();
+  $("map").value = m.map.id;
+  document
+    .querySelectorAll(".map-card")
+    .forEach((button) =>
+      button.setAttribute("aria-pressed", String(button.dataset.map === m.map.id)),
+    );
   $("versus").textContent = m.teams.map((t) => t.humans + t.bots).join(" VS ");
   const actor = loadoutActor(),
     [lo] = ammoOf(actor).angles;
@@ -423,13 +432,37 @@ async function start() {
   const loaded = await loadAssets();
   images = loaded.images;
   buildLoadout();
+  buildMapChoices();
   m.reset();
   updateLoadout();
   $("assetStatus").textContent = loaded.failed.length
     ? `Thiếu ${loaded.failed.length} hình — đang dùng hình dự phòng. Tải lại trang để thử lại.`
-    : "4 nhân vật · 6 vũ khí · Chọn trong lượt của bạn";
+    : `4 nhân vật · 6 vũ khí · ${MAPS.length} bản đồ`;
   paused = document.hidden;
   $("restart").disabled = false;
   $("help").disabled = false;
   requestAnimationFrame(frame);
+}
+
+function buildMapChoices() {
+  for (const map of MAPS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "map-card";
+    button.dataset.map = map.id;
+    button.setAttribute("aria-label", `Bắt đầu trận tại ${map.name}`);
+    const image = document.createElement("img");
+    image.src = assetURL(map.preview);
+    image.alt = "";
+    image.onerror = () => (image.hidden = true);
+    const title = document.createElement("strong");
+    title.textContent = `${map.number} · ${map.name}`;
+    button.append(image, title);
+    button.onclick = () => {
+      if (paused || !m.setMap(map.id)) return;
+      refreshGround();
+      updateLoadout();
+    };
+    $("mapChoices").append(button);
+  }
 }

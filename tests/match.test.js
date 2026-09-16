@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Match, MAX_ROUNDS, TURN_TIME, DIFFICULTIES, MAX_TEAM } from "../src/match.js";
-import { DT, HEIGHT, ENERGY, MAPS } from "../src/physics.js";
+import { DT, HEIGHT, ENERGY } from "../src/physics.js";
+import { MAPS } from "../src/maps.js";
 
 const run = (m, seconds) => {
   for (let t = 0; t < seconds; t += DT) m.update(DT);
@@ -20,6 +21,23 @@ test("seeded matches replay identically and the bot never shares the player's sk
   a.nextTurn();
   b.nextTurn();
   assert.equal(a.wind, b.wind);
+});
+
+test("switching maps resets the match on that map and preserves the loadout", () => {
+  const m = new Match({ seed: 7, character: "nemu", weapon: "star" });
+  m.terrain[600] += 50;
+  m.round = 8;
+  assert.equal(m.setMap("death"), true);
+  assert.equal(m.map.id, "death");
+  for (const actor of m.actors) {
+    const [lo, hi] = m.map.spawnZones[actor.team];
+    assert.ok(actor.x >= lo && actor.x <= hi);
+  }
+  assert.equal(m.actors[0].skin, "nemu");
+  assert.equal(m.actors[0].weapon, "star");
+  assert.equal(m.round, 1);
+  assert.deepEqual(m.terrain, m.map.createTerrain());
+  assert.equal(m.setMap("missing"), false);
 });
 
 test("timer expiry passes the turn without a shot", () => {
@@ -127,19 +145,19 @@ test("loadout changes are refused while charging or off turn", () => {
 test("changing the map restarts on that map's terrain", () => {
   const m = new Match({ seed: 4 });
   m.actors[1].hp = 5;
-  m.setMap("vuc-sau");
-  assert.equal(m.map.id, "vuc-sau");
+  m.setMap("death");
+  assert.equal(m.map.id, "death");
   assert.equal(m.actors[1].hp, 100);
-  assert.equal(m.terrain[600], HEIGHT);
+  assert.deepEqual(m.terrain, m.map.createTerrain());
   assert.equal(m.round, 1);
-  assert.ok(MAPS.some((map) => map.id === "doi-doi"));
+  assert.ok(MAPS.some((map) => map.id === "celestial"));
 });
 
 test("spawns are random per seed, on the team's side, spaced and on ground", () => {
   const a = new Match({ seed: 11 }),
     b = new Match({ seed: 12 });
   assert.notEqual(a.actors[0].x, b.actors[0].x);
-  const big = new Match({ seed: 3, teams: [{ humans: 1, bots: 2 }, { humans: 0, bots: 3 }], map: "vuc-sau" });
+  const big = new Match({ seed: 3, teams: [{ humans: 1, bots: 2 }, { humans: 0, bots: 3 }], map: "celestial" });
   assert.equal(big.actors.length, 6);
   for (const actor of big.actors) {
     assert.ok(actor.team === 0 ? actor.x < 600 : actor.x > 600);

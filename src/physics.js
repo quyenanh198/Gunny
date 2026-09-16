@@ -20,14 +20,8 @@ export function clampAngle(angle,[lo,hi]){const e=Math.min(hi,Math.max(lo,angle<
 export function settleAim(v,last,[lo,hi]){v=Math.max(lo,Math.min(180-lo,v));if(v>hi&&v<180-hi)v=v>last?180-hi:v<last?hi:v-hi<180-hi-v?hi:180-hi;return v;}
 // Bot search density and aim noise per difficulty.
 export const DEFAULT_SKILL={angleJitter:3,powerJitter:5,angleStep:3,powerStep:2};
-// Heightmap profiles. Both spawn columns (205 and 980) must stay well above ROCK_Y.
-export const MAPS=[
-{id:"gio-xanh",name:"Đảo Gió Xanh",height:(x)=>440+24*Math.sin(x/140)+12*Math.sin(x/57)},
-{id:"thung-lung",name:"Thung Lũng",height:(x)=>400+70*Math.exp(-(((x-600)/260)**2))+10*Math.sin(x/45)},
-{id:"doi-doi",name:"Đồi Đôi",height:(x)=>470-60*Math.exp(-(((x-250)/150)**2))-60*Math.exp(-(((x-950)/150)**2))+8*Math.sin(x/70)},
-{id:"vuc-sau",name:"Vực Sâu",height:(x)=>Math.abs(x-600)<70?HEIGHT:430+14*Math.sin(x/90)+40*Math.max(0,1-Math.abs(Math.abs(x-600)-110)/40)},
-];
-export function makeTerrain(map=MAPS[0]){return Array.from({length:WIDTH},(_,x)=>map.height(x));}
+// Original Sky Islands heightmap. Additional arena profiles live in maps.js.
+export function makeTerrain(){return Array.from({length:WIDTH},(_,x)=>440+24*Math.sin(x/140)+12*Math.sin(x/57));}
 export function launch(actor,angle,power,ammo=DEFAULT_AMMO){const r=angle*Math.PI/180,s=160+power*6;return{x:actor.x+Math.cos(r)*30,y:actor.y-30-Math.sin(r)*30,vx:Math.cos(r)*s,vy:-Math.sin(r)*s,age:0,ammo};}
 export function step(p,wind,dt=DT){p.vx+=wind*p.ammo.windScale*dt;p.vy+=GRAVITY*p.ammo.gravityScale*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.age+=dt;return p;}
 export function collides(p,terrain){return p.x>=0&&p.x<WIDTH&&p.y>=terrain[Math.floor(p.x)];}

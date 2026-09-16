@@ -3,8 +3,6 @@
 import {
   WIDTH,
   HEIGHT,
-  makeTerrain,
-  MAPS,
   launch,
   step,
   collides,
@@ -23,6 +21,7 @@ import {
 } from "./physics.js";
 import { CHARACTERS, WEAPONS } from "./assets.js";
 import { createAnimation, playAnimation, advanceAnimation } from "./animation.js";
+import { MAPS } from "./maps.js";
 
 export const MAX_ROUNDS = 30;
 export const TURN_TIME = 25;
@@ -76,7 +75,7 @@ export class Match {
   }
   reset() {
     this.random = this.seed === undefined ? Math.random : mulberry32(this.seed);
-    this.terrain = makeTerrain(this.map);
+    this.terrain = this.map.createTerrain();
     this.originalTerrain = [...this.terrain];
     this.terrainDirty = true;
     this.actors = [];
@@ -137,7 +136,7 @@ export class Match {
   }
   // Random columns on the team's side with spacing, never over a pit.
   spawnColumns(team, count) {
-    const [lo, hi] = SIDES[team],
+    const [lo, hi] = this.map.spawnZones?.[team] || SIDES[team],
       picked = [];
     for (let tries = 0; picked.length < count && tries < 200; tries++) {
       const x = Math.round(lo + this.random() * (hi - lo));
@@ -200,8 +199,11 @@ export class Match {
   }
   // Changing the map or the team makeup restarts the match.
   setMap(id) {
-    this.map = MAPS.find((m) => m.id === id) || this.map;
+    const map = MAPS.find((m) => m.id === id);
+    if (!map || map === this.map) return false;
+    this.map = map;
     this.reset();
+    return true;
   }
   setTeams(teams) {
     const clamp = (n) => Math.max(0, Math.min(MAX_TEAM, n | 0));
