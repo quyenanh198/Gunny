@@ -9,14 +9,21 @@ import {
 } from "./sprites.js";
 import { Match, MAX_ROUNDS, MAX_TEAM, DIFFICULTIES, ammoOf } from "./match.js";
 import { MAPS } from "./physics.js";
+import { RemoteMatch } from "./net.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("game"),
   ctx = canvas.getContext("2d");
-const seed = new URLSearchParams(location.search).get("seed");
-const m = new Match({ seed: seed === null ? undefined : +seed });
+const params = new URLSearchParams(location.search),
+  seed = params.get("seed"),
+  online = params.has("room");
+// ?room=ABCD joins (or creates) an online room; otherwise the match runs locally.
+const m = online
+  ? new RemoteMatch({ room: params.get("room"), name: params.get("name") })
+  : new Match({ seed: seed === null ? undefined : +seed });
 let images = new Map(),
   groundLayer = null,
   lastTurn = -1,
+  setupShown = "",
   last = 0,
   accumulator = 0,
   paused = false;
@@ -81,6 +88,35 @@ function sync() {
       : m.current.control === "human"
         ? `Lượt của ${m.current.name}`
         : "Bot đang ngắm";
+  if (online) {
+    const seat = m.you.seat ? `GHẾ ${m.you.seat}` : "KHÁN GIẢ";
+    $("online").lastChild.textContent = m.ready
+      ? ` PHÒNG ${m.roomId} · ${seat}${m.you.host ? " · CHỦ PHÒNG" : ""}`
+      : " ĐANG KẾT NỐI…";
+    const setupLocked = !m.you.host;
+    for (const id of ["difficulty", "map", "humans0", "bots0", "humans1", "bots1"]) $(id).disabled = setupLocked;
+    $("restart").disabled = setupLocked;
+    $("roomInfo").textContent = m.ready
+      ? `Phòng ${m.roomId}: ${m.seats.map((s) => `ghế ${s.player} ${s.name ? s.name : "trống"}`).join(" · ")}${m.spectators ? ` · ${m.spectators} khán giả` : ""}`
+      : "";
+    // Setup selects mirror the server; a change is confirmed by the next snapshot.
+    const setup = JSON.stringify([m.teams, m.map.id, m.difficulty.id]);
+    if (m.ready && setupShown !== setup) {
+      setupShown = setup;
+      updateLoadout();
+      $("map").value = m.map.id;
+      $("difficulty").value = m.difficulty.id;
+    }
+    // The room code only exists once the server answers, so refresh the invite then.
+    if (m.ready && $("roomLink").dataset.room !== m.roomId) {
+      const share = new URL(location.href);
+      share.searchParams.set("room", m.roomId);
+      share.searchParams.delete("name");
+      $("roomLink").value = share.href;
+      $("roomLink").dataset.room = m.roomId;
+      $("roomCode").value = m.roomId;
+    }
+  }
 }
 function ellipse(x, y, rx, ry, color) {
   ctx.fillStyle = color;
@@ -316,6 +352,19 @@ $("restart").onclick = () => {
   m.reset();
   updateLoadout();
 };
+// Lobby: joining is a navigation so the page starts in online mode.
+const goOnline = (room) => {
+  const url = new URL(location.href);
+  url.searchParams.set("room", room);
+  url.searchParams.set("name", $("playerName").value.trim() || "Khách");
+  url.searchParams.delete("seed");
+  location.href = url;
+};
+$("joinRoom").onclick = () => goOnline($("roomCode").value.trim().toUpperCase());
+$("newRoom").onclick = () => goOnline("");
+$("roomCode").onkeydown = (e) => {
+  if (e.key === "Enter") $("joinRoom").click();
+};
 $("help").onclick = () => {
   m.cancelCharge();
   paused = true;
@@ -334,7 +383,8 @@ for (const id of ["humans0", "bots0", "humans1", "bots1"]) {
       { humans: +$("humans0").value, bots: +$("bots0").value },
       { humans: +$("humans1").value, bots: +$("bots1").value },
     ]);
-    updateLoadout();
+    // Online, the selects follow the server's next snapshot instead.
+    if (!online) updateLoadout();
   };
 }
 await start();
@@ -416,6 +466,7 @@ function buildLoadout() {
 }
 async function start() {
   paused = true;
+  document.body.classList.toggle("online", online);
   sync();
   $("restart").disabled = true;
   $("help").disabled = true;
@@ -423,7 +474,7 @@ async function start() {
   const loaded = await loadAssets();
   images = loaded.images;
   buildLoadout();
-  m.reset();
+  if (!online) m.reset();
   updateLoadout();
   $("assetStatus").textContent = loaded.failed.length
     ? `Thiếu ${loaded.failed.length} hình — đang dùng hình dự phòng. Tải lại trang để thử lại.`

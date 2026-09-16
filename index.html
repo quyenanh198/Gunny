@@ -12,7 +12,7 @@
     <header>
       <a class="brand" href="./"
         ><span class="logo">✦</span> GUNNY <small>CHIBI ARENA</small></a
-      ><span class="online"><i></i> ĐẤU TẬP · OFFLINE</span
+      ><span class="online" id="online"><i></i> ĐẤU TẬP · OFFLINE</span
       ><button id="help" class="subtle" aria-label="Hướng dẫn">
         ? <span>Hướng dẫn</span>
       </button>
@@ -26,6 +26,16 @@
         </div>
         <button id="restart" class="subtle">↻ Trận mới</button>
       </div>
+      <section class="lobby" aria-label="Chơi online">
+        <label for="playerName">TÊN</label>
+        <input id="playerName" maxlength="16" placeholder="Tên của bạn" />
+        <label for="roomCode">MÃ PHÒNG</label>
+        <input id="roomCode" maxlength="4" placeholder="ABCD" autocapitalize="characters" />
+        <button id="joinRoom" class="subtle">Vào phòng</button>
+        <button id="newRoom" class="subtle">Tạo phòng mới</button>
+        <input id="roomLink" readonly aria-label="Link mời" />
+        <p id="roomInfo" role="status"></p>
+      </section>
       <section class="arena" aria-label="Sân đấu">
         <div class="scoreboard">
           <div class="player">

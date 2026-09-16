@@ -118,6 +118,49 @@ h1 span + span {
   font-size: 12px;
   margin-bottom: 0;
 }
+.lobby {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 16px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #bfccc4;
+}
+.lobby input {
+  width: auto;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: inherit;
+  background: #ffffff08;
+  border: 1px solid #ffffff25;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.lobby #roomCode {
+  width: 70px;
+  text-transform: uppercase;
+}
+.lobby #roomLink {
+  display: none;
+  flex: 1;
+  min-width: 200px;
+}
+.lobby p {
+  width: 100%;
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: #aec49c;
+}
+body.online .lobby #roomLink {
+  display: block;
+}
+body.online .lobby #newRoom {
+  display: none;
+}
 .arena {
   position: relative;
   border-radius: 20px;

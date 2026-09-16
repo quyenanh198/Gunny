@@ -1,14 +1,15 @@
 # Gunny · Chibi Arena
 
-Webgame bắn tọa độ theo lượt, lấy cảm hứng từ Gunny, với sprite chibi nền trong suốt và đồ họa riêng, hiển thị bằng Canvas. Giao diện tiếng Việt, responsive, không cần tài khoản hay backend.
+Webgame bắn tọa độ theo lượt, lấy cảm hứng từ Gunny, với sprite chibi nền trong suốt và đồ họa riêng, hiển thị bằng Canvas. Giao diện tiếng Việt, responsive. Chơi offline không cần backend; chơi online qua một server Node nhỏ tự host, không cần tài khoản.
 
 ## Chạy
 
 Cần Python 3 để chạy server, Node.js 20+ để kiểm tra.
 
 ```sh
-npm run dev
-# mở http://localhost:5173
+npm install        # chỉ cần cho server online và test server (gói ws)
+npm run dev        # offline, static, mở http://localhost:5173
+npm start          # server online kèm file tĩnh, mở http://localhost:8080
 npm test
 npm run check
 ```
@@ -17,6 +18,35 @@ Smoke test trình duyệt: cài Playwright rồi chạy `BROWSER_EXECUTABLE=/pat
 
 Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pages hoặc Nginx). Không có bước build, đường dẫn tương đối hỗ trợ subdirectory. Font Google là tùy chọn, có font hệ thống dự phòng.
 
+## Chơi online và host trên Mac mini
+
+Server là một tiến trình Node (`server/server.js`): serve file tĩnh và chạy `Match` cho từng phòng, client chỉ gửi input và nhận snapshot 20 lần mỗi giây qua WebSocket tại `/ws`. Không database, không tài khoản; phòng trống 60 giây thì xóa.
+
+- Tạo phòng: điền tên, bấm Tạo phòng mới. Trang chuyển sang `?room=ABCD`. Gửi link mời (ô link trên bảng) cho người khác.
+- Người vào sau nhận ghế người chơi còn trống theo thứ tự đội 1 rồi đội 2; hết ghế thì làm khán giả. Chủ phòng (người vào đầu, tự chuyển khi rời) chỉnh đội hình, bản đồ, độ khó và bấm Trận mới.
+- Ghế không có người thì lượt đó tự bỏ sau 1,5 giây.
+- Bot chạy trên server nên mọi người thấy cùng một kết quả.
+
+Cài trên Mac mini (macOS, Node 20 trở lên, ví dụ `brew install node`):
+
+```sh
+git clone https://github.com/quyenanh198/Gunny.git ~/Gunny
+cd ~/Gunny && npm install
+PORT=8080 npm start
+# trong mạng LAN: http://<tên-máy>.local:8080 hoặc http://<IP-LAN>:8080
+```
+
+Chạy nền và tự khởi động cùng máy bằng launchd: sửa `WorkingDirectory` và đường dẫn `node` (`which node`) trong `deploy/com.gunny.server.plist`, rồi:
+
+```sh
+cp deploy/com.gunny.server.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.gunny.server.plist
+launchctl list | grep gunny      # kiểm tra
+tail -f /tmp/gunny-server.log
+```
+
+Chơi từ ngoài mạng nhà: cách an toàn nhất là Tailscale trên Mac mini và máy khách, dùng địa chỉ Tailscale của Mac mini. Nếu mở port trên router thì đặt server sau một reverse proxy có HTTPS (ví dụ Caddy với `reverse_proxy localhost:8080`), vì WebSocket trên trang HTTPS phải là `wss://`, client tự đổi theo `location.protocol`.
+
 ## Cách chơi
 
 - A/D hoặc nút trái/phải: di chuyển. Mỗi lượt có 100 năng lượng, đi ngang hoặc xuống dốc tốn 1 mỗi pixel, lên dốc tốn thêm 2 lần độ dốc (tan), dốc quá 45° không leo được. Đứng trong hố sâu thì phải bắn ra chứ không trèo được.
@@ -24,7 +54,7 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 - Giữ SPACE hoặc nút BẮN để tăng lực, thả để bắn. Lực tối đa được giữ ở 100%.
 - Gió hiển thị theo cấp 0 đến 10 (mỗi cấp 3 px/s² trong vật lý), mũi tên là chiều gió.
 - 4 bản đồ chọn trong bảng chuẩn bị, đổi bản đồ là trận mới: Đảo Gió Xanh (mặc định), Thung Lũng (gò giữa che tầm), Đồi Đôi (hai bên đứng cao, giữa trũng), Vực Sâu (khe giữa rơi là thua, chỉ bắn qua).
-- Đội hình: mỗi đội 0 đến 3 người và 0 đến 3 bot, ít nhất 1 thành viên. Nhiều người chơi thay phiên trên cùng máy (hot-seat), thanh trạng thái ghi tên người đến lượt; bảng chọn nhân vật và vũ khí áp cho người đang có lượt. Trong đội, các thành viên còn sống luân phiên; hai đội xen kẽ. Bot bắn kẻ địch gần nhất. Đội thua khi mọi thành viên hết máu. Chưa có chơi online, cần server, ngoài phạm vi repo.
+- Đội hình: mỗi đội 0 đến 3 người và 0 đến 3 bot, ít nhất 1 thành viên. Nhiều người chơi thay phiên trên cùng máy (hot-seat), thanh trạng thái ghi tên người đến lượt; bảng chọn nhân vật và vũ khí áp cho người đang có lượt. Trong đội, các thành viên còn sống luân phiên; hai đội xen kẽ. Bot bắn kẻ địch gần nhất. Đội thua khi mọi thành viên hết máu. Chơi online qua server tự host, xem mục trên.
 - Vị trí xuất phát ngẫu nhiên theo seed, đội 1 nửa trái, đội 2 nửa phải, cách nhau ít nhất 70 px, không đứng trên vực.
 - Độ khó bot chọn trong bảng chuẩn bị: Dễ, Vừa, Khó, khác nhau ở độ lệch ngắm và mật độ tìm kiếm. Áp dụng từ lượt bot kế tiếp.
 - Thêm `?seed=123` vào URL để trận lặp lại y hệt (gió, skin bot, độ lệch của bot), tiện tái hiện lỗi.
@@ -38,13 +68,16 @@ Có thể đưa toàn bộ repo lên static hosting (GitHub Pages, Cloudflare Pa
 
 - `src/physics.js`: vật lý bước cố định 120 Hz, địa hình dạng heightmap, sát thương và tìm góc cho bot.
 - `src/match.js`: trạng thái và luật trận (lượt, timer, bắn, nổ, di chuyển, thắng thua, độ khó bot), không đụng DOM, có unit test. PRNG có seed để replay.
-- `src/game.js`: input, render Canvas và HUD; chỉ đọc và ghi vào `Match`.
+- `src/game.js`: input, render Canvas và HUD; chỉ đọc và ghi vào `Match` hoặc `RemoteMatch`.
+- `src/net.js`: `RemoteMatch`, bản sao trạng thái từ server cho chế độ online, cùng giao diện với `Match`, tự nội suy đạn và hiệu ứng giữa hai snapshot.
+- `server/server.js`: server Node, phòng chơi, ghế, WebSocket, file tĩnh. `deploy/com.gunny.server.plist` cho launchd.
 - `style.css`: giao diện desktop/mobile và bảng chọn trang bị.
 - `src/assets.js`: danh mục 16 asset và cơ chế tải có fallback.
 - `src/animation.js`: trạng thái, thời lượng khung hình và recoil độc lập với vật lý.
 - `src/sprites.js`: vẽ sprite, lật hướng và cắt texture theo địa hình.
 - `assets/`: 4 sprite nhân vật, 6 sprite vũ khí, 2 ảnh môi trường; xem `assets/README.md`.
 - `tests/physics.test.js`: đối xứng quỹ đạo, gió, phá địa hình, sát thương, độ chính xác bot.
+- `tests/match.test.js`, `tests/server.test.js`: luật trận, đội hình, phòng online, ghế, quyền chủ phòng.
 
 ## Phạm vi v0.3
 

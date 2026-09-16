@@ -336,3 +336,13 @@ Asset, chờ model thiết kế:
 - HUD: hai thẻ điểm là hai đội, HP là tổng đội, ảnh và tên là người đang có lượt hoặc người sẽ có lượt tiếp theo của đội đó. Trên canvas thêm tên trên đầu mỗi nhân vật, màu theo đội, vì 6 nhân vật với 4 skin sẽ có trùng skin.
 - Kiểm chứng bằng script 3 vs 3: đội 1 hai người một bot, đội 2 ba bot. Lượt đi đúng người 1, bot địch, người 2. Không tràn ngang ở 390 px.
 - Chưa làm: chọn tên hoặc skin riêng cho người 2 và 3 trước trận, hiện họ nhận skin ngẫu nhiên và đổi được trong lượt của mình bằng bảng chọn. Chưa có lệnh bỏ lượt.
+
+### 14. Backend online, host trên Mac mini
+
+- `server/server.js`: một tiến trình Node, phụ thuộc duy nhất là `ws`. Serve file tĩnh từ gốc repo (chặn `server/`, `node_modules/`, `.git/`), WebSocket tại `/ws`, `GET /api/rooms` liệt kê phòng. Mỗi phòng một `Match` chạy 120 Hz theo accumulator, snapshot 20 Hz. Phòng trống 60 giây thì xóa.
+- Tái dùng `Match` nguyên vẹn trên server, đúng như dự tính ở mục 13: server là nguồn sự thật, client chỉ gửi input (`keys`, `aim`, `charge`, `release`, `cancel`, `loadout`) và chủ phòng gửi `setup`, `restart`. Server kiểm tra ghế trước khi áp input, kiểm tra id vũ khí, nhân vật, bản đồ, độ khó.
+- Ghế: người vào nhận ghế người chơi trống theo thứ tự đội, hết ghế làm khán giả. Chủ phòng là người đầu, rời thì chuyển cho người kế. Ghế trống thì lượt tự bỏ sau 1,5 giây để trận không treo.
+- `src/net.js`: `RemoteMatch` cùng giao diện với `Match` nên `game.js` chỉ đổi một dòng khởi tạo theo `?room=`. Client nội suy đạn bằng `step()` giữa hai snapshot, tự sinh particle, rung, trail; địa hình chỉ gửi khi đổi (`terrainVersion`), mã hóa số nguyên x10 để nhẹ.
+- Lỗi đã gặp khi thử: link mời tạo trước khi có mã phòng; select đội hình bị ghi đè bởi snapshot cũ ngay sau khi chủ phòng đổi, làm mất ghế người 2. Cả hai sửa bằng cách cho HUD online chỉ đi theo snapshot.
+- Kiểm chứng: `tests/server.test.js` chạy server thật trên port ngẫu nhiên, hai client WebSocket, kiểm tra ghế, quyền chủ phòng, input sai ghế bị bỏ, bắn thật đổi phase, rời phòng chuyển chủ. Playwright hai trình duyệt: tạo phòng, vào bằng link, khán giả bị khóa, chủ mở ghế 2, bắn xen kẽ, cả hai thấy cùng trạng thái.
+- Chưa làm và nên cân nhắc: chống mất kết nối tạm (hiện ngắt là mất ghế, vào lại bằng link nhận ghế trống kế tiếp); chat; danh sách phòng trên trang chủ dùng `/api/rooms`; giới hạn số phòng và số kết nối mỗi IP nếu mở ra internet; HTTPS phải qua reverse proxy.
