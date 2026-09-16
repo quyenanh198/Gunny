@@ -47,15 +47,14 @@ Quy tắc phụ thuộc: mũi tên chỉ đi xuống. `match.js` không biết `
 | Module | Dòng | Trách nhiệm | Được test bởi |
 |---|---|---|---|
 | `src/physics.js` | 35 | Quỹ đạo, gió, va chạm, hố nổ, sát thương, độ dốc, chi phí di chuyển, tìm góc cho bot | `physics.test.js` |
-| `src/maps.js` | 100 | 5 sân đấu: heightmap, art, vùng xuất phát, mô tả | `maps.test.js` |
-| `src/assets.js` | 118 | Danh mục nhân vật, vũ khí, môi trường; loader có fallback | `assets.test.js` |
+| `src/content/` | 218 | 5 sân đấu; danh mục nhân vật, vũ khí, môi trường; loader có fallback | `maps.test.js`, `assets.test.js` |
 | `src/animation.js` | 59 | Trạng thái khung hình, recoil; thuần hình ảnh | `animation.test.js` |
-| `src/match.js` | 469 | Toàn bộ luật một trận: actor, lượt, bắn, nổ, di chuyển, thắng thua, bot | `match.test.js` |
+| `src/core/` + `src/match.js` | 499 | Luật thuần cho combat, bot, lượt, cấu hình và điều phối một trận | `match.test.js` |
 | `src/session.js` | 73 | `LocalSession`: phòng chờ và trận cục bộ | `session.test.js` |
 | `src/net.js` | 240 | `OnlineSession` + `RemoteMatch`: bản sao trạng thái, nội suy giữa snapshot | gián tiếp |
-| `server/server.js` | 385 | HTTP tĩnh, `/api/rooms`, `/healthz`, WebSocket, `Room` | `server.test.js` |
+| `server/` | 417 | Bootstrap HTTP/WebSocket, quản lý phòng, `Room`, validation | `server.test.js` |
 | `src/sprites.js` | 154 | Vẽ nhân vật, vũ khí, lớp địa hình | smoke test |
-| `src/game.js` | 671 | Ba màn hình, input, render, HUD | smoke test |
+| `src/ui/` + `src/game.js` | 724 | Điều hướng ba màn hình, input adapters, renderer, HUD, responsive sizing | smoke test |
 
 ## 4. Vòng đời
 
@@ -96,9 +95,13 @@ Client gửi ý định, không gửi kết quả:
 | `setup`, `start`, `restart`, `lobby` | Phòng chờ hoặc kết trận | Phải là chủ phòng |
 | `keys`, `aim`, `charge`, `release`, `cancel` | Trong trận | Phải đúng lượt của chính người gửi |
 
-Server gửi một loại bản tin duy nhất, `room`, 20 lần mỗi giây: trạng thái phòng, và khi đang chơi thì kèm trạng thái trận. Địa hình chỉ gửi khi đổi, đánh dấu bằng `terrainVersion`, mã hoá số nguyên nhân 10.
+Mọi input có `protocolVersion` và `clientSeq`; server kiểm tra schema, quyền, sequence và rate limit trước khi áp dụng. Snapshot `room` gửi 20 lần mỗi giây, có `serverTick`, `lastAckSeq`, `roomVersion`, trạng thái phòng và trạng thái trận. Địa hình chỉ gửi khi đổi hoặc reconnect, đánh dấu bằng `terrainVersion`, mã hoá số nguyên nhân 10. Contract đầy đủ nằm tại `docs/protocol.md`.
+
+Heartbeat WebSocket phát hiện kết nối chết. Server giữ ghế, host và state trong 30 giây; client reconnect bằng token ngắn hạn rồi nhận full resync.
 
 Client nội suy giữa hai snapshot bằng chính `physics.step`, nên đạn bay mượt 60 khung hình dù mạng chỉ cập nhật 20 lần.
+
+Client giữ buffer snapshot 120 ms và nội suy vị trí actor/projectile; sai lệch trên 80 px được snap để tránh kéo dài state sai. Các giá trị luật như HP, lượt và kết quả vẫn lấy trực tiếp từ snapshot authoritative.
 
 ## 7. Thời gian và tính xác định
 
@@ -110,6 +113,9 @@ Client nội suy giữa hai snapshot bằng chính `physics.step`, nên đạn b
 ## 7b. Hợp đồng bố cục
 
 Màn trận đấu là ứng dụng, không phải trang nội dung, nên nó khóa theo viewport:
+
+- Canvas giữ hệ logic 1200×620 nhưng backing store nhân theo `devicePixelRatio`, giới hạn ở 2.
+- Padding dùng safe-area của thiết bị; input chính có touch target tối thiểu 44 CSS px.
 
 - `body[data-screen="game"]` cao đúng `100dvh`, `overflow: hidden`. Sảnh và phòng chờ vẫn cuộn bình thường vì chúng là trang nội dung.
 - Chiều dọc chia làm ba: header, `.stage` co giãn, `.controls` cao tự nhiên. Chỉ `.stage` nhận phần còn lại.
