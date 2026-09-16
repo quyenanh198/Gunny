@@ -409,3 +409,11 @@ Hai điều phát hiện khi đối chiếu tài liệu với code:
 - `playerRow` trong `game.js` đưa tên người chơi vào `innerHTML`. Tên do người khác đặt, qua tham số URL, nên đây là lỗ chèn HTML thật, không phải rủi ro tương lai. Server cắt còn 16 ký tự nên khó chạy được script, nhưng vẫn phá được bố cục phòng chờ. Đã sửa thành text node trong cùng lần cập nhật này, và ghi thành ràng buộc bắt buộc ở hand-off M6 trước khi thêm chat.
 
 M4 được đánh dấu `Một phần` chứ không phải `Chưa bắt đầu`: phần vừa khít viewport và ma trận bốn kích thước đã xong ở `893058d`, còn DPR, safe area, nút tinh chỉnh góc và bố cục hai cụm cho điện thoại nằm ngang thì chưa.
+
+### 20. Gộp hand-off với PR song song đã chạy thật M1–M7
+
+Trong lúc `docs/handoff/` ở trên còn nằm trên nhánh, một session khác (`codex/check-roadmap`) đã merge thẳng vào `main` một đợt refactor và tính năng rất lớn: tách kiến trúc thành `content/`, `core/`, `play/`, `ui/`; thêm protocol version, reconnect token, snapshot buffer nội suy, DPR cap, safe area, hệ lượt kiểu Gunbound (S1/S2/SS + item), Quick Join, chat, metrics/readyz — và tự ghi tiến độ vào file `HANDOFF.md` ở gốc repo, không phải `docs/handoff/`.
+
+Đã verify trước khi tin: `npm run check` sạch, `npm test` 70/70, và chạy thật server + Playwright trên trình duyệt thật (không chỉ test giấy) — pass toàn bộ. Lỗ XSS ở mục 19 vẫn còn nguyên vẹn sau refactor, mọi nơi hiện tên người chơi đều dùng `textContent` hoặc canvas `fillText`.
+
+Vì hai hệ hand-off trùng mục đích và một bên đã khớp code thật hơn nhiều, xóa `docs/handoff/` và giữ `HANDOFF.md` của họ làm bản chính; cập nhật lại các link trỏ tới nó ở `ARCHITECTURE.md` mục 10 và `ONLINE_GAME_ROADMAP.md` mục 4b.

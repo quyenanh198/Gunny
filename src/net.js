@@ -5,6 +5,20 @@ import { MAPS } from "./maps.js";
 import { CHARACTERS } from "./assets.js";
 import { Match, DIFFICULTIES, ammoOf } from "./match.js";
 import { advanceAnimation } from "./animation.js";
+import { PROTOCOL_VERSION } from "./play/protocol.js";
+import { SnapshotBuffer } from "./play/snapshot-buffer.js";
+
+const ERROR_MESSAGES = {
+  INVALID_JSON: "Dữ liệu gửi lên không hợp lệ.",
+  INVALID_MESSAGE: "Tin nhắn không hợp lệ.",
+  INVALID_PAYLOAD: "Dữ liệu thao tác không hợp lệ.",
+  INVALID_SEQUENCE: "Thứ tự thao tác không hợp lệ.",
+  VERSION_MISMATCH: "Phiên bản game không tương thích với máy chủ.",
+  UNKNOWN_MESSAGE: "Máy chủ không nhận ra thao tác.",
+  MESSAGE_TOO_LARGE: "Tin nhắn vượt quá giới hạn.",
+  RATE_LIMITED: "Bạn thao tác quá nhanh. Hãy thử lại.",
+  RECONNECT_EXPIRED: "Phiên kết nối lại đã hết hạn.",
+};
 
 // A read-only view of the server's Match, smoothed between snapshots.
 class RemoteMatch {
@@ -36,6 +50,7 @@ class RemoteMatch {
     this.keys = new Set();
     this.sentKeys = "";
     this.seenBlasts = 0;
+    this.snapshotBuffer = new SnapshotBuffer();
   }
   get current() {
     return this.actors[this.turn];
@@ -49,7 +64,7 @@ class RemoteMatch {
   }
   apply(s) {
     const wasFlying = this.phase === "flight";
-    for (const k of ["turn", "round", "wind", "time", "energy", "phase", "charge", "charging", "status", "cursor", "teams", "popups"])
+    for (const k of ["turn", "round", "wind", "time", "energy", "phase", "charge", "charging", "status", "cursor", "teams", "popups", "shotType", "item", "upcoming", "stats"])
       this[k] = s[k];
     this.map = MAPS.find((m) => m.id === s.map) || MAPS[0];
     this.actors = s.actors.map((a) => ({ ...a, animation: a.anim, walking: false }));
@@ -70,6 +85,19 @@ class RemoteMatch {
     for (const b of s.blasts.slice(this.seenBlasts)) this.spawnBlast(b);
     this.seenBlasts = s.blasts.length;
     this.blasts = s.blasts;
+  }
+  enqueue(s, serverTick, receivedAt = performance.now()) {
+    const hadSnapshot = this.snapshotBuffer.items.length > 0;
+    const actorPositions = this.actors.map(({ x, y }) => ({ x, y }));
+    const projectilePosition = this.projectile && { x: this.projectile.x, y: this.projectile.y };
+    if (!this.snapshotBuffer.push(s, receivedAt, serverTick)) return;
+    this.apply(s);
+    if (hadSnapshot) {
+      actorPositions.forEach((position, index) => {
+        if (this.actors[index]) Object.assign(this.actors[index], position);
+      });
+      if (projectilePosition && this.projectile) Object.assign(this.projectile, projectilePosition);
+    }
   }
   spawnBlast(p) {
     this.shake = 0.3;
@@ -101,6 +129,14 @@ class RemoteMatch {
   }
   // Between snapshots the client keeps the shot and the effects moving.
   update(dt) {
+    const buffered = this.snapshotBuffer.sample();
+    if (buffered) {
+      buffered.actors.forEach((actor, index) => {
+        if (this.actors[index]) Object.assign(this.actors[index], { x: actor.x, y: actor.y });
+      });
+      if (buffered.projectile && this.projectile)
+        Object.assign(this.projectile, { x: buffered.projectile.x, y: buffered.projectile.y });
+    }
     const keys = [...this.keys].sort().join(",");
     if (keys !== this.sentKeys) {
       this.sentKeys = keys;
@@ -112,6 +148,7 @@ class RemoteMatch {
       if (this.trail.length > 50) this.trail.shift();
     }
     if (this.charging && this.playerCanAct) this.charge = Math.min(100, this.charge + 45 * dt);
+    if (this.phase === "aim") this.time = Math.max(0, this.time - dt);
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -162,6 +199,13 @@ class RemoteMatch {
     this.session.send({ t: "loadout", character, weapon });
     return true;
   }
+  setAction(action) {
+    if (!this.playerCanAct || this.charging) return false;
+    if (action.shot) this.shotType = action.shot;
+    if (action.item !== undefined) this.item = action.item;
+    this.session.send({ t: "action", ...action });
+    return true;
+  }
 }
 
 export class OnlineSession {
@@ -174,20 +218,35 @@ export class OnlineSession {
     this.map = MAPS[0].id;
     this.difficulty = "normal";
     this.canStart = false;
+    this.chat = [];
+    this.history = [];
     this.you = { id: 0, host: false, team: null, ready: false, character: "mochi", weapon: "carrot", player: null };
     this.error = "";
+    this.name = name || "";
+    this.clientSeq = 0;
+    this.lastAckSeq = 0;
+    this.serverTick = 0;
+    this.roomVersion = 0;
+    this.reconnectToken = "";
+    this.closed = false;
     this.onUpdate = onUpdate;
     this.match = new RemoteMatch(this);
+    this.connect();
+  }
+  connect() {
     const url = new URL("/ws", location.href);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.searchParams.set("room", room || "");
-    url.searchParams.set("name", name || "");
+    url.searchParams.set("room", this.id);
+    url.searchParams.set("name", this.name);
+    if (this.reconnectToken) url.searchParams.set("reconnectToken", this.reconnectToken);
     this.ws = new WebSocket(url);
-    this.ws.onmessage = (e) => this.receive(JSON.parse(e.data));
+    this.ws.onmessage = (event) => this.receive(JSON.parse(event.data));
     this.ws.onclose = () => {
-      this.state = "offline";
-      this.error = "Mất kết nối tới máy chủ. Tải lại trang để vào lại.";
+      if (this.closed) return;
+      this.state = this.reconnectToken ? "reconnecting" : "offline";
+      this.error = this.reconnectToken ? "Mất kết nối, đang thử nối lại…" : "Mất kết nối tới máy chủ.";
       this.onUpdate(this);
+      if (this.reconnectToken) this.reconnectTimer = setTimeout(() => this.connect(), 1000);
     };
   }
   get host() {
@@ -197,13 +256,36 @@ export class OnlineSession {
     return this.players.filter((p) => p.team === team).length + this.bots[team];
   }
   send(msg) {
-    if (this.ws.readyState === 1) this.ws.send(JSON.stringify(msg));
+    if (this.ws.readyState === 1)
+      this.ws.send(JSON.stringify({ protocolVersion: PROTOCOL_VERSION, clientSeq: ++this.clientSeq, ...msg }));
   }
   receive(s) {
+    if (s.t === "error") {
+      this.error = ERROR_MESSAGES[s.code] || "Máy chủ từ chối thao tác.";
+      if (s.code === "RECONNECT_EXPIRED" || s.code === "VERSION_MISMATCH") {
+        this.closed = true;
+        this.state = "offline";
+      }
+      this.onUpdate(this, this.state);
+      return;
+    }
     if (s.t !== "room") return;
+    if (s.protocolVersion !== PROTOCOL_VERSION) {
+      this.closed = true;
+      this.state = "offline";
+      this.error = "Phiên bản game không tương thích với máy chủ.";
+      this.ws.close();
+      this.onUpdate(this);
+      return;
+    }
     const was = this.state;
-    for (const k of ["id", "state", "map", "difficulty", "bots", "canStart", "players", "you"]) this[k] = s[k];
-    if (s.match) this.match.apply(s.match);
+    this.lastAckSeq = s.lastAckSeq;
+    this.serverTick = s.serverTick;
+    this.roomVersion = s.roomVersion;
+    this.reconnectToken = s.reconnectToken;
+    for (const k of ["id", "state", "map", "difficulty", "bots", "canStart", "players", "you", "chat", "history"]) this[k] = s[k];
+    if (was === "reconnecting") this.match.snapshotBuffer.clear();
+    if (s.match) this.match.enqueue(s.match, s.serverTick);
     this.onUpdate(this, was);
   }
   chooseTeam(team) {
@@ -234,7 +316,15 @@ export class OnlineSession {
   backToLobby() {
     this.send({ t: "lobby" });
   }
+  sendChat(text) {
+    this.send({ t: "chat", text });
+  }
+  kick(id) {
+    this.send({ t: "kick", id });
+  }
   leave() {
+    this.closed = true;
+    clearTimeout(this.reconnectTimer);
     this.ws.close();
   }
 }

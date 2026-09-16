@@ -166,7 +166,7 @@ test("spawns are random per seed, on the team's side, spaced and on ground", () 
   }
 });
 
-test("teams alternate and living members rotate; humans and bots mix", () => {
+test("delay queue rotates members and can grant a low-delay consecutive turn", () => {
   const m = new Match({ seed: 5, teams: [{ humans: 2, bots: 1 }, { humans: 1, bots: 1 }] });
   assert.deepEqual(m.actors.map((a) => a.control), ["human", "human", "bot", "human", "bot"]);
   assert.equal(m.current.player, 1);
@@ -176,10 +176,10 @@ test("teams alternate and living members rotate; humans and bots mix", () => {
     order.push(m.turn);
     m.nextTurn();
   }
-  assert.deepEqual(order, [0, 3, 1, 4, 2, 3]);
+  assert.deepEqual(order, [0, 3, 0, 1, 4, 2]);
   m.actors[3].hp = 0;
   m.nextTurn();
-  assert.equal(m.turn, 4, "dead members are skipped");
+  assert.notEqual(m.turn, 3, "dead members are skipped");
   m.setTeams([{ humans: 0, bots: 0 }, { humans: 5, bots: 0 }]);
   assert.deepEqual(m.teams, [{ humans: 0, bots: 1 }, { humans: MAX_TEAM, bots: 0 }]);
   assert.equal(m.current.control, "bot");

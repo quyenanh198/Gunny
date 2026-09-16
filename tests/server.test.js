@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "../server/server.js";
+import { PROTOCOL_VERSION } from "../src/play/protocol.js";
 
 const listen = () =>
   new Promise((resolve) => {
@@ -13,9 +14,11 @@ const connect = (port, query) =>
   new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?${query}`);
     const queue = [];
+    let clientSeq = 0;
     const client = {
       ws,
-      send: (msg) => ws.send(JSON.stringify(msg)),
+      send: (msg) => ws.send(JSON.stringify({ protocolVersion: PROTOCOL_VERSION, clientSeq: ++clientSeq, ...msg })),
+      sendRaw: (msg) => ws.send(JSON.stringify(msg)),
       next: () => (queue.length ? Promise.resolve(queue.shift()) : new Promise((r) => (client.waiter = r))),
     };
     ws.onmessage = (e) => {
@@ -64,6 +67,10 @@ test("the lobby seats players, only the host configures, and only the host start
     assert.equal(first.state, "lobby");
     assert.equal(first.id.length, 4);
     assert.equal(first.you.team, 0, "first player fills team 1");
+    assert.equal(first.protocolVersion, PROTOCOL_VERSION);
+    assert.equal(first.serverTick, 0);
+    assert.equal(first.lastAckSeq, 0);
+    assert.ok(first.reconnectToken);
     assert.equal(first.canStart, true, "one player plus the default bot is enough");
     const listed = await (await fetch(`http://127.0.0.1:${port}/api/rooms`)).json();
     assert.deepEqual(listed[0].id, first.id);
@@ -113,9 +120,92 @@ test("the lobby seats players, only the host configures, and only the host start
     const back = await until(guest, (s) => s.state === "lobby");
     assert.equal(back.you.ready, false, "everyone re-readies for the next match");
     host.ws.close();
-    const promoted = await until(guest, (s) => s.you.host, 150);
-    assert.equal(promoted.players.length, 1);
+    const retained = await until(guest, (s) => s.players.some((player) => player.id === first.you.id && !player.connected));
+    assert.equal(retained.you.host, false, "host ownership is retained during the reconnect grace period");
+    assert.equal(retained.players.length, 2);
     guest.ws.close();
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("invalid and duplicate messages are rejected without applying twice", async () => {
+  const { server, port } = await listen();
+  try {
+    const host = await connect(port, "room=&name=An");
+    const first = await until(host, (snapshot) => snapshot.you.host);
+    host.sendRaw({ t: "ready", value: true });
+    assert.equal((await until(host, (message) => message.t === "error")).code, "VERSION_MISMATCH");
+
+    const input = { protocolVersion: PROTOCOL_VERSION, clientSeq: 1, t: "team", team: 1 };
+    host.sendRaw(input);
+    const changed = await until(host, (snapshot) => snapshot.you.team === 1);
+    assert.equal(changed.lastAckSeq, 1);
+    host.sendRaw({ ...input, team: 0 });
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const unchanged = await until(host, (snapshot) => snapshot.t === "room");
+    assert.equal(unchanged.you.team, 1);
+    assert.equal(unchanged.lastAckSeq, 1);
+    host.ws.close();
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("reconnect token keeps the same seat and forces a full resync", async () => {
+  const { server, port } = await listen();
+  try {
+    const original = await connect(port, "room=&name=An");
+    const first = await until(original, (snapshot) => snapshot.you.host);
+    original.ws.close();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const resumed = await connect(
+      port,
+      `room=${first.id}&name=Ignored&reconnectToken=${encodeURIComponent(first.reconnectToken)}`,
+    );
+    const snapshot = await until(resumed, (message) => message.t === "room");
+    assert.equal(snapshot.you.id, first.you.id);
+    assert.equal(snapshot.you.host, true);
+    assert.equal(snapshot.you.team, first.you.team);
+    assert.ok(snapshot.roomVersion > first.roomVersion);
+    resumed.ws.close();
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("oversized messages and input floods return machine-readable errors", async () => {
+  const { server, port } = await listen();
+  try {
+    const client = await connect(port, "room=&name=An");
+    await until(client, (message) => message.t === "room");
+    client.ws.send("x".repeat(4097));
+    assert.equal((await until(client, (message) => message.t === "error")).code, "MESSAGE_TOO_LARGE");
+    for (let sequence = 1; sequence <= 61; sequence++)
+      client.sendRaw({ protocolVersion: PROTOCOL_VERSION, clientSeq: sequence, t: "ready", value: true });
+    assert.equal((await until(client, (message) => message.t === "error", 200)).code, "RATE_LIMITED");
+    client.ws.close();
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("quick join and production probes expose live room state", async () => {
+  const { server, port } = await listen();
+  try {
+    const client = await connect(port, "room=&name=An");
+    const room = await until(client, (message) => message.t === "room");
+    const quick = await (await fetch(`http://127.0.0.1:${port}/api/quick-join`)).json();
+    assert.equal(quick.room.length, 4);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 200);
+    const metrics = await (await fetch(`http://127.0.0.1:${port}/metrics`)).text();
+    assert.match(metrics, /gunny_active_connections [1-9]\d*/);
+    assert.match(metrics, /gunny_rooms [1-9]\d*/);
+    client.ws.close();
   } finally {
     server.closeAllConnections();
     server.close();
