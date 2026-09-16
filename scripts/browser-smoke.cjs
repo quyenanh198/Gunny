@@ -21,16 +21,16 @@ const assert = require("node:assert/strict");
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(process.env.GAME_URL || "http://127.0.0.1:5173");
     await page.waitForFunction(
-      () => document.querySelector("#characterChoices").children.length === 4,
+      () => document.querySelector("#characterChoices").children.length === 5,
     );
     // Home screen, then the practice room, then the battle.
     assert.equal(await page.locator("#home").isVisible(), true);
     await page.locator("#playerName").fill("Kiểm thử");
     await page.locator("#practice").click();
     await page.waitForSelector("#room", { state: "visible" });
-    assert.match(await page.locator("#assetStatus").innerText(), /4 nhân vật/);
-    assert.equal(await page.locator("#characterChoices button").count(), 4);
-    assert.equal(await page.locator("#weaponChoices button").count(), 6);
+    assert.match(await page.locator("#assetStatus").innerText(), /5 nhân vật/);
+    assert.equal(await page.locator("#characterChoices button").count(), 5);
+    assert.equal(await page.locator("#weaponChoices button").count(), 7);
     // Every character sheet contains four distinct frames in all four rows.
     assert.equal(
       await page.evaluate(async () => {
@@ -69,16 +69,31 @@ const assert = require("node:assert/strict");
       true,
     );
 
-    for (const id of ["mochi", "hat-de", "bzz", "nemu"]) {
+    for (const id of ["mochi", "hat-de", "bzz", "nemu", "aether"]) {
       const button = page.locator(`#characterChoices [data-id="${id}"]`);
       await button.click();
       assert.equal(await button.getAttribute("aria-pressed"), "true");
     }
-    for (const id of ["carrot", "acorn", "honey", "bubble", "fish", "star"]) {
+    for (const id of ["carrot", "acorn", "honey", "bubble", "fish", "star", "void-prism"]) {
       const button = page.locator(`#weaponChoices [data-id="${id}"]`);
       await button.click();
       assert.equal(await button.getAttribute("aria-pressed"), "true");
     }
+    // Every arena is selectable from the room, with its own preview card.
+    assert.equal(await page.locator(".map-card").count(), 5);
+    for (const [id, name] of [
+      ["candy", "Thung Lũng Kẹo"],
+      ["moon", "Đêm Nấm Phát Sáng"],
+      ["death", "Death Valley"],
+      ["celestial", "Thiên Tinh"],
+      ["sky", "Đảo Gió Xanh"],
+    ]) {
+      const card = page.locator(`[data-map="${id}"]`);
+      await card.click();
+      assert.equal(await card.getAttribute("aria-pressed"), "true");
+      assert.match(await page.locator("#lobbyMapName").innerText(), new RegExp(name));
+    }
+    await page.locator('[data-map="death"]').click();
     await page.locator('#characterChoices [data-id="mochi"]').click();
     await page.locator('#weaponChoices [data-id="carrot"]').click();
     await page.locator("#startMatch").click();
@@ -86,6 +101,22 @@ const assert = require("node:assert/strict");
     // The HUD fills in on the first animation frame after the switch.
     await page.waitForFunction(() =>
       document.querySelector("#name0").textContent.includes("Kiểm thử"),
+    );
+    assert.match(await page.locator("#mapName").innerText(), /Death Valley/);
+    assert.equal(await page.locator("#health0").innerText(), "100 / 100 HP");
+    if (process.env.SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.SCREENSHOT_DIR}/map-death.png`,
+        fullPage: true,
+      });
+    // Back to the room for a different arena.
+    await page.locator("#leaveMatch").click();
+    await page.waitForSelector("#room", { state: "visible" });
+    await page.locator('[data-map="sky"]').click();
+    await page.locator("#startMatch").click();
+    await page.waitForSelector("#game", { state: "visible" });
+    await page.waitForFunction(() =>
+      document.querySelector("#mapName").textContent.includes("Đảo Gió Xanh"),
     );
     if (process.env.SCREENSHOT_DIR)
       await page.screenshot({
@@ -196,7 +227,7 @@ const assert = require("node:assert/strict");
     );
     await fallback.close();
     console.log(
-      "PASS: 16 assets, 64 animation frames, home/room/battle screens, 10 selections, rematch, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
+      "PASS: 27 assets, 5 maps, 80 animation frames, home/room/battle screens, 12 selections, rematch, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
     );
   } finally {
     await browser.close();

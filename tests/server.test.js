@@ -74,20 +74,20 @@ test("the lobby seats players, only the host configures, and only the host start
     assert.equal(g1.you.host, false);
     assert.equal(g1.canStart, false, "the guest has not readied up");
 
-    guest.send({ t: "setup", map: "vuc-sau" });
+    guest.send({ t: "setup", map: "death" });
     guest.send({ t: "start" });
     await new Promise((r) => setTimeout(r, 150));
     const ignored = await until(guest, (s) => s.players.length === 2);
-    assert.equal(ignored.map, "gio-xanh", "a guest cannot change the setup");
+    assert.equal(ignored.map, "sky", "a guest cannot change the setup");
     assert.equal(ignored.state, "lobby", "a guest cannot start the match");
 
     guest.send({ t: "loadout", character: "bzz", weapon: "star" });
     guest.send({ t: "ready", value: true });
     await until(host, (s) => s.canStart && s.players.some((p) => p.character === "bzz"));
-    host.send({ t: "setup", map: "vuc-sau", difficulty: "easy", bots: [1, 0] });
+    host.send({ t: "setup", map: "death", difficulty: "easy", bots: [1, 0] });
     host.send({ t: "start" });
     const playing = await until(host, (s) => s.state === "playing");
-    assert.equal(playing.match.map, "vuc-sau");
+    assert.equal(playing.match.map, "death");
     assert.equal(playing.match.actors.length, 3, "two players and one bot");
     assert.equal(playing.you.player, 1);
     assert.ok(Array.isArray(playing.match.terrain));
@@ -96,7 +96,7 @@ test("the lobby seats players, only the host configures, and only the host start
     const mine = gp.match.actors.find((a) => a.player === 2);
     assert.equal(mine.skin, "bzz", "the lobby loadout carries into the match");
     assert.equal(mine.weapon, "star");
-    assert.equal(mine.label, "Binh", "actors carry the player name");
+    assert.equal(mine.name, "Binh", "actors carry the player name");
 
     // Only the player whose turn it is can aim.
     guest.send({ t: "aim", angle: 70 });

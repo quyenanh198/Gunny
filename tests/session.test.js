@@ -9,11 +9,11 @@ test("a practice session starts a match from the lobby choices", () => {
   assert.equal(s.canStart, true, "you plus the default bot");
   s.setCharacter("nemu");
   s.setWeapon("star");
-  s.setSetup({ map: "doi-doi", difficulty: "hard", bots: [1, 2] });
+  s.setSetup({ map: "moon", difficulty: "hard", bots: [1, 2] });
   assert.equal(s.teamSize(0), 2);
   assert.equal(s.start(), true);
   assert.equal(s.state, "playing");
-  assert.equal(s.match.map.id, "doi-doi");
+  assert.equal(s.match.map.id, "moon");
   assert.equal(s.match.difficulty.id, "hard");
   assert.equal(s.match.actors.length, 4);
   const you = s.match.actors.find((a) => a.control === "human");

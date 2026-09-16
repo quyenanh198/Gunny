@@ -310,7 +310,7 @@ Gameplay, theo mức ảnh hưởng:
 4. **Nghiêng cộng góc có thể bắn ngược hướng.** Đã làm cả hai: `MAX_TILT` hạ xuống 20, và `launchAngle(aim, tilt)` giữ góc thật cùng phía với góc chọn, tối đa 89 khi bắn phải, tối thiểu 91 khi bắn trái. Dùng chung ở `shoot()`, đường ngắm và bot. Dốc xuống vẫn hạ góc thật xuống dưới góc chọn, kể cả âm, nghĩa là bắn góc thấp trên dốc xuống có thể nổ ngay chân mình. Cố ý, tự trừng phạt.
 5. **Gió hiển thị số thô.** Đã làm: HUD hiện `GIÓ → cấp 7`, cấp = ceil(|wind| / 3), 0 đến 10, `GIÓ LẶNG` khi 0. Vật lý vẫn dùng px/s².
 6. **Bot nhắm vào chân.** Đã làm: `botShot()` đo sai số tới `y - BODY_OFFSET`. Quan trọng hơn, `simulate()` nhận `target` và dừng khi đạn đi qua thân trong `HIT_RADIUS`, đúng như `Match.update()` cho nổ khi chạm người. Trước đây bot sim đạn xuyên qua người tới đất nên đánh giá sai những cú bắn thẳng vào thân. Test bot phải truyền `target` vào `simulate` cho khớp.
-7. **Chỉ có một bản đồ.** Đã làm: `MAPS` trong `physics.js`, mỗi map là hàm `height(x)`. Đảo Gió Xanh (cũ), Thung Lũng (gò giữa cao 70 px che tầm bắn thấp), Đồi Đôi (hai bên đứng trên đồi, giữa trũng), Vực Sâu (khe rộng 140 px ở giữa là vực, rơi xuống là thua, đi bộ qua không được). `Match.setMap()` là trận mới. Test: mọi map hai điểm xuất phát đều trên đất và bot bắn trúng cả hai chiều. Ảnh: khe Vực Sâu lộ nền trời vì texture chỉ vẽ từ `original[x]` xuống, nhìn như vực thật, không cần vẽ thêm.
+7. **Chỉ có một bản đồ.** Đã làm: `MAPS` trong `maps.js` định nghĩa 5 sân đấu, gồm background, texture đất, heightmap và vùng spawn. `Match.setMap()` bắt đầu trận mới. Test: mọi map có địa hình hữu hạn, trơn, phá hủy độc lập; bot bắn trúng cả hai chiều dưới gió ngược và gió xuôi.
 
 Code và kiểm thử:
 
@@ -332,7 +332,7 @@ Asset, chờ model thiết kế:
 - `Match` nhận `teams: [{humans, bots}, {humans, bots}]`, mỗi đội tối đa `MAX_TEAM = 3`, đội trống tự thêm 1 bot. Actor có `team`, `control` (`human` hoặc `bot`), `player` (số thứ tự người). `current` là actor đang có lượt; mọi input, loadout, đường ngắm áp cho `current`.
 - Lượt: hai đội xen kẽ, trong đội các thành viên còn sống luân phiên bằng `cursor[team]`. Chết thì bỏ qua. Đội thua khi hết thành viên. Hết 30 lượt so tổng HP đội.
 - Bot bắn kẻ địch còn sống gần nhất theo trục x. Bắn nhầm đồng đội vẫn ăn sát thương, giống Gunny.
-- Spawn: `spawnColumns(team, n)` random trong nửa sân của đội (40 đến 540 và 660 đến 1160), cách nhau ít nhất 70 px, loại cột có `terrain[x] >= HEIGHT - 60` để không đứng trên vực. Theo seed nên replay được. Thử 200 lần rồi rơi về chia đều.
+- Spawn: `spawnColumns(team, n)` random trong `spawnZones` của map, cách nhau ít nhất 70 px, loại cột có `terrain[x] >= HEIGHT - 60`. Theo seed nên replay được. Thử 200 lần rồi rơi về chia đều.
 - HUD: hai thẻ điểm là hai đội, HP là tổng đội, ảnh và tên là người đang có lượt hoặc người sẽ có lượt tiếp theo của đội đó. Trên canvas thêm tên trên đầu mỗi nhân vật, màu theo đội, vì 6 nhân vật với 4 skin sẽ có trùng skin.
 - Kiểm chứng bằng script 3 vs 3: đội 1 hai người một bot, đội 2 ba bot. Lượt đi đúng người 1, bot địch, người 2. Không tràn ngang ở 390 px.
 - Chưa làm: chọn tên hoặc skin riêng cho người 2 và 3 trước trận, hiện họ nhận skin ngẫu nhiên và đổi được trong lượt của mình bằng bảng chọn. Chưa có lệnh bỏ lượt.
@@ -370,3 +370,14 @@ Lỗi tự phát hiện khi kiểm thử và đã sửa:
 - Smoke test chờ theo thời gian cố định nên đọc phải HUD của trận cũ; đổi sang `waitForFunction` theo trạng thái.
 
 Chưa làm: chat trong phòng, giữ ghế khi rớt mạng tạm, mời bằng QR, xếp phòng tự động.
+
+### 16. Hợp nhất với nhánh maps, Aether và lobby trên main
+
+Trong lúc làm bản online, `main` nhận thêm 4 commit từ session khác: 5 bản đồ có art riêng (`src/maps.js`, background và texture đất cho từng map), nhân vật Aether và vũ khí Pháo Hư Không, một màn lobby cục bộ với roster, và Dockerfile cộng nginx cho gunny.lazybutts.com. Đã merge và hòa giải như sau:
+
+- **Lấy của họ**: `src/maps.js` cùng toàn bộ asset mới, `physics.js` (bỏ MAPS, giữ `makeTerrain` cho map gốc), `assets.js`, và quan trọng nhất là `Match` nhận `roster`: danh sách thành viên mỗi đội kèm `control`, `name`, `skin`, `weapon`. Thiết kế này thay cho cách vá `label` sau khi tạo trận của mình, nên `LocalSession` và server giờ chỉ dựng roster rồi đưa cho `Match`.
+- **Lấy của mình**: ba màn hình, server phòng, `net.js`, `session.js`. Màn lobby cục bộ của họ bị thay vì trùng mục đích nhưng không có phòng online.
+- **Ghép**: thẻ chọn bản đồ `.map-card` của họ chuyển từ màn chơi sang phòng chờ, kèm CSS. Số hiệu và mô tả map hiện ở tiêu đề trận. Render lấy background và texture đất theo `map.background` và `map.ground` thay vì hai ảnh cố định.
+- **Bỏ `label`**: roster đặt thẳng tên người chơi vào `actor.name`, nên HUD, tên trên canvas và câu thông báo khi bắn chỉ đọc một trường.
+- **Docker**: ảnh cũ là nginx phục vụ tĩnh, không còn đúng khi game cần server cho phòng và trận. Đổi sang `node:22-alpine` chạy `server/server.js`, giữ nguyên cổng 8080 và `/healthz` để hợp đồng với caddy phía trước không đổi; xóa `nginx.conf`. Proxy phải chuyển tiếp WebSocket trên `/ws`, nếu không chỉ còn chế độ luyện tập.
+- Kiểm chứng sau merge: 50 unit test, smoke test đầy đủ (27 asset, 5 map, ba màn hình, rematch), và kịch bản hai trình duyệt chơi online qua server.

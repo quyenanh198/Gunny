@@ -3,6 +3,7 @@ export const CHARACTERS = [
   { id: "hat-de", name: "Hạt Dẻ", file: "characters/hat-de.png" },
   { id: "bzz", name: "Bzz", file: "characters/bzz.png" },
   { id: "nemu", name: "Nemu", file: "characters/nemu.png" },
+  { id: "aether", name: "Aether", file: "characters/aether.png" },
 ];
 export const WEAPONS = [
   // ammo: gravityScale and windScale change the arc; craterWidth (half width)
@@ -56,8 +57,24 @@ export const WEAPONS = [
     color: "#fff08e",
     ammo: { gravityScale: 0.9, windScale: 1, craterWidth: 26, craterDepth: 32, damageMax: 36, damageRadius: 90, angles: [10, 85] },
   },
+  {
+    id: "void-prism",
+    name: "Pháo Hư Không",
+    desc: "Chính xác · Ít lệch gió",
+    file: "weapons/void-prism.png",
+    color: "#54dcff",
+    ammo: { gravityScale: 0.8, windScale: 0.65, craterWidth: 30, craterDepth: 38, damageMax: 38, damageRadius: 90, angles: [15, 85] },
+  },
 ];
 export const ENVIRONMENT = [
+  { id: "candy-background", file: "environment/candy-valley.webp" },
+  { id: "candy-ground", file: "environment/cake-ground.webp" },
+  { id: "moon-background", file: "environment/moonlit-grove.webp" },
+  { id: "moon-ground", file: "environment/moss-ground.webp" },
+  { id: "death-background", file: "environment/death-valley.webp" },
+  { id: "death-ground", file: "environment/death-ground.webp" },
+  { id: "celestial-background", file: "environment/celestial-stars.webp" },
+  { id: "celestial-ground", file: "environment/celestial-ground.webp" },
   { id: "background", file: "environment/sky-islands.webp" },
   { id: "ground", file: "environment/grass-earth.webp" },
 ];

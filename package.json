@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "node server/server.js",
+    "start": "node server/server.js",
     "test": "node --test",
-    "check": "node --check src/game.js && node --check src/match.js && node --check src/session.js && node --check src/physics.js && node --check src/assets.js && node --check src/sprites.js && node --check src/animation.js && node --check src/net.js && node --check server/server.js",
-    "start": "node server/server.js"
+    "check": "node --check src/game.js && node --check src/match.js && node --check src/maps.js && node --check src/session.js && node --check src/physics.js && node --check src/assets.js && node --check src/sprites.js && node --check src/animation.js && node --check src/net.js && node --check server/server.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

@@ -7,7 +7,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { Match, MAX_TEAM, DIFFICULTIES } from "../src/match.js";
-import { DT, MAPS } from "../src/physics.js";
+import { DT } from "../src/physics.js";
+import { MAPS } from "../src/maps.js";
 import { CHARACTERS, WEAPONS } from "../src/assets.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -76,16 +77,17 @@ class Room {
   clientOfSeat(player) {
     return this.order[player - 1] || null;
   }
-  applyRoster() {
-    for (const a of this.match.actors) {
-      if (a.control !== "human") continue;
-      const c = this.clientOfSeat(a.player);
-      if (!c) continue;
-      a.skin = c.character;
-      a.weapon = c.weapon;
-      a.name = CHARACTERS.find((x) => x.id === c.character).name;
-      a.label = c.name;
-    }
+  // The lobby roster carries each member's name and loadout into the match.
+  roster() {
+    return [0, 1].map((t) => [
+      ...this.teamPlayers(t).map((c) => ({
+        control: "human",
+        name: c.name,
+        skin: c.character,
+        weapon: c.weapon,
+      })),
+      ...Array.from({ length: this.bots[t] }, () => ({ control: "bot" })),
+    ]);
   }
   start() {
     if (!this.canStart) return false;
@@ -94,9 +96,8 @@ class Room {
       seed: Math.floor(Math.random() * 2 ** 31),
       map: this.map,
       difficulty: this.difficulty,
-      teams: [0, 1].map((t) => ({ humans: this.teamPlayers(t).length, bots: this.bots[t] })),
+      roster: this.roster(),
     });
-    this.applyRoster();
     this.terrainVersion++;
     this.match.terrainDirty = false;
     this.state = "playing";
@@ -106,7 +107,6 @@ class Room {
   }
   restart() {
     this.match.reset();
-    this.applyRoster();
     this.terrainVersion++;
     this.match.terrainDirty = false;
   }
@@ -194,7 +194,6 @@ class Room {
           team: a.team,
           control: a.control,
           player: a.player ?? null,
-          label: a.label ?? null,
           x: a.x,
           y: a.y,
           hp: a.hp,
@@ -325,6 +324,10 @@ async function serveStatic(req, res) {
 
 export function createServer() {
   const server = http.createServer((req, res) => {
+    if (req.url === "/healthz") {
+      res.writeHead(200, { "content-type": "text/plain" }).end("ok");
+      return;
+    }
     if (req.url === "/api/rooms") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(

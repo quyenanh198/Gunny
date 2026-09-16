@@ -1,6 +1,7 @@
 // Online session: the server owns the room and the match, this mirrors both so
 // the screens in game.js work the same as with a LocalSession.
-import { step, launch, launchAngle, settleAim, slopeAngle, makeTerrain, MAPS } from "./physics.js";
+import { step, launch, launchAngle, settleAim, slopeAngle } from "./physics.js";
+import { MAPS } from "./maps.js";
 import { CHARACTERS } from "./assets.js";
 import { Match, DIFFICULTIES, ammoOf } from "./match.js";
 import { advanceAnimation } from "./animation.js";
@@ -54,7 +55,7 @@ class RemoteMatch {
     this.actors = s.actors.map((a) => ({ ...a, animation: a.anim, walking: false }));
     if (s.terrain) {
       this.terrain = s.terrain.map((y) => y / 10);
-      this.originalTerrain = makeTerrain(this.map);
+      this.originalTerrain = this.map.createTerrain();
       this.terrainDirty = true;
       this.trail = [];
       this.particles = [];

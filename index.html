@@ -135,16 +135,19 @@
               <legend><label for="difficulty">ĐỘ KHÓ BOT</label></legend>
               <select id="difficulty"></select>
             </fieldset>
-            <fieldset class="difficulty">
-              <legend><label for="map">BẢN ĐỒ</label></legend>
-              <select id="map"></select>
-            </fieldset>
             <fieldset class="difficulty teams">
               <legend>SỐ BOT MỖI ĐỘI</legend>
               <label for="bots0">Đội 1</label><select id="bots0"></select>
               <label for="bots1">Đội 2</label><select id="bots1"></select>
             </fieldset>
           </div>
+        </section>
+        <section class="map-picker" aria-label="Chọn bản đồ">
+          <div class="map-picker-label">
+            <span>CHỌN SÂN ĐẤU</span>
+            <strong id="lobbyMapName">Đảo Gió Xanh</strong>
+          </div>
+          <div id="mapChoices"></div>
         </section>
         <div class="room-foot">
           <button id="ready" type="button" class="subtle">Sẵn sàng</button
@@ -159,8 +162,11 @@
         <div class="heading">
           <div>
             <p class="eyebrow" id="matchTag">TRẬN ĐẤU</p>
-            <h1><span id="mapName">Đảo Gió Xanh</span><span>01</span></h1>
-            <p>Chỉnh góc thật khéo. Thả một chút bất ngờ.</p>
+            <h1>
+              <span id="mapName">Đảo Gió Xanh</span
+              ><span id="mapNumber">01</span>
+            </h1>
+            <p id="mapDescription">Đồi cỏ thoai thoải giữa những tầng mây.</p>
           </div>
           <button id="leaveMatch" class="subtle" type="button">
             ← Về phòng chờ

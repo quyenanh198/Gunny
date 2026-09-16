@@ -1,4 +1,5 @@
-import { WIDTH, HEIGHT, DT, step, collides, ROCK_Y, MAPS } from "./physics.js";
+import { WIDTH, HEIGHT, DT, step, collides, ROCK_Y } from "./physics.js";
+import { MAPS } from "./maps.js";
 import { CHARACTERS, WEAPONS, assetURL, loadAssets } from "./assets.js";
 import { terrainLayer, drawCharacter, drawWeapon, drawMuzzle, drawBlast } from "./sprites.js";
 import { MAX_ROUNDS, MAX_TEAM, DIFFICULTIES } from "./match.js";
@@ -52,6 +53,7 @@ async function refreshRooms() {
       li.innerHTML = `<strong>${room.id}</strong><span>${map ? map.name : ""} · ${room.teams[0]} vs ${room.teams[1]} · ${
         room.state === "playing" ? "đang đấu" : "chờ"
       }</span>`;
+      li.title = map ? map.description : "";
       const join = document.createElement("button");
       join.type = "button";
       join.className = "subtle";
@@ -169,11 +171,16 @@ function updateRoom() {
   document.querySelectorAll("#weaponChoices button").forEach((b) => {
     b.setAttribute("aria-pressed", String(b.dataset.id === s.you.weapon));
   });
-  $("map").value = s.map;
+  const map = MAPS.find((x) => x.id === s.map) || MAPS[0];
+  $("lobbyMapName").textContent = map.name;
+  document.querySelectorAll(".map-card").forEach((card) => {
+    card.setAttribute("aria-pressed", String(card.dataset.map === map.id));
+    card.disabled = !s.host;
+  });
   $("difficulty").value = s.difficulty;
   $("bots0").value = s.bots[0];
   $("bots1").value = s.bots[1];
-  for (const id of ["map", "difficulty", "bots0", "bots1"]) $(id).disabled = !s.host;
+  for (const id of ["difficulty", "bots0", "bots1"]) $(id).disabled = !s.host;
   $("ready").setAttribute("aria-pressed", String(s.you.ready));
   $("ready").textContent = s.you.ready ? "Đã sẵn sàng" : "Sẵn sàng";
   $("ready").hidden = !s.online || s.you.team === null || s.host;
@@ -210,10 +217,9 @@ $("copyLink").onclick = () => {
   $("copyLink").textContent = "Đã sao chép!";
   setTimeout(() => ($("copyLink").textContent = "Sao chép link"), 1500);
 };
-for (const id of ["map", "difficulty", "bots0", "bots1"]) {
+for (const id of ["difficulty", "bots0", "bots1"]) {
   $(id).onchange = () => {
     session.setSetup({
-      map: $("map").value,
       difficulty: $("difficulty").value,
       bots: [+$("bots0").value, +$("bots1").value],
     });
@@ -245,7 +251,9 @@ $("toLobby").onclick = $("leaveMatch").onclick;
 $("restart").onclick = () => session.restart();
 
 function refreshGround(m) {
-  groundLayer = images.has("ground") ? terrainLayer(images.get("ground"), m.originalTerrain, m.terrain) : null;
+  groundLayer = images.has(m.map.ground)
+    ? terrainLayer(images.get(m.map.ground), m.originalTerrain, m.terrain)
+    : null;
   m.terrainDirty = false;
 }
 function teamFace(m, team) {
@@ -253,14 +261,12 @@ function teamFace(m, team) {
   const alive = m.alive(team);
   return alive[m.cursor[team] % alive.length] || m.actors.find((a) => a.team === team);
 }
-function labelOf(a) {
-  return a.label ? `${a.label} · ${a.name}` : a.name;
-}
+
 function sync(m) {
   for (const team of [0, 1]) {
     const face = teamFace(m, team),
       size = m.actors.filter((a) => a.team === team).length;
-    $("name" + team).textContent = face.label || face.name;
+    $("name" + team).textContent = face.name;
     $("tag" + team).textContent =
       face.control === "bot" ? "BOT" : face.player === session.you.player ? "BẠN" : `NGƯỜI ${face.player}`;
     $("hp" + team).max = size * 100;
@@ -293,11 +299,13 @@ function sync(m) {
   });
   $("battleHint").textContent = m.playerCanAct
     ? "Đổi vũ khí trước khi bắn."
-    : `Đang chờ ${labelOf(m.current)}…`;
+    : `Đang chờ ${m.current.name}…`;
   $("turnHint").textContent =
-    m.phase === "over" ? "Trận đấu kết thúc" : m.current.control === "human" ? `Lượt của ${labelOf(m.current)}` : "Bot đang ngắm";
+    m.phase === "over" ? "Trận đấu kết thúc" : m.current.control === "human" ? `Lượt của ${m.current.name}` : "Bot đang ngắm";
   $("matchTag").textContent = session.online ? `PHÒNG ${session.id}` : "LUYỆN TẬP";
   $("mapName").textContent = m.map.name;
+  $("mapNumber").textContent = m.map.number;
+  $("mapDescription").textContent = m.map.description;
   $("mapLabel").textContent = m.map.name.toUpperCase();
   $("versus").textContent = m.teams.map((t) => t.humans + t.bots).join(" VS ");
   const over = m.phase === "over";
@@ -361,9 +369,9 @@ function character(m, a, i) {
   ctx.textAlign = "center";
   ctx.lineWidth = 4;
   ctx.strokeStyle = "#1c3b41";
-  ctx.strokeText(a.label || a.name, a.x, a.y - 134);
+  ctx.strokeText(a.name, a.x, a.y - 134);
   ctx.fillStyle = a.team === 0 ? "#d2ef9c" : "#ffb494";
-  ctx.fillText(a.label || a.name, a.x, a.y - 134);
+  ctx.fillText(a.name, a.x, a.y - 134);
 }
 function render(m) {
   const { actors, projectile, trail } = m;
@@ -372,7 +380,8 @@ function render(m) {
     const s = (m.shake / 0.3) * 6;
     ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
   }
-  if (images.has("background")) ctx.drawImage(images.get("background"), 0, 0, WIDTH, HEIGHT);
+  // Each arena brings its own sky and soil texture.
+  if (images.has(m.map.background)) ctx.drawImage(images.get(m.map.background), 0, 0, WIDTH, HEIGHT);
   else {
     const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
     sky.addColorStop(0, "#a6d9df");
@@ -606,16 +615,31 @@ function buildUI() {
     };
     $("battleWeapons").append(battle);
   }
-  for (const [id, entries] of [
-    ["difficulty", DIFFICULTIES],
-    ["map", MAPS],
-  ])
-    for (const entry of entries) {
-      const option = document.createElement("option");
-      option.value = entry.id;
-      option.textContent = entry.name;
-      $(id).append(option);
-    }
+  for (const entry of DIFFICULTIES) {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = entry.name;
+    $("difficulty").append(option);
+  }
+  for (const map of MAPS) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "map-card";
+    card.dataset.map = map.id;
+    card.title = map.description;
+    const image = document.createElement("img");
+    image.src = assetURL(map.preview);
+    image.alt = "";
+    image.onerror = () => (image.hidden = true);
+    const name = document.createElement("strong");
+    name.textContent = `${map.number} · ${map.name}`;
+    card.append(image, name);
+    card.onclick = () => {
+      session.setSetup({ map: map.id });
+      updateRoom();
+    };
+    $("mapChoices").append(card);
+  }
   for (const id of ["bots0", "bots1"])
     for (let n = 0; n <= MAX_TEAM; n++) {
       const option = document.createElement("option");
@@ -632,7 +656,7 @@ async function start() {
   images = loaded.images;
   $("assetStatus").textContent = loaded.failed.length
     ? `Thiếu ${loaded.failed.length} hình — đang dùng hình dự phòng. Tải lại trang để thử lại.`
-    : "4 nhân vật · 6 vũ khí · Chọn trước khi vào trận";
+    : `${CHARACTERS.length} nhân vật · ${WEAPONS.length} vũ khí · Chọn trước khi vào trận`;
   // An invite link prefills the code; a first-time visitor still names themselves.
   const room = new URLSearchParams(location.search).get("room");
   if (room) $("roomCode").value = room.toUpperCase();

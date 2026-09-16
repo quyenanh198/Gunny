@@ -1,7 +1,7 @@
 // Local session: the same shape as the online session in net.js, so the lobby,
 // room and battle screens are written once and work with or without a server.
 import { Match, DIFFICULTIES, MAX_TEAM } from "./match.js";
-import { MAPS } from "./physics.js";
+import { MAPS } from "./maps.js";
 
 export class LocalSession {
   constructor({ name = "Bạn" } = {}) {
@@ -43,38 +43,27 @@ export class LocalSession {
     if (difficulty && DIFFICULTIES.some((d) => d.id === difficulty)) this.difficulty = difficulty;
     if (bots) this.bots = bots.map((n) => Math.max(0, Math.min(MAX_TEAM, n | 0)));
   }
-  // Human actors are created team 0 first, so seats follow this order.
-  seatOrder() {
-    return [0, 1].flatMap((t) => this.players.filter((p) => p.team === t));
-  }
-  applyRoster() {
-    for (const a of this.match.actors) {
-      if (a.control !== "human") continue;
-      const p = this.order[a.player - 1];
-      if (p) a.label = p.name;
-    }
+  // The lobby roster carries each member's name and loadout into the match.
+  roster() {
+    return [0, 1].map((t) => [
+      ...this.players
+        .filter((p) => p.team === t)
+        .map((p) => ({ control: "human", name: p.name, skin: p.character, weapon: p.weapon })),
+      ...Array.from({ length: this.bots[t] }, () => ({ control: "bot" })),
+    ]);
   }
   start() {
     if (!this.canStart) return false;
-    this.order = this.seatOrder();
-    const teams = [0, 1].map((t) => ({
-      humans: this.players.filter((p) => p.team === t).length,
-      bots: this.bots[t],
-    }));
     this.match = new Match({
       map: this.map,
       difficulty: this.difficulty,
-      teams,
-      character: this.you.character,
-      weapon: this.you.weapon,
+      roster: this.roster(),
     });
-    this.applyRoster();
     this.state = "playing";
     return true;
   }
   restart() {
     this.match.reset();
-    this.applyRoster();
   }
   backToLobby() {
     this.match = null;
