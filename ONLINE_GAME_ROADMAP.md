@@ -238,6 +238,12 @@ Hoàn thành khi:
 - Restart không để process/cổng treo; client nhận trạng thái mất server rõ ràng.
 - Có runbook deploy, rollback, xem log, kiểm tra health.
 
+## 4b. Hand-off theo từng bước
+
+Mỗi mốc M0 đến M7 có một file bàn giao ở `docs/handoff/`, đủ để một người chưa đọc repo cầm lên là làm được: trạng thái hiện tại đã kiểm chứng, phạm vi làm và không làm, các bước kèm cách kiểm chứng, rủi ro, và thứ phải để lại cho bước sau. Bảng trạng thái và quy ước cập nhật ở `docs/handoff/README.md`.
+
+Khi code và hand-off lệch nhau thì hand-off sai; sửa nó trong cùng commit làm lệch.
+
 ## 5. Thứ tự ưu tiên đề xuất
 
 | Mốc | Nội dung | Giá trị | Phụ thuộc |

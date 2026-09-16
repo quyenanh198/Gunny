@@ -120,10 +120,15 @@ function playerRow(p) {
   const img = document.createElement("img");
   img.src = assetURL(CHARACTERS.find((c) => c.id === p.character).file);
   img.alt = "";
-  const text = document.createElement("span");
-  text.innerHTML = `<strong>${p.name}</strong><small>${CHARACTERS.find((c) => c.id === p.character).name} · ${
+  // Names come from other players, so they are text nodes, never markup.
+  const text = document.createElement("span"),
+    name = document.createElement("strong"),
+    loadout = document.createElement("small");
+  name.textContent = p.name;
+  loadout.textContent = `${CHARACTERS.find((c) => c.id === p.character).name} · ${
     WEAPONS.find((w) => w.id === p.weapon).name
-  }</small>`;
+  }`;
+  text.append(name, loadout);
   const tag = document.createElement("b");
   tag.textContent = p.host ? "CHỦ PHÒNG" : p.ready ? "SẴN SÀNG" : "CHỜ";
   tag.className = p.ready || p.host ? "ok" : "";

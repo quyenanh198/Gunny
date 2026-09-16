@@ -217,6 +217,8 @@ cost = khoảngCáchTớiMụcTiêu + w * delayCủaHànhĐộng
 
 ## 10. Chuyển đổi theo giai đoạn
 
+Lộ trình đầy đủ cho bản online nằm ở `ONLINE_GAME_ROADMAP.md`, bàn giao từng bước ở `docs/handoff/`. Bảng dưới là phần kiến trúc của lộ trình đó, tương ứng mốc M1 và M5.
+
 Mỗi giai đoạn giữ game chơi được, test xanh, và có thể dừng lại ở đó.
 
 | Giai đoạn | Nội dung | Rủi ro |

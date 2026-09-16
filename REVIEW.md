@@ -398,3 +398,14 @@ Phản hồi từ người dùng: Gunbound gói mọi thứ trong một màn hì
 Đã sửa: màn trận đấu khóa `100dvh`, chia header, sân đấu co giãn, thanh điều khiển; kho vũ khí gộp vào thanh điều khiển dưới dạng dải biểu tượng nên không còn khối thứ hai; tên map, mô tả, tỉ số đội và tên phòng dồn vào dải chú thích trong sân; nút về phòng chờ thành nút nổi trong sân. Kích thước khung tính bằng `fitStage` và theo dõi bằng `ResizeObserver`, xem mục 7b của `ARCHITECTURE.md` để biết vì sao CSS thuần không làm được.
 
 Ba lỗi phát hiện khi làm: canvas bị kéo giãn trên điện thoại vì bảng điểm nằm trong khung tỉ lệ (tách `.frame` riêng); vùng trống dưới sân do flex kéo giãn (`align-items: center`); và smoke test đo sớm hơn một nhịp bố cục (chờ theo điều kiện thay vì chờ theo thời gian).
+
+### 19. Hand-off theo từng bước, và một lỗ chèn HTML
+
+`ONLINE_GAME_ROADMAP.md` (do một session khác đưa lên `main`) chia việc thành 8 mốc M0 đến M7. Mỗi mốc giờ có một file bàn giao trong `docs/handoff/`, viết theo cùng khuôn: trạng thái đã kiểm chứng trên code thật, phạm vi làm và không làm, các bước kèm cách kiểm chứng từng bước, rủi ro, và thứ phải bàn giao cho bước sau. Quy ước cập nhật ở `docs/handoff/README.md`; nguyên tắc là khi code và hand-off lệch nhau thì hand-off sai.
+
+Hai điều phát hiện khi đối chiếu tài liệu với code:
+
+- README mục Phạm vi vẫn ghi "Chưa có PvP online", mâu thuẫn với chính mục hướng dẫn online phía trên. Đã ghi vào M0 làm việc đầu tiên.
+- `playerRow` trong `game.js` đưa tên người chơi vào `innerHTML`. Tên do người khác đặt, qua tham số URL, nên đây là lỗ chèn HTML thật, không phải rủi ro tương lai. Server cắt còn 16 ký tự nên khó chạy được script, nhưng vẫn phá được bố cục phòng chờ. Đã sửa thành text node trong cùng lần cập nhật này, và ghi thành ràng buộc bắt buộc ở hand-off M6 trước khi thêm chat.
+
+M4 được đánh dấu `Một phần` chứ không phải `Chưa bắt đầu`: phần vừa khít viewport và ma trận bốn kích thước đã xong ở `893058d`, còn DPR, safe area, nút tinh chỉnh góc và bố cục hai cụm cho điện thoại nằm ngang thì chưa.
