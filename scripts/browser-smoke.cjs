@@ -21,10 +21,10 @@ const assert = require("node:assert/strict");
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(process.env.GAME_URL || "http://127.0.0.1:5173");
     await page.waitForFunction(
-      () => document.querySelector("#characterChoices").children.length === 4,
+      () => document.querySelector("#characterChoices").children.length === 5,
     );
-    assert.match(await page.locator("#assetStatus").innerText(), /4 nhân vật/);
-    assert.equal(await page.locator(".loadout button").count(), 10);
+    assert.match(await page.locator("#assetStatus").innerText(), /5 nhân vật/);
+    assert.equal(await page.locator(".loadout button").count(), 12);
     // Every character sheet contains four distinct frames in all four rows.
     assert.equal(
       await page.evaluate(async () => {
@@ -63,21 +63,21 @@ const assert = require("node:assert/strict");
       true,
     );
 
-    for (const id of ["mochi", "hat-de", "bzz", "nemu"]) {
+    for (const id of ["mochi", "hat-de", "bzz", "nemu", "aether"]) {
       await page.locator(`[data-id="${id}"]`).click();
       assert.equal(
         await page.locator(`[data-id="${id}"]`).getAttribute("aria-pressed"),
         "true",
       );
     }
-    for (const id of ["carrot", "acorn", "honey", "bubble", "fish", "star"]) {
+    for (const id of ["carrot", "acorn", "honey", "bubble", "fish", "star", "void-prism"]) {
       await page.locator(`[data-id="${id}"]`).click();
       assert.equal(
         await page.locator(`[data-id="${id}"]`).getAttribute("aria-pressed"),
         "true",
       );
     }
-    assert.equal(await page.locator("#name0").innerText(), "Nemu");
+    assert.equal(await page.locator("#name0").innerText(), "Aether");
     assert.equal(await page.locator(".map-card").count(), 5);
     for (const [id, name] of [
       ["candy", "Thung Lũng Kẹo"],
@@ -96,7 +96,7 @@ const assert = require("node:assert/strict");
         "true",
       );
       assert.equal(await page.locator("#health0").innerText(), "100 / 100 HP");
-      assert.equal(await page.locator("#name0").innerText(), "Nemu");
+      assert.equal(await page.locator("#name0").innerText(), "Aether");
       if (process.env.SCREENSHOT_DIR && ["death", "celestial"].includes(id)) {
         await page.screenshot({
           path: `${process.env.SCREENSHOT_DIR}/map-${id}.png`,
@@ -116,7 +116,7 @@ const assert = require("node:assert/strict");
     assert.match(await page.locator("#mapName").innerText(), /Death Valley/);
     await page.locator('[data-map="sky"]').click();
     await page.locator("#restart").click();
-    assert.equal(await page.locator("#name0").innerText(), "Nemu");
+    assert.equal(await page.locator("#name0").innerText(), "Aether");
     await page.locator('[data-id="mochi"]').click();
     await page.locator('[data-id="carrot"]').click();
     if (process.env.SCREENSHOT_DIR)
@@ -215,7 +215,7 @@ const assert = require("node:assert/strict");
     );
     await fallback.close();
     console.log(
-      "PASS: 24 assets, 5 maps, 64 animation frames, 10 selections, map reset, restart, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
+      "PASS: 27 assets, 5 maps, 80 animation frames, 12 selections, map reset, restart, crater pixels, player/bot turns, pause freezes animation, reduced motion, mobile layout, asset fallback.",
     );
   } finally {
     await browser.close();

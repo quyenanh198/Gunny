@@ -539,10 +539,10 @@ dialog li {
   gap: 10px;
 }
 .characters {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 .weapons {
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
 }
 .choices button {
   display: flex;
@@ -609,7 +609,7 @@ dialog li {
     line-height: 1.7;
   }
   .characters {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
   .choices button {
     padding: 6px 3px;
