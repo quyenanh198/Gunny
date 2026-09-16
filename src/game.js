@@ -437,7 +437,7 @@ async function start() {
   updateLoadout();
   $("assetStatus").textContent = loaded.failed.length
     ? `Thiếu ${loaded.failed.length} hình — đang dùng hình dự phòng. Tải lại trang để thử lại.`
-    : `4 nhân vật · 6 vũ khí · ${MAPS.length} bản đồ`;
+    : `${CHARACTERS.length} nhân vật · ${WEAPONS.length} vũ khí · ${MAPS.length} bản đồ`;
   paused = document.hidden;
   $("restart").disabled = false;
   $("help").disabled = false;
