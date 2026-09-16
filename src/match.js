@@ -63,15 +63,46 @@ export class Match {
       { humans: 1, bots: 0 },
       { humans: 0, bots: 1 },
     ],
+    // Lobby roster: per team, members { control, name?, skin?, weapon? }. When
+    // set it wins over `teams` (which is then derived from it for the HUD).
+    roster = null,
   } = {}) {
     this.seed = seed;
     this.character = character;
     this.weapon = weapon;
     this.teams = teams;
+    this.roster = null;
     this.map = MAPS.find((m) => m.id === map) || MAPS[0];
     this.difficulty = DIFFICULTIES.find((d) => d.id === difficulty) || DIFFICULTIES[1];
     this.keys = new Set();
+    if (roster) this.setRoster(roster, { reset: false });
     this.reset();
+  }
+  // Normalise a lobby roster: clamp team sizes, fill names/skins/weapons, keep a
+  // team from being empty (a lone bot steps in, as setTeams does).
+  static normaliseRoster(roster) {
+    const skinIds = CHARACTERS.map((c) => c.id),
+      weaponIds = WEAPONS.map((w) => w.id);
+    let humans = 0;
+    return [0, 1].map((t) => {
+      const members = (Array.isArray(roster?.[t]) ? roster[t] : []).slice(0, MAX_TEAM).map((member) => {
+        const control = member?.control === "bot" ? "bot" : "human";
+        const skin = skinIds.includes(member?.skin) ? member.skin : null;
+        const weapon = weaponIds.includes(member?.weapon) ? member.weapon : null;
+        const typed = typeof member?.name === "string" ? member.name.trim().slice(0, 16) : "";
+        if (control === "human") humans++;
+        return { control, skin, weapon, name: typed || (control === "human" ? `Người ${humans}` : "") };
+      });
+      return members.length ? members : [{ control: "bot", skin: null, weapon: null, name: "" }];
+    });
+  }
+  setRoster(roster, { reset = true } = {}) {
+    this.roster = Match.normaliseRoster(roster);
+    this.teams = this.roster.map((members) => ({
+      humans: members.filter((m) => m.control === "human").length,
+      bots: members.filter((m) => m.control === "bot").length,
+    }));
+    if (reset) this.reset();
   }
   reset() {
     this.random = this.seed === undefined ? Math.random : mulberry32(this.seed);
@@ -88,21 +119,29 @@ export class Match {
       usedSkins.push(skin);
       return skin;
     };
-    this.teams.forEach((team, t) => {
-      const spawns = this.spawnColumns(t, team.humans + team.bots);
-      for (let i = 0; i < team.humans + team.bots; i++) {
-        const human = i < team.humans;
-        // The first human keeps the loadout chosen in the setup panel.
-        const skin = human && humanIndex === 0 ? this.character : pickSkin();
-        if (human && humanIndex === 0) usedSkins.push(skin);
+    // Without a lobby roster, teams are counts: humans first, then bots.
+    const roster =
+      this.roster ||
+      this.teams.map((team) => [
+        ...Array.from({ length: team.humans }, () => ({ control: "human" })),
+        ...Array.from({ length: team.bots }, () => ({ control: "bot" })),
+      ]);
+    roster.forEach((members, t) => {
+      const spawns = this.spawnColumns(t, members.length);
+      members.forEach((member, i) => {
+        const human = member.control === "human";
+        // The first human keeps the loadout chosen in the setup panel unless the lobby picked one.
+        let skin = member.skin || (human && humanIndex === 0 ? this.character : null);
+        if (skin) usedSkins.push(skin);
+        else skin = pickSkin();
         const a = {
           team: t,
           control: human ? "human" : "bot",
           x: spawns[i],
           hp: START_HP,
           skin,
-          name: CHARACTERS.find((c) => c.id === skin).name,
-          weapon: human ? this.weapon : "acorn",
+          name: member.name || CHARACTERS.find((c) => c.id === skin).name,
+          weapon: member.weapon || (human ? this.weapon : "acorn"),
           angle: t === 0 ? 45 : 135,
           hurt: 0,
           walking: false,
@@ -111,7 +150,7 @@ export class Match {
         if (human) a.player = ++humanIndex;
         a.y = this.terrain[Math.floor(a.x)];
         this.actors.push(a);
-      }
+      });
     });
     this.cursor = [0, 0];
     this.turn = this.actors.findIndex((a) => a.team === 0);
@@ -186,7 +225,8 @@ export class Match {
     if (character) {
       if (a.player === 1) this.character = character;
       a.skin = character;
-      a.name = CHARACTERS.find((c) => c.id === character).name;
+      const typed = this.roster?.[a.team]?.find((mem, i) => this.actors.filter((b) => b.team === a.team)[i] === a)?.name;
+      a.name = typed || CHARACTERS.find((c) => c.id === character).name;
       a.animation = createAnimation();
     }
     if (weapon) {
@@ -206,6 +246,7 @@ export class Match {
     return true;
   }
   setTeams(teams) {
+    this.roster = null;
     const clamp = (n) => Math.max(0, Math.min(MAX_TEAM, n | 0));
     this.teams = teams.map(({ humans, bots }) => {
       const h = clamp(humans),

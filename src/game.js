@@ -12,8 +12,19 @@ import { MAPS } from "./maps.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("game"),
   ctx = canvas.getContext("2d");
-const seed = new URLSearchParams(location.search).get("seed");
+const params = new URLSearchParams(location.search);
+const seed = params.get("seed");
 const m = new Match({ seed: seed === null ? undefined : +seed });
+// Lobby draft: what the start screen edits before a match exists.
+const lobby = readInvite(params.get("lobby")) || {
+  map: m.map.id,
+  difficulty: m.difficulty.id,
+  teams: [
+    [{ control: "human", name: "Bạn", skin: "mochi", weapon: "carrot" }],
+    [{ control: "bot", skin: "", weapon: "" }],
+  ],
+};
+const inLobby = () => document.body.classList.contains("in-lobby");
 let images = new Map(),
   groundLayer = null,
   lastTurn = -1,
@@ -278,7 +289,7 @@ const keyMap = {
   ArrowDown: "down",
 };
 window.addEventListener("keydown", (e) => {
-  if (paused || e.target.closest("input,button,select")) return;
+  if (paused || inLobby() || e.target.closest("input,button,select")) return;
   if (keyMap[e.key]) {
     e.preventDefault();
     m.keys.add(keyMap[e.key]);
@@ -309,12 +320,44 @@ $("fire").addEventListener("keyup", (e) => {
 });
 window.addEventListener("blur", () => m.cancelCharge());
 document.addEventListener("visibilitychange", () => {
-  paused = document.hidden || $("guide").open;
+  paused = document.hidden || $("guide").open || inLobby();
   m.cancelCharge();
 });
 $("restart").onclick = () => {
   m.reset();
   updateLoadout();
+};
+$("toLobby").onclick = () => {
+  m.cancelCharge();
+  lobby.map = m.map.id;
+  lobby.difficulty = m.difficulty.id;
+  openLobby();
+};
+$("startMatch").onclick = () => startMatch();
+$("lobbyDifficulty").onchange = () => (lobby.difficulty = $("lobbyDifficulty").value);
+document.querySelectorAll(".add-human, .add-bot").forEach((button) => {
+  button.onclick = () => {
+    const team = lobby.teams[+button.dataset.team];
+    if (team.length >= MAX_TEAM) return;
+    const humans = lobby.teams.flat().filter((p) => p.control === "human").length;
+    team.push(
+      button.classList.contains("add-human")
+        ? { control: "human", name: `Người ${humans + 1}`, skin: freeSkin(), weapon: "carrot" }
+        : { control: "bot", skin: "", weapon: "" },
+    );
+    renderLobby();
+  };
+});
+$("copyInvite").onclick = async () => {
+  const url = new URL(location.href);
+  url.searchParams.set("lobby", encodeInvite(lobby));
+  if (m.seed !== undefined) url.searchParams.set("seed", m.seed);
+  try {
+    await navigator.clipboard.writeText(url.toString());
+    $("inviteStatus").textContent = "Đã sao chép! Gửi link cho bạn bè — mở ra là thấy đúng đội hình này.";
+  } catch {
+    $("inviteStatus").textContent = url.toString();
+  }
 };
 $("help").onclick = () => {
   m.cancelCharge();
@@ -322,23 +365,162 @@ $("help").onclick = () => {
   $("guide").showModal();
 };
 $("closeHelp").onclick = () => $("guide").close();
-$("guide").addEventListener("close", () => (paused = document.hidden));
+$("guide").addEventListener("close", () => (paused = document.hidden || inLobby()));
 $("difficulty").onchange = () => m.setDifficulty($("difficulty").value);
 $("map").onchange = () => {
   m.setMap($("map").value);
   refreshGround();
   updateLoadout();
 };
-for (const id of ["humans0", "bots0", "humans1", "bots1"]) {
-  $(id).onchange = () => {
-    m.setTeams([
-      { humans: +$("humans0").value, bots: +$("bots0").value },
-      { humans: +$("humans1").value, bots: +$("bots1").value },
-    ]);
-    updateLoadout();
-  };
-}
 await start();
+
+// ---------- Lobby ----------
+function encodeInvite(draft) {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(draft)))).replace(/=+$/, "");
+}
+function readInvite(text) {
+  if (!text) return null;
+  try {
+    const draft = JSON.parse(decodeURIComponent(escape(atob(text))));
+    if (!Array.isArray(draft.teams) || draft.teams.length !== 2) return null;
+    return {
+      map: MAPS.some((map) => map.id === draft.map) ? draft.map : MAPS[0].id,
+      difficulty: DIFFICULTIES.some((d) => d.id === draft.difficulty) ? draft.difficulty : "normal",
+      teams: draft.teams.map((members) =>
+        (Array.isArray(members) ? members : []).slice(0, MAX_TEAM).map((p) => ({
+          control: p?.control === "bot" ? "bot" : "human",
+          name: typeof p?.name === "string" ? p.name.slice(0, 16) : "",
+          skin: CHARACTERS.some((c) => c.id === p?.skin) ? p.skin : "",
+          weapon: WEAPONS.some((w) => w.id === p?.weapon) ? p.weapon : "",
+        })),
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
+// A skin no lobby member has yet, so new players don't all look alike.
+function freeSkin() {
+  const used = lobby.teams.flat().map((p) => p.skin);
+  return (CHARACTERS.find((c) => !used.includes(c.id)) || CHARACTERS[0]).id;
+}
+function openLobby() {
+  paused = true;
+  document.body.classList.add("in-lobby");
+  renderLobby();
+  window.scrollTo({ top: 0 });
+}
+function startMatch() {
+  if ($("startMatch").disabled) return;
+  m.setDifficulty(lobby.difficulty);
+  if (m.map.id !== lobby.map) m.map = MAPS.find((map) => map.id === lobby.map) || m.map;
+  m.setRoster(lobby.teams);
+  refreshGround();
+  document.body.classList.remove("in-lobby");
+  paused = document.hidden;
+  lastTurn = -1;
+  updateLoadout();
+  window.scrollTo({ top: 0 });
+}
+function option(select, value, text, selected) {
+  const o = document.createElement("option");
+  o.value = value;
+  o.textContent = text;
+  o.selected = selected;
+  select.append(o);
+}
+function renderLobby() {
+  $("lobbyMapName").textContent = (MAPS.find((map) => map.id === lobby.map) || MAPS[0]).name;
+  $("lobbyDifficulty").value = lobby.difficulty;
+  document
+    .querySelectorAll(".map-card")
+    .forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.map === lobby.map)));
+  lobby.teams.forEach((members, t) => {
+    const box = $("members" + t);
+    box.replaceChildren();
+    if (!members.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "Chưa có ai — một bot sẽ được thêm khi bắt đầu.";
+      box.append(empty);
+    }
+    members.forEach((member, i) => {
+      const row = document.createElement("div");
+      row.className = `member ${member.control}`;
+      const skin = CHARACTERS.find((c) => c.id === member.skin) || null;
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = assetURL((skin || CHARACTERS[i % CHARACTERS.length]).file);
+      img.onerror = () => (img.hidden = true);
+      const fields = document.createElement("div");
+      fields.className = "fields";
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = member.control === "human" ? "NGƯỜI" : "BOT";
+      if (member.control === "human") {
+        const nameLabel = document.createElement("label");
+        nameLabel.className = "wide";
+        nameLabel.textContent = "TÊN";
+        const name = document.createElement("input");
+        name.maxLength = 16;
+        name.value = member.name;
+        name.placeholder = `Người ${i + 1}`;
+        name.oninput = () => (member.name = name.value);
+        nameLabel.append(name);
+        fields.append(nameLabel);
+      }
+      const skinLabel = document.createElement("label");
+      skinLabel.textContent = "NHÂN VẬT";
+      const skinSelect = document.createElement("select");
+      if (member.control === "bot") option(skinSelect, "", "Ngẫu nhiên", member.skin === "");
+      for (const c of CHARACTERS) option(skinSelect, c.id, c.name, c.id === member.skin);
+      skinSelect.onchange = () => {
+        member.skin = skinSelect.value;
+        renderLobby();
+      };
+      skinLabel.append(skinSelect);
+      fields.append(skinLabel);
+      if (member.control === "human") {
+        const weaponLabel = document.createElement("label");
+        weaponLabel.textContent = "VŨ KHÍ";
+        const weaponSelect = document.createElement("select");
+        for (const w of WEAPONS) option(weaponSelect, w.id, w.name, w.id === member.weapon);
+        weaponSelect.onchange = () => (member.weapon = weaponSelect.value);
+        weaponLabel.append(weaponSelect);
+        fields.append(weaponLabel);
+      } else {
+        const hint = document.createElement("label");
+        hint.textContent = "VŨ KHÍ";
+        const note = document.createElement("span");
+        note.textContent = "Hạt dẻ · độ khó chung";
+        note.style.fontSize = "12px";
+        note.style.color = "#ecf4ed";
+        note.style.letterSpacing = "0";
+        hint.append(note);
+        fields.append(hint);
+      }
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "remove";
+      remove.title = "Bỏ khỏi đội";
+      remove.textContent = "×";
+      remove.onclick = () => {
+        members.splice(i, 1);
+        renderLobby();
+      };
+      const left = document.createElement("div");
+      left.append(img, badge);
+      left.style.display = "grid";
+      left.style.gap = "6px";
+      left.style.justifyItems = "center";
+      row.append(left, fields, remove);
+      box.append(row);
+    });
+    document.querySelectorAll(`.team-actions button[data-team="${t}"]`).forEach((b) => (b.disabled = members.length >= MAX_TEAM));
+  });
+  const humans = lobby.teams.flat().filter((p) => p.control === "human").length;
+  $("lobbyStatus").textContent = `${humans} người · ${lobby.teams.flat().length - humans} bot · ${lobby.teams.map((t) => t.length || 1).join(" vs ")}`;
+}
 
 // Loadout buttons follow the human whose turn it is, else the first human.
 function loadoutActor() {
@@ -368,10 +550,6 @@ function updateLoadout() {
     const selected = button.dataset.kind === "character" ? actor.skin : actor.weapon;
     button.setAttribute("aria-pressed", String(button.dataset.id === selected));
   });
-  for (const [t, team] of m.teams.entries()) {
-    $("humans" + t).value = team.humans;
-    $("bots" + t).value = team.bots;
-  }
 }
 function buildLoadout() {
   for (const [kind, entries] of [
@@ -402,16 +580,9 @@ function buildLoadout() {
       $(kind + "Choices").append(button);
     }
   }
-  for (const id of ["humans0", "bots0", "humans1", "bots1"]) {
-    for (let n = 0; n <= MAX_TEAM; n++) {
-      const option = document.createElement("option");
-      option.value = n;
-      option.textContent = n;
-      $(id).append(option);
-    }
-  }
   for (const [select, entries, current] of [
     ["difficulty", DIFFICULTIES, m.difficulty.id],
+    ["lobbyDifficulty", DIFFICULTIES, lobby.difficulty],
     ["map", MAPS, m.map.id],
   ]) {
     for (const entry of entries) {
@@ -428,6 +599,7 @@ async function start() {
   sync();
   $("restart").disabled = true;
   $("help").disabled = true;
+  $("startMatch").disabled = true;
   $("status").textContent = "Đang tải sân đấu và sprite…";
   const loaded = await loadAssets();
   images = loaded.images;
@@ -438,9 +610,10 @@ async function start() {
   $("assetStatus").textContent = loaded.failed.length
     ? `Thiếu ${loaded.failed.length} hình — đang dùng hình dự phòng. Tải lại trang để thử lại.`
     : `${CHARACTERS.length} nhân vật · ${WEAPONS.length} vũ khí · ${MAPS.length} bản đồ`;
-  paused = document.hidden;
   $("restart").disabled = false;
   $("help").disabled = false;
+  $("startMatch").disabled = false;
+  openLobby();
   requestAnimationFrame(frame);
 }
 
@@ -459,6 +632,11 @@ function buildMapChoices() {
     title.textContent = `${map.number} · ${map.name}`;
     button.append(image, title);
     button.onclick = () => {
+      if (inLobby()) {
+        lobby.map = map.id;
+        renderLobby();
+        return;
+      }
       if (paused || !m.setMap(map.id)) return;
       refreshGround();
       updateLoadout();

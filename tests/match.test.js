@@ -201,3 +201,39 @@ test("bots shoot the nearest living enemy and never target the dead", () => {
   assert.equal(m.phase, "flight");
   assert.equal(m.current, m.actors[0]);
 });
+
+test("lobby roster: names, skins, weapons and team sizes come from the roster", () => {
+  const m = new Match({
+    seed: 9,
+    roster: [
+      [
+        { control: "human", name: "  An  ", skin: "nemu", weapon: "star" },
+        { control: "bot" },
+      ],
+      [{ control: "human", name: "" }, { control: "bot", skin: "mochi" }, { control: "bot" }, { control: "bot" }],
+    ],
+  });
+  assert.deepEqual(m.teams, [
+    { humans: 1, bots: 1 },
+    { humans: 1, bots: 2 },
+  ]);
+  const [an, bot0, second] = [m.actors[0], m.actors[1], m.actors[2]];
+  assert.equal(an.name, "An");
+  assert.equal(an.skin, "nemu");
+  assert.equal(an.weapon, "star");
+  assert.equal(an.player, 1);
+  assert.equal(bot0.control, "bot");
+  assert.equal(second.name, "Người 2");
+  assert.equal(second.player, 2);
+  assert.equal(m.actors.length, 5);
+  // An empty team gets a bot so the match can run.
+  m.setRoster([[{ control: "human", name: "Solo" }], []]);
+  assert.deepEqual(m.teams, [
+    { humans: 1, bots: 0 },
+    { humans: 0, bots: 1 },
+  ]);
+  // Counts-based setup still works and clears the roster.
+  m.setTeams([{ humans: 2, bots: 0 }, { humans: 0, bots: 2 }]);
+  assert.equal(m.roster, null);
+  assert.equal(m.actors.length, 4);
+});

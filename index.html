@@ -8,7 +8,7 @@
     <link rel="icon" href="assets/characters/mochi.png" />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body>
+  <body class="in-lobby">
     <header>
       <a class="brand" href="./"
         ><span class="logo">✦</span> GUNNY <small>CHIBI ARENA</small></a
@@ -18,22 +18,71 @@
       </button>
     </header>
     <main>
-      <div class="heading">
+      <section id="lobby" class="lobby" aria-label="Sảnh tạo trận">
+        <div class="heading">
+          <div>
+            <p class="eyebrow">SẢNH CHỜ · TẠO TRẬN</p>
+            <h1>Lập đội và chọn sân</h1>
+            <p id="lobbyStatus">Đang tải bộ sprite…</p>
+          </div>
+          <button id="startMatch" class="primary">▶ Bắt đầu trận</button>
+        </div>
+        <section class="map-picker" aria-label="Chọn bản đồ">
+          <div class="map-picker-label">
+            <span>CHỌN SÂN ĐẤU</span>
+            <strong id="lobbyMapName">Đảo Gió Xanh</strong>
+          </div>
+          <div id="mapChoices"></div>
+        </section>
+        <div class="lobby-grid">
+          <section class="team-panel" data-team="0" aria-label="Đội 1">
+            <div class="team-head">
+              <h2>ĐỘI 1 <small>Trái sân</small></h2>
+              <div class="team-actions">
+                <button type="button" class="subtle add-human" data-team="0">+ Người</button>
+                <button type="button" class="subtle add-bot" data-team="0">+ Bot</button>
+              </div>
+            </div>
+            <div class="members" id="members0"></div>
+          </section>
+          <div class="versus-badge">VS</div>
+          <section class="team-panel" data-team="1" aria-label="Đội 2">
+            <div class="team-head">
+              <h2>ĐỘI 2 <small>Phải sân</small></h2>
+              <div class="team-actions">
+                <button type="button" class="subtle add-human" data-team="1">+ Người</button>
+                <button type="button" class="subtle add-bot" data-team="1">+ Bot</button>
+              </div>
+            </div>
+            <div class="members" id="members1"></div>
+          </section>
+        </div>
+        <div class="lobby-bar">
+          <fieldset class="difficulty">
+            <legend><label for="lobbyDifficulty">ĐỘ KHÓ BOT</label></legend>
+            <select id="lobbyDifficulty"></select>
+          </fieldset>
+          <fieldset class="difficulty invite">
+            <legend>MỜI NGƯỜI CHƠI <span>Cùng máy, thay phiên (hot-seat)</span></legend>
+            <div class="invite-row">
+              <button type="button" id="copyInvite" class="subtle">⛓ Sao chép link mời</button>
+              <span id="inviteStatus" role="status">Link mở đúng đội hình, sân và seed này trên máy khác.</span>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+      <div class="heading match-only">
         <div>
           <p class="eyebrow">MỘT PHÁT BẮN. NGÀN NIỀM VUI.</p>
           <h1><span id="mapName">Đảo Gió Xanh</span><span id="mapNumber">01</span></h1>
           <p id="mapDescription">Đồi cỏ thoai thoải giữa những tầng mây.</p>
         </div>
-        <button id="restart" class="subtle">↻ Trận mới</button>
-      </div>
-      <section class="map-picker" aria-label="Chọn bản đồ">
-        <div class="map-picker-label">
-          <span>CHỌN SÂN ĐẤU</span>
-          <strong>Đổi map sẽ bắt đầu trận mới</strong>
+        <div class="heading-actions">
+          <button id="toLobby" class="subtle">⚙ Sảnh</button>
+          <button id="restart" class="subtle">↻ Trận mới</button>
         </div>
-        <div id="mapChoices"></div>
-      </section>
-      <section class="arena" aria-label="Sân đấu">
+      </div>
+      <section class="arena match-only" aria-label="Sân đấu">
         <div class="scoreboard">
           <div class="player">
             <img class="avatar" id="avatar0" alt="Mochi" />
@@ -70,7 +119,7 @@
           <span id="versus">1 VS 1</span>
         </div>
       </section>
-      <section class="controls">
+      <section class="controls match-only">
         <div class="move">
           <label>DI CHUYỂN <span id="energy">100 / 100</span></label>
           <div>
@@ -102,7 +151,7 @@
         </div>
         <button id="fire">BẮN! <small>GIỮ SPACE / CHẠM</small></button>
       </section>
-      <section class="loadout" aria-label="Chọn nhân vật và vũ khí">
+      <section class="loadout match-only" aria-label="Chọn nhân vật và vũ khí">
         <div class="loadout-heading">
           <h2>Chuẩn bị ra trận</h2>
           <p id="assetStatus" role="status">Đang tải bộ sprite…</p>
@@ -124,16 +173,9 @@
             <legend><label for="map">BẢN ĐỒ <span>Đổi là bắt đầu trận mới</span></label></legend>
             <select id="map"></select>
           </fieldset>
-          <fieldset class="difficulty teams">
-            <legend>ĐỘI HÌNH <span>Người chơi thay phiên trên cùng máy · Đổi là trận mới</span></legend>
-            <label for="humans0">Đội 1 người</label><select id="humans0"></select>
-            <label for="bots0">bot</label><select id="bots0"></select>
-            <label for="humans1">Đội 2 người</label><select id="humans1"></select>
-            <label for="bots1">bot</label><select id="bots1"></select>
-          </fieldset>
         </div>
       </section>
-      <footer>
+      <footer class="match-only">
         <span><i></i> <span id="turnHint">Lượt của bạn</span></span
         ><span>↑ ↓ chỉnh góc <b>·</b> A D di chuyển <b>·</b> SPACE bắn</span
         ><span>CHIBI ARENA / v0.5</span>

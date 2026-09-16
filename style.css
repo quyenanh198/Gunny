@@ -83,9 +83,11 @@ i {
   font-size: 12px;
 }
 main {
-  max-width: 1320px;
-  margin: auto;
-  padding: 32px 42px 20px;
+  /* Fill the screen: no fixed column, side padding scales with the viewport. */
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 24px clamp(12px, 3vw, 48px) 20px;
 }
 .heading {
   display: flex;
@@ -130,6 +132,13 @@ canvas {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 1200 / 620;
+}
+/* Keep the whole arena on screen: never taller than the viewport minus header + controls. */
+.arena {
+  width: min(100%, calc((100vh - 300px) * 1200 / 620));
+  min-width: min(100%, 640px);
+  margin: 0 auto;
 }
 .scoreboard {
   position: absolute;
@@ -721,4 +730,103 @@ dialog li {
     font-size: 22px;
     line-height: 1.45;
   }
+}
+
+/* ---------- Lobby (start screen) ---------- */
+.in-lobby .match-only { display: none !important; }
+body:not(.in-lobby) #lobby { display: none; }
+.lobby .heading h1 { font-size: 30px; }
+.lobby .heading p:last-child { color: #a5bcb9; font-size: 12px; margin-bottom: 0; }
+.primary {
+  background: linear-gradient(135deg, #7fdc7c, #c8e799);
+  color: #10312a;
+  border: 0;
+  border-radius: 14px;
+  padding: 14px 24px;
+  font: inherit;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 10px 30px #7fdc7c40;
+}
+.primary:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
+.lobby-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: start;
+  margin: 22px 0 18px;
+}
+.versus-badge {
+  align-self: center;
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: #ffd27b;
+  padding: 10px 14px;
+  border: 1px solid #ffffff20;
+  border-radius: 999px;
+}
+.team-panel {
+  background: #ffffff0a;
+  border: 1px solid #ffffff14;
+  border-radius: 18px;
+  padding: 16px 18px;
+  min-width: 0;
+}
+.team-panel[data-team="1"] { border-color: #ffb49430; }
+.team-panel[data-team="0"] { border-color: #d2ef9c30; }
+.team-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.team-head h2 { margin: 0; font-size: 15px; letter-spacing: 1.5px; }
+.team-head h2 small { color: #a5bcb9; font-weight: 500; letter-spacing: 0; margin-left: 8px; font-size: 11px; }
+.team-actions { display: flex; gap: 6px; }
+.team-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.members { display: flex; flex-direction: column; gap: 10px; }
+.member {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 10px 12px;
+  align-items: center;
+  background: #0d2329;
+  border: 1px solid #ffffff10;
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.member img { width: 56px; height: 56px; object-fit: contain; image-rendering: auto; background: #ffffff0c; border-radius: 12px; }
+.member .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; min-width: 0; }
+.member .fields label { display: flex; flex-direction: column; gap: 3px; font-size: 9px; letter-spacing: 1.5px; color: #a5bcb9; font-weight: 700; min-width: 0; }
+.member .fields label.wide { grid-column: 1 / -1; }
+.member input, .member select {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: #ecf4ed;
+  background: #ffffff10;
+  border: 1px solid #ffffff20;
+  border-radius: 9px;
+  padding: 7px 9px;
+}
+.member input:focus, .member select:focus { outline: none; border-color: #c8e799; }
+.member .badge { font-size: 9px; letter-spacing: 1.5px; font-weight: 800; color: #10312a; background: #c8e799; border-radius: 6px; padding: 3px 6px; justify-self: start; }
+.member.bot .badge { background: #ffb494; }
+.member .remove { background: none; border: 1px solid #ffffff20; color: #ecf4ed; border-radius: 10px; width: 34px; height: 34px; cursor: pointer; font-size: 16px; }
+.member .remove:hover { border-color: #ff9c9c; color: #ff9c9c; }
+.members .empty { color: #a5bcb9; font-size: 12px; padding: 12px; text-align: center; border: 1px dashed #ffffff20; border-radius: 12px; }
+.lobby-bar { display: grid; grid-template-columns: 220px 1fr; gap: 14px; align-items: start; }
+.invite-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.invite-row span { color: #a5bcb9; font-size: 12px; }
+.heading-actions { display: flex; gap: 8px; }
+@media (max-width: 900px) {
+  .lobby-grid { grid-template-columns: 1fr; }
+  .versus-badge { justify-self: center; }
+  .lobby-bar { grid-template-columns: 1fr; }
+  .arena { width: 100%; min-width: 0; }
+}
+@media (max-width: 760px) {
+  .lobby .heading { flex-direction: column; align-items: stretch; gap: 12px; }
+  .primary { width: 100%; }
+  .member { grid-template-columns: 44px 1fr auto; }
+  .member img { width: 44px; height: 44px; }
+  .member .fields { grid-template-columns: 1fr; }
 }
