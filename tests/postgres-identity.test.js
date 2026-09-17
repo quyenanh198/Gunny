@@ -78,3 +78,29 @@ test("PostgreSQL recovery abandons stale playing matches only", { skip: !databas
     await pool.end();
   }
 });
+
+test("PostgreSQL authoritative lifecycle completes a playing match exactly once", { skip: !databaseUrl }, async () => {
+  const pool = createPool(databaseUrl);
+  await migrate(pool);
+  const store = new PostgresIdentityStore(pool);
+  const first = await store.createGuest("Lifecycle One");
+  const second = await store.createGuest("Lifecycle Two");
+  const id = randomUUID();
+  const participants = [{ userId: first.user.id, team: 0 }, { userId: second.user.id, team: 1 }];
+  try {
+    assert.equal((await store.beginMatch({ id, roomId: "LIFE01", startedAt: new Date(), participants })).applied, true);
+    const result = { id, resultKey: `match:${id}`, status: "completed", summary: { winnerTeam: 0 },
+      participants: [{ userId: first.user.id, outcome: "win", disconnected: false },
+        { userId: second.user.id, outcome: "loss", disconnected: true }] };
+    assert.equal((await store.completeMatch(result)).applied, true);
+    assert.deepEqual(await store.completeMatch(result), { applied: false });
+    const history = await store.listMatches(first.token);
+    assert.equal(history[0].outcome, "win");
+    const otherHistory = await store.listMatches(second.token);
+    assert.equal(otherHistory[0].disconnected, true);
+  } finally {
+    await pool.query("DELETE FROM matches WHERE id = $1", [id]);
+    await pool.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [[first.user.id, second.user.id]]);
+    await pool.end();
+  }
+});

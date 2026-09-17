@@ -458,3 +458,28 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 ### Phạm vi R2 còn lại
 
 - R2E tự ghi match `playing`, chốt authoritative result/participant/disconnect và chạy exit test xuyên restart.
+
+## M17 — R2E authoritative match settlement
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Room tạo UUID match và ghi trạng thái `playing` cùng authenticated participants ngay khi start.
+- Khi engine authoritative chuyển sang `over`, server tự chốt winner/draw, round, map, outcome và disconnect flag.
+- Rời trận sớm/restart giữa trận chốt `abandoned`; không cấp winner giả. Process crash được recovery R2C xử lý.
+- Finalize cập nhật đúng hàng `playing`, dùng result key `match:<uuid>`; gọi lại hoặc result key trùng trả `applied: false`.
+- Một identity không thể chiếm hai player seat trong cùng room; resume production phải khớp cả reconnect token và user identity.
+- Test memory lifecycle và PostgreSQL lifecycle chứng minh history của hai phía, disconnect outcome và replay không ghi lần hai.
+
+### Exit criteria R2
+
+- Session bearer/cookie cùng trỏ về UUID/profile bền vững; pool/server restart vẫn đọc được identity và history.
+- Profile dùng optimistic version, stale write bị chặn.
+- Match lifecycle tồn tại trong PostgreSQL từ `playing` đến `completed`/`abandoned`; replay settlement không thể nhân đôi.
+- Consent, export, revoke, delete, retention và recovery policy đã có contract/test. Account linking email/OAuth được chủ đích để sau, không tự lưu password.
+
+### Hand-off sang R3
+
+- Bắt đầu matchmaking queue/party trên identity hiện tại; không dùng room code hoặc display name làm identity.
+- Social safety (block/mute/report), chat moderation và reconnect trong queue là acceptance criteria trước rank/season.

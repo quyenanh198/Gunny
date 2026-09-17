@@ -7,8 +7,9 @@ export function percentile(values, fraction) {
 }
 
 export class RoomManager {
-  constructor() {
+  constructor({ matchLifecycle = null } = {}) {
     this.rooms = new Map();
+    this.matchLifecycle = matchLifecycle;
   }
 
   newCode() {
@@ -19,7 +20,7 @@ export class RoomManager {
 
   create(visibility = "private") {
     const id = this.newCode();
-    const room = new Room(id, (roomId) => this.rooms.delete(roomId), visibility);
+    const room = new Room(id, (roomId) => this.rooms.delete(roomId), visibility, this.matchLifecycle);
     this.rooms.set(id, room);
     return room;
   }

@@ -89,7 +89,7 @@ export function createServer({
   identityStore = new MemoryIdentityStore(),
   requireRealtimeIdentity = false,
 } = {}) {
-  const roomManager = new RoomManager();
+  const roomManager = new RoomManager({ matchLifecycle: identityStore });
   const ipOptions = { trustProxy, trustedProxies };
   const activeByIp = new Map();
   const handshakeLimiter = new FixedWindowLimiter({ limit: handshakesPerMinute, windowMs: 60000 });
@@ -243,7 +243,14 @@ export function createServer({
     ws.on("close", () => room.disconnect(client));
   };
   wss.on("connection", async (ws, req) => {
-    const identity = await identityStore.authenticate(cookieSession(req));
+    let identity;
+    try { identity = await identityStore.authenticate(cookieSession(req)); }
+    catch (error) {
+      console.error(JSON.stringify({ event: "realtime_auth_failed", message: error.message }));
+      sendError(ws, "SERVER_UNAVAILABLE");
+      ws.close(1011, "identity service unavailable");
+      return;
+    }
     if (requireRealtimeIdentity && !identity) {
       sendError(ws, "AUTH_REQUIRED");
       ws.close(1008, "authentication required");
@@ -277,7 +284,7 @@ export function createServer({
           return;
         }
         const room = roomManager.get(message.room);
-        const client = room?.reconnect(message.reconnectToken, ws, randomUUID());
+        const client = room?.reconnect(message.reconnectToken, ws, randomUUID(), identity?.user.id || null);
         if (!client) {
           sendError(ws, "RECONNECT_EXPIRED");
           ws.close(1008, "reconnect expired");
@@ -302,6 +309,11 @@ export function createServer({
       return;
     }
     const role = params.mode === "spectate" ? "spectator" : "player";
+    if (role === "player" && identity && [...room.clients].some((client) => client.userId === identity.user.id)) {
+      sendError(ws, "ALREADY_JOINED");
+      ws.close(1008, "identity already joined");
+      return;
+    }
     if (!room.canJoin(role)) {
       ws.send(JSON.stringify({ t: "error", code: role === "spectator" ? "SPECTATOR_FULL" : "ROOM_FULL" }));
       ws.close(1008, "room full");
