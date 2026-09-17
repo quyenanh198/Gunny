@@ -49,9 +49,27 @@ test("2v2 waits for four identities and queued tickets can be cancelled", () => 
   assert.equal(rooms.created.length, 0);
   assert.equal(queue.cancel("u3"), true);
   assert.equal(queue.cancel("u3"), false);
+  assert.notEqual(queue.enqueue("u3", config).status, "cancelled", "a cancelled user can queue again");
+  queue.cancel("u3");
   queue.enqueue("u4", config);
   assert.equal(rooms.created.length, 0);
   queue.enqueue("u5", config);
   assert.equal(rooms.created.length, 1);
   assert.equal(rooms.created[0].reservedUserIds.length, 4);
+});
+
+test("party tickets stay atomic and receive one reserved team", () => {
+  const rooms = manager();
+  const queue = new MatchmakingQueue(rooms, { now: () => 1000 });
+  const config = request({ mode: "casual-2v2", teamSize: 2 });
+  assert.equal(queue.enqueueGroup("leader-a", ["leader-a", "member-a"], config).status, "queued");
+  assert.equal(queue.enqueueGroup("leader-b", ["leader-b", "member-b"], config).status, "matched");
+  const first = queue.status("leader-a");
+  const member = queue.status("member-a");
+  const opponent = queue.status("leader-b");
+  assert.equal(first.roomId, opponent.roomId);
+  assert.equal(first.assignedTeam, member.assignedTeam);
+  assert.notEqual(first.assignedTeam, opponent.assignedTeam);
+  assert.equal(first.partySize, 2);
+  assert.equal(queue.cancel("member-a"), false, "only the ticket owner can cancel a party queue");
 });

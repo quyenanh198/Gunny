@@ -15,6 +15,7 @@ import { MemoryIdentityStore } from "./memory-identity-store.js";
 import { PostgresIdentityStore } from "./identity-store.js";
 import { createPool, migrate } from "./database.js";
 import { MatchmakingQueue } from "./matchmaking.js";
+import { PartyService } from "./party.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -92,6 +93,7 @@ export function createServer({
 } = {}) {
   const roomManager = new RoomManager({ matchLifecycle: identityStore });
   const matchmaking = new MatchmakingQueue(roomManager);
+  const parties = new PartyService();
   const ipOptions = { trustProxy, trustedProxies };
   const activeByIp = new Map();
   const handshakeLimiter = new FixedWindowLimiter({ limit: handshakesPerMinute, windowMs: 60000 });
@@ -151,7 +153,12 @@ export function createServer({
     if (req.url === "/api/matchmaking/enqueue" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
-      const queued = matchmaking.enqueue(session.user.id, await jsonBody(req));
+      const body = await jsonBody(req);
+      const party = parties.partyOf(session.user.id);
+      if (body.partyId && (!party || party.id !== body.partyId)) return sendJson(res, 404, { error: "PARTY_NOT_FOUND" });
+      if (party && party.leaderId !== session.user.id) return sendJson(res, 403, { error: "LEADER_REQUIRED" });
+      const queued = party ? matchmaking.enqueueGroup(session.user.id,
+        party.members.map((member) => member.userId), body) : matchmaking.enqueue(session.user.id, body);
       return queued.error ? sendJson(res, 400, queued) : sendJson(res, 202, queued);
     }
     if (req.url === "/api/matchmaking/status" && req.method === "GET") {
@@ -165,6 +172,51 @@ export function createServer({
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       return matchmaking.cancel(session.user.id) ? sendJson(res, 204, null)
         : sendJson(res, 409, { error: "NOT_CANCELLABLE" });
+    }
+    if (req.url === "/api/party" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      return session ? sendJson(res, 201, parties.create(session.user.id))
+        : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/party" && req.method === "GET") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const party = parties.state(session.user.id);
+      return party ? sendJson(res, 200, party) : sendJson(res, 404, { error: "PARTY_NOT_FOUND" });
+    }
+    if (req.url === "/api/party" && req.method === "DELETE") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      if (matchmaking.active(session.user.id)) return sendJson(res, 409, { error: "PARTY_QUEUE_LOCKED" });
+      const party = parties.leave(session.user.id);
+      return party ? sendJson(res, 200, party) : sendJson(res, 404, { error: "PARTY_NOT_FOUND" });
+    }
+    if (req.url === "/api/party/invites" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      if (matchmaking.active(session.user.id)) return sendJson(res, 409, { error: "PARTY_QUEUE_LOCKED" });
+      const body = await jsonBody(req);
+      const invite = parties.invite(session.user.id, body.userId);
+      return invite.error ? sendJson(res, 409, invite) : sendJson(res, 201, invite);
+    }
+    const acceptInvite = /^\/api\/party\/invites\/([0-9a-f-]+)\/accept$/.exec(req.url);
+    if (acceptInvite && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const invite = parties.invites.get(acceptInvite[1]);
+      const leader = invite && parties.parties.get(invite.partyId)?.leaderId;
+      if (matchmaking.active(session.user.id) || (leader && matchmaking.active(leader)))
+        return sendJson(res, 409, { error: "PARTY_QUEUE_LOCKED" });
+      const party = parties.accept(session.user.id, acceptInvite[1]);
+      return party.error ? sendJson(res, 409, party) : sendJson(res, 200, party);
+    }
+    const kickMember = /^\/api\/party\/members\/([0-9a-f-]+)$/.exec(req.url);
+    if (kickMember && req.method === "DELETE") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      if (matchmaking.active(session.user.id)) return sendJson(res, 409, { error: "PARTY_QUEUE_LOCKED" });
+      const party = parties.kick(session.user.id, kickMember[1]);
+      return party.error ? sendJson(res, 409, party) : sendJson(res, 200, party);
     }
     if (req.url === "/api/privacy/consent" && req.method === "POST") {
       const consentedAt = await identityStore.recordConsent(requestCredential(req));
@@ -363,7 +415,7 @@ export function createServer({
       terrainVersion: -1,
       role,
     };
-    room.join(client, role);
+    room.join(client, role, room.reservedTeams.get(client.userId));
     activate(ws, room, client);
   });
   const heartbeat = setInterval(() => {
@@ -385,6 +437,7 @@ export function createServer({
   };
   server.roomManager = roomManager;
   server.matchmaking = matchmaking;
+  server.parties = parties;
   return server;
 }
 
