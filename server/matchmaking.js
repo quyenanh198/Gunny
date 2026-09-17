@@ -21,9 +21,10 @@ function assignTeams(tickets, teamSize, index = 0, teamZero = []) {
 }
 
 export class MatchmakingQueue {
-  constructor(roomManager, { now = () => Date.now(), widenAfterMs = 15000, ticketTtlMs = 120000 } = {}) {
+  constructor(roomManager, { now = () => Date.now(), widenAfterMs = 15000, ticketTtlMs = 120000,
+    presence = null } = {}) {
     this.roomManager = roomManager; this.now = now; this.widenAfterMs = widenAfterMs;
-    this.ticketTtlMs = ticketTtlMs; this.byUser = new Map();
+    this.ticketTtlMs = ticketTtlMs; this.byUser = new Map(); this.presence = presence;
   }
   valid(config) { return config.mode in MATCH_MODES && MATCH_MODES[config.mode] === config.teamSize &&
     REGIONS.has(config.region) && config.protocolVersion === PROTOCOL_VERSION; }
@@ -41,6 +42,7 @@ export class MatchmakingQueue {
     const ticket = { id: randomUUID(), ownerId, userIds, ...config, status: "queued", queuedAt: this.now(),
       roomId: null, matchedRegion: null, teams: null };
     for (const id of userIds) this.byUser.set(id, ticket);
+    for (const id of userIds) this.presence?.set(id, "queued");
     this.match(); return this.public(ticket, ownerId);
   }
   compatible(a, b, now) { return a.mode === b.mode && a.teamSize === b.teamSize &&
@@ -62,17 +64,21 @@ export class MatchmakingQueue {
       const teams = new Map();
       for (const ticket of group) for (const userId of ticket.userIds) teams.set(userId, teamZero.has(ticket) ? 0 : 1);
       const userIds = group.flatMap((ticket) => ticket.userIds);
-      const room = this.roomManager.create("private", { reservedUserIds: userIds, reservedTeams: teams });
+      const room = this.roomManager.create("private", { reservedUserIds: userIds, reservedTeams: teams,
+        allowSpectators: false });
       const regions = new Set(group.map((ticket) => ticket.region));
       for (const ticket of group) Object.assign(ticket, { status: "matched", roomId: room.id,
         matchedRegion: regions.size === 1 ? ticket.region : "global", matchedAt: now, teams });
+      for (const userId of userIds) this.presence?.set(userId, "matched", { roomId: room.id, role: "player" });
     }
   }
   status(userId) { this.match(); const ticket = this.byUser.get(userId);
     return ticket && !this.expired(ticket) ? this.public(ticket, userId) : null; }
   cancel(userId) { const ticket = this.byUser.get(userId);
     if (!ticket || ticket.status !== "queued" || ticket.ownerId !== userId) return false;
-    ticket.status = "cancelled"; return true; }
+    ticket.status = "cancelled";
+    for (const id of ticket.userIds) this.presence?.set(id, "online");
+    return true; }
   active(userId) { const ticket = this.byUser.get(userId); return !!ticket && ["queued", "matched"].includes(ticket.status); }
   expired(ticket, now = this.now()) { return ticket.status !== "queued" &&
     now - (ticket.matchedAt || ticket.queuedAt) > this.ticketTtlMs; }

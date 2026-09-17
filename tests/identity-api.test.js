@@ -98,12 +98,20 @@ test("authenticated matchmaking API returns one reserved room", async () => {
       method: "POST", headers: { Authorization: `Bearer ${session.token}` }, body,
     });
     assert.equal((await enqueue(first)).status, 202);
+    assert.equal((await (await fetch(`${url}/api/presence`, {
+      headers: { Authorization: `Bearer ${first.token}` },
+    })).json()).state, "queued");
     assert.equal((await enqueue(second)).status, 202);
     const status = await (await fetch(`${url}/api/matchmaking/status`, {
       headers: { Authorization: `Bearer ${first.token}` },
     })).json();
     assert.equal(status.status, "matched");
     assert.equal(status.roomId.length, 6);
+    const routed = await (await fetch(`${url}/api/presence`, {
+      headers: { Authorization: `Bearer ${first.token}` },
+    })).json();
+    assert.equal(routed.state, "matched");
+    assert.equal(routed.roomId, status.roomId);
     const room = server.roomManager.get(status.roomId);
     assert.deepEqual(room.reservedUserIds, new Set([first.user.id, second.user.id]));
     assert.deepEqual(room.bots, [0, 0]);
