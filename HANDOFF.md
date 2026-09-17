@@ -502,3 +502,21 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 - R3B party/invite lifecycle và team-atomic queue.
 - R3C presence/reconnect routing, spectator policy và leaver/AFK consistency.
 - R3D mute/block/report, profanity/chat retention và admin review queue.
+
+## M19 — R3B party và team-atomic matchmaking
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Party tối đa hai người, tách khỏi room/match; create/read/leave có contract authenticated.
+- Invite UUID ràng buộc target, hết hạn sau 5 phút, không replay; party đầy hoặc target đã có party bị từ chối.
+- Chỉ leader invite/kick/enqueue/cancel; leader leave chuyển quyền cho member vào sớm nhất, party rỗng tự disband.
+- Membership bị khóa khi party đang queued/matched để ticket không thay đổi giữa chừng.
+- Matchmaking dùng party như ticket nguyên tử, tìm tổ hợp đủ player và phân team chính xác; member cùng party luôn cùng reserved team.
+- Cancelled user/party có thể enqueue ticket mới; member không thể tự cancel ticket của leader.
+
+### Phạm vi R3 còn lại
+
+- R3C presence/reconnect routing, spectator policy và leaver/AFK consistency.
+- R3D mute/block/report, profanity/chat retention và admin review queue.

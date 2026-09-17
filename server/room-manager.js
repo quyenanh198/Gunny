@@ -18,10 +18,11 @@ export class RoomManager {
     return this.rooms.has(code) ? this.newCode() : code;
   }
 
-  create(visibility = "private", { reservedUserIds = [] } = {}) {
+  create(visibility = "private", { reservedUserIds = [], reservedTeams = new Map() } = {}) {
     const id = this.newCode();
     const room = new Room(id, (roomId) => this.rooms.delete(roomId), visibility, this.matchLifecycle);
     room.reservedUserIds = new Set(reservedUserIds);
+    room.reservedTeams = new Map(reservedTeams);
     room.expectedPlayerCount = reservedUserIds.length || 0;
     if (room.expectedPlayerCount) room.bots = [0, 0];
     this.rooms.set(id, room);

@@ -15,4 +15,12 @@ Supported beta pools are `casual-1v1`/team size 1 and `casual-2v2`/team size 2, 
 - Clients poll status at most once per second. The beta target is assignment within 1 second of enough compatible players becoming available.
 - Matched/cancelled tickets are retained for 120 seconds. Empty reserved rooms use the normal room TTL.
 
-The resulting private room reserves player seats for the matched user UUIDs, disables bots, and cannot start until every reserved player arrives. Party atomicity and presence/reconnect routing are separate R3 milestones.
+The resulting private room reserves player seats for the matched user UUIDs, disables bots, and cannot start until every reserved player arrives. Presence/reconnect routing remains a separate R3 milestone.
+
+## Party contract
+
+- `POST /api/party`, `GET /api/party`, and `DELETE /api/party` create/read/leave the current identity's party.
+- Leader creates a five-minute target-bound invite with `POST /api/party/invites`; the target accepts through `POST /api/party/invites/:id/accept`.
+- Leader removes another member with `DELETE /api/party/members/:userId`. A leader who leaves transfers leadership to the earliest remaining member; the last member leaving disbands the party.
+- Beta party capacity is two. Only the leader may enqueue/cancel its matchmaking ticket, and membership is locked while queued or matched.
+- Matchmaking treats a party as an indivisible ticket and assigns every member to the same reserved team. It may combine a party with compatible solo tickets but never split it.

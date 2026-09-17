@@ -117,3 +117,35 @@ test("authenticated matchmaking API returns one reserved room", async () => {
     server.close();
   }
 });
+
+test("party API enforces invite target, leader actions, and queue lock", async () => {
+  const { server, port } = await listen();
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    const create = async (displayName) => (await (await fetch(`${url}/api/sessions/guest`, {
+      method: "POST", body: JSON.stringify({ displayName }),
+    })).json());
+    const [leader, member] = await Promise.all([create("Leader"), create("Member")]);
+    const auth = (session) => ({ Authorization: `Bearer ${session.token}` });
+    const party = await (await fetch(`${url}/api/party`, { method: "POST", headers: auth(leader) })).json();
+    const invite = await (await fetch(`${url}/api/party/invites`, {
+      method: "POST", headers: auth(leader), body: JSON.stringify({ userId: member.user.id }),
+    })).json();
+    const joined = await (await fetch(`${url}/api/party/invites/${invite.inviteId}/accept`, {
+      method: "POST", headers: auth(member),
+    })).json();
+    assert.equal(joined.members.length, 2);
+    assert.equal((await fetch(`${url}/api/matchmaking/enqueue`, {
+      method: "POST", headers: auth(member), body: JSON.stringify({ partyId: party.id,
+        mode: "casual-2v2", region: "ap", teamSize: 2, protocolVersion: PROTOCOL_VERSION }),
+    })).status, 403);
+    assert.equal((await fetch(`${url}/api/matchmaking/enqueue`, {
+      method: "POST", headers: auth(leader), body: JSON.stringify({ partyId: party.id,
+        mode: "casual-2v2", region: "ap", teamSize: 2, protocolVersion: PROTOCOL_VERSION }),
+    })).status, 202);
+    assert.equal((await fetch(`${url}/api/party`, { method: "DELETE", headers: auth(member) })).status, 409);
+    assert.equal((await fetch(`${url}/api/matchmaking/queue`, { method: "DELETE", headers: auth(leader) })).status, 204);
+    const transferred = await (await fetch(`${url}/api/party`, { method: "DELETE", headers: auth(leader) })).json();
+    assert.equal(transferred.leaderId, member.user.id);
+  } finally { server.closeAllConnections(); server.close(); }
+});

@@ -22,6 +22,7 @@ export class Room {
     this.matchRecord = null;
     this.clients = new Set();
     this.reservedUserIds = new Set();
+    this.reservedTeams = new Map();
     this.expectedPlayerCount = 0;
     this.state = "lobby";
     this.match = null;
@@ -305,7 +306,7 @@ export class Room {
       c.ws.send(payload);
     }
   }
-  join(client, role = "player") {
+  join(client, role = "player", reservedTeam = null) {
     if (!this.canJoin(role)) return false;
     client.role = role;
     this.clients.add(client);
@@ -313,7 +314,8 @@ export class Room {
     this.emptySince = Infinity;
     // Fill the emptier team so a fresh player can act right away.
     client.team = role === "player"
-      ? (this.teamPlayers(0).length <= this.teamPlayers(1).length ? 0 : 1)
+      ? ([0, 1].includes(reservedTeam) ? reservedTeam :
+        (this.teamPlayers(0).length <= this.teamPlayers(1).length ? 0 : 1))
       : null;
     this.promoteHost();
     this.broadcast();
