@@ -354,3 +354,32 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 ### Phạm vi R1 còn lại
 
 - R1C: quota theo IP/handshake/room creation, trusted proxy policy, outbound snapshot backpressure, slow-consumer close code và network chaos/fuzz coverage.
+
+## M12 — R1C abuse controls, backpressure và chaos coverage
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Thêm fixed-window quota cho handshake, active connection/IP, room creation/IP và HTTP API/IP.
+- `X-Forwarded-For` chỉ được tin khi `TRUST_PROXY=true` và remote address nằm trong `TRUSTED_PROXY_IPS`.
+- Snapshot được coalesce khi socket vượt 256 KiB buffered; vượt 1 MiB đóng bằng WebSocket code 1013.
+- Metrics thêm slow-consumer drop/close; `/metrics` yêu cầu bearer token trong production.
+- Rate limiter tự prune để không tăng memory vô hạn theo số key.
+- Thêm protocol fuzz 500 input, unit test trusted proxy/rate window và integration test quota.
+- Thêm network-chaos simulation với 300 ms latency, jitter, 25% loss và reordered stale packet; render state không đi lùi.
+- Cập nhật runbook cho secrets, origin, proxy và quota production.
+
+### Xác minh local
+
+- `npm run verify` — đạt.
+- Syntax — 50 JavaScript files đạt.
+- Node test — 88/88 đạt.
+- Browser smoke — đạt toàn bộ.
+- `npm audit --audit-level=high` — 0 vulnerability.
+
+### Hand-off sang R2
+
+- R1 đã đóng phần foundation trong một process. Volumetric DDoS phải chặn ở edge; network/device soak thật tiếp tục là gate R8.
+- R2 phải xây guest identity, rotating session và PostgreSQL migrations trước profile/progression.
+- Không dùng reconnect token hoặc display name làm player identity.

@@ -52,3 +52,12 @@ Ngày review: 2026-09-17. Phạm vi: browser client, HTTP endpoints, WebSocket g
 - Origin sai, payload quá lớn, handshake flood và room-create flood bị chặn.
 - Client có `bufferedAmount` vượt ngưỡng bị coalesce hoặc disconnect.
 - Fuzz protocol không crash process và không tạo room/player state rác.
+
+## Trạng thái remediation R1
+
+- Đã tách create/join/spectate, tăng entropy room ID và enforce player/spectator capacity.
+- Đã bỏ reconnect credential khỏi URL, rotate token, thêm resume timeout và request ack/error.
+- Đã thêm same-origin/allowlist, trusted-proxy opt-in, quota handshake/connection/room-create/HTTP.
+- Đã thêm soft/hard outbound backpressure và metrics slow-consumer.
+- Đã thêm protocol fuzz cùng mô phỏng 300 ms latency, jitter, 25% loss và reorder.
+- Chưa có identity/account bền vững; đây là R2. DDoS volumetric vẫn phải chặn ở edge, không thể giải quyết chỉ trong Node process.

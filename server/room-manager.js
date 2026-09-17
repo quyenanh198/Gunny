@@ -48,6 +48,8 @@ export class RoomManager {
       snapshotBytes: rooms.reduce((sum, room) => sum + room.snapshotBytes, 0),
       rejectedMessages: rooms.reduce((sum, room) => sum + room.rejectedMessages, 0),
       reconnects: rooms.reduce((sum, room) => sum + room.reconnects, 0),
+      slowConsumerDrops: rooms.reduce((sum, room) => sum + room.slowConsumerDrops, 0),
+      slowConsumerCloses: rooms.reduce((sum, room) => sum + room.slowConsumerCloses, 0),
     };
   }
 

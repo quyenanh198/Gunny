@@ -41,3 +41,9 @@ test("protocol bounds chat and kick commands", () => {
   assert.equal(validateClientMessage(message({ t: "chat", text: "x".repeat(161) })).code, "INVALID_PAYLOAD");
   assert.equal(validateClientMessage(message({ t: "kick", id: 0 })).code, "INVALID_PAYLOAD");
 });
+
+test("protocol validation never throws for fuzzed JSON values", () => {
+  const values = [null, true, false, 0, 1, "x", [], {}, { t: "aim" }, { __proto__: { admin: true } }];
+  for (let index = 0; index < 500; index++)
+    assert.doesNotThrow(() => validateClientMessage(values[index % values.length]));
+});

@@ -15,6 +15,9 @@ Terminal 2:
 ```powershell
 $env:CLIENTS = "30"
 $env:DURATION_MS = "5000"
+$env:MAX_CONNECTIONS_PER_IP = "100"
+$env:HANDSHAKES_PER_MINUTE = "120"
+$env:ROOM_CREATES_PER_MINUTE = "100"
 npm run benchmark:load
 ```
 

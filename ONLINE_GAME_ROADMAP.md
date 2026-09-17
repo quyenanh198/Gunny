@@ -135,7 +135,7 @@ Exit criteria:
 
 ### R1 — Hardening protocol và room lifecycle
 
-Trạng thái: **đang thực hiện**. R1A (room lifecycle, capacity và Origin policy) đã verify local; credential/ack/backpressure/chaos còn ở R1B–R1C.
+Trạng thái: **đã triển khai local qua R1A–R1C; chờ CI/merge R1C**. Field soak trên mạng/device thật vẫn là release gate của R8, không phải lý do mở rộng content sớm.
 
 - Tách rõ `create room`, `join room`, `spectate`; room không tồn tại phải trả `ROOM_NOT_FOUND`.
 - Room ID đủ entropy, có private/public flag và capacity invariant tại server boundary.
