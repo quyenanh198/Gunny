@@ -41,7 +41,7 @@ test("PostgreSQL persists guest identity and rotates session atomically", { skip
     const rotated = await restartedStore.rotate(created.token);
     assert.equal(rotated.user.id, created.user.id);
     assert.equal(await restartedStore.authenticate(created.token), null);
-    assert.equal((await restartedStore.authenticate(rotated.token)).profile.displayName, "Persistent Guest");
+    assert.equal((await restartedStore.authenticate(rotated.token)).profile.displayName, "Renamed");
     assert.equal(await restartedStore.rotate(created.token), null, "rotated token cannot be replayed");
   } finally {
     await restartedPool.query("DELETE FROM matches WHERE result_key = $1", [`result-${created.user.id}`]);
