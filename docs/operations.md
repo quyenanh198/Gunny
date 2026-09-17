@@ -23,6 +23,8 @@ Biến môi trường production bắt buộc/khuyến nghị:
 - Development không có database dùng memory store và log cảnh báo; dữ liệu này mất khi restart và không được phép trong production.
 - Session bearer là credential: không ghi raw token vào log, URL hoặc database. Database chỉ giữ SHA-256 digest.
 - CI dùng PostgreSQL thật và kiểm tra session tồn tại qua lần đóng/mở connection pool.
+- Khi khởi động, match `playing` cũ hơn 5 phút được chuyển sang `abandoned` với recovery reason; không tự cấp kết quả/reward sau crash.
+- Thực thi retention trong `docs/privacy.md` bằng scheduled database job có audit cho tới khi có automation ở R7/R8.
 
 ## Quan sát
 

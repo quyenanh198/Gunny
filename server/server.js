@@ -137,6 +137,22 @@ export function createServer({
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       return sendJson(res, 200, { matches: await identityStore.listMatches(credential) });
     }
+    if (req.url === "/api/privacy/consent" && req.method === "POST") {
+      const consentedAt = await identityStore.recordConsent(bearerToken(req));
+      return consentedAt ? sendJson(res, 200, { consentedAt }) : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/privacy/export" && req.method === "GET") {
+      const data = await identityStore.exportUser(bearerToken(req));
+      return data ? sendJson(res, 200, data) : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/session" && req.method === "DELETE") {
+      return await identityStore.revoke(bearerToken(req)) ? sendJson(res, 204, null)
+        : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/account" && req.method === "DELETE") {
+      return await identityStore.deleteUser(bearerToken(req)) ? sendJson(res, 204, null)
+        : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
     if (req.url === "/api/quick-join") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(JSON.stringify({ room: roomManager.quickJoin()?.id || "" }));
@@ -323,6 +339,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     pool = createPool();
     await migrate(pool);
     identityStore = new PostgresIdentityStore(pool);
+    const recovered = await identityStore.abandonStaleMatches(new Date(Date.now() - 5 * 60 * 1000));
+    if (recovered) console.warn(JSON.stringify({ event: "stale_matches_abandoned", count: recovered }));
   } else {
     if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is required in production");
     console.warn(JSON.stringify({ event: "ephemeral_identity_store", warning: "identity is lost on restart" }));

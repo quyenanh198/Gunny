@@ -424,3 +424,21 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 
 - R2C nối identity vào realtime participant, tự ghi kết quả authoritative, đánh dấu/recover match dang dở.
 - Thêm revoke/export/delete, consent/retention và test exit criteria end-to-end trước khi đóng R2.
+
+## M15 — R2C privacy và crash recovery
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- API consent, export dữ liệu, revoke session và delete account đều yêu cầu bearer session hợp lệ.
+- Delete account revoke toàn bộ session, soft-delete user và ẩn danh display name; match facts còn lại bị giới hạn bởi retention policy.
+- Migration bổ sung consent timestamp và index phục vụ recovery.
+- Startup chuyển match `playing` quá 5 phút sang `abandoned`; tuyệt đối không suy diễn winner/reward sau process crash.
+- `docs/privacy.md` chốt data inventory và retention beta: session đã hết hạn/revoke 30 ngày, match 180 ngày.
+- PostgreSQL integration test bao phủ consent/export/delete và chỉ abandon match stale, không đụng match mới.
+
+### Phạm vi R2 còn lại
+
+- R2D: xác thực user cho WebSocket player, tự mở/chốt match authoritative và ghi disconnect outcome.
+- Sau R2D phải chạy exit test xuyên suốt restart, history và replay settlement trước khi chuyển R3.

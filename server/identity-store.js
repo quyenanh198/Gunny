@@ -119,4 +119,49 @@ export class PostgresIdentityStore {
       startedAt: row.started_at, endedAt: row.ended_at, summary: row.summary, team: row.team,
       outcome: row.outcome, disconnected: row.disconnected }));
   }
+
+  async recordConsent(rawToken) {
+    const result = await this.pool.query(`UPDATE users u SET privacy_consent_at = COALESCE(privacy_consent_at, now())
+      FROM sessions s WHERE s.user_id = u.id AND s.token_hash = $1 AND s.revoked_at IS NULL
+      AND s.rotated_at IS NULL AND s.expires_at > now() RETURNING u.privacy_consent_at`, [hash(rawToken)]);
+    return result.rows[0]?.privacy_consent_at || null;
+  }
+
+  async revoke(rawToken) {
+    const result = await this.pool.query(`UPDATE sessions SET revoked_at = now()
+      WHERE token_hash = $1 AND revoked_at IS NULL RETURNING id`, [hash(rawToken)]);
+    return result.rowCount > 0;
+  }
+
+  async exportUser(rawToken) {
+    const session = await this.authenticate(rawToken);
+    if (!session) return null;
+    const user = await this.pool.query(`SELECT id, kind, created_at, privacy_consent_at FROM users WHERE id = $1`,
+      [session.user.id]);
+    return { exportedAt: new Date().toISOString(), user: user.rows[0], profile: session.profile,
+      matches: await this.listMatches(rawToken, 50) };
+  }
+
+  async deleteUser(rawToken) {
+    const session = await this.authenticate(rawToken);
+    if (!session) return false;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("UPDATE sessions SET revoked_at = now() WHERE user_id = $1", [session.user.id]);
+      await client.query("UPDATE profiles SET display_name = 'Deleted player', version = version + 1, updated_at = now() WHERE user_id = $1",
+        [session.user.id]);
+      await client.query("UPDATE users SET deleted_at = now() WHERE id = $1", [session.user.id]);
+      await client.query("COMMIT");
+      return true;
+    } catch (error) { await client.query("ROLLBACK"); throw error; }
+    finally { client.release(); }
+  }
+
+  async abandonStaleMatches(before) {
+    const result = await this.pool.query(`UPDATE matches SET status = 'abandoned', ended_at = COALESCE(ended_at, now()),
+      summary = COALESCE(summary, '{}'::jsonb) || '{"recovery":"process_restart"}'::jsonb
+      WHERE status = 'playing' AND started_at < $1 RETURNING id`, [before]);
+    return result.rowCount;
+  }
 }

@@ -48,6 +48,15 @@ test("guest session authenticates across requests and rotation rejects replay", 
     assert.equal((await fetch(`${url}/api/profile`, {
       headers: { Authorization: `Bearer ${rotated.token}` },
     })).status, 200);
+    const rotatedAuthorization = { Authorization: `Bearer ${rotated.token}` };
+    assert.equal((await fetch(`${url}/api/privacy/consent`, {
+      method: "POST", headers: rotatedAuthorization,
+    })).status, 200);
+    const exported = await (await fetch(`${url}/api/privacy/export`, { headers: rotatedAuthorization })).json();
+    assert.equal(exported.user.id, created.user.id);
+    assert.equal(exported.profile.displayName, "New Name");
+    assert.equal((await fetch(`${url}/api/account`, { method: "DELETE", headers: rotatedAuthorization })).status, 204);
+    assert.equal((await fetch(`${url}/api/profile`, { headers: rotatedAuthorization })).status, 401);
   } finally {
     server.closeAllConnections();
     server.close();
@@ -64,6 +73,10 @@ test("identity API validates input and authorization", async () => {
       method: "POST", body: JSON.stringify({ displayName: "x".repeat(25) }),
     })).status, 400);
     assert.equal((await fetch(`${url}/api/sessions/guest`, { method: "POST", body: "{" })).status, 400);
+    const created = await (await fetch(`${url}/api/sessions/guest`, { method: "POST" })).json();
+    const authorization = { Authorization: `Bearer ${created.token}` };
+    assert.equal((await fetch(`${url}/api/session`, { method: "DELETE", headers: authorization })).status, 204);
+    assert.equal((await fetch(`${url}/api/privacy/export`, { headers: authorization })).status, 401);
   } finally {
     server.closeAllConnections();
     server.close();
