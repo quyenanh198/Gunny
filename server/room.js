@@ -14,11 +14,12 @@ export const SOFT_BACKPRESSURE_BYTES = 256 * 1024;
 export const HARD_BACKPRESSURE_BYTES = 1024 * 1024;
 
 export class Room {
-  constructor(id, onClose, visibility = "private", matchLifecycle = null) {
+  constructor(id, onClose, visibility = "private", matchLifecycle = null, socialSafety = null) {
     this.onClose = onClose;
     this.id = id;
     this.visibility = visibility === "public" ? "public" : "private";
     this.matchLifecycle = matchLifecycle;
+    this.socialSafety = socialSafety;
     this.matchRecord = null;
     this.clients = new Set();
     this.reservedUserIds = new Set();
@@ -219,7 +220,7 @@ export class Room {
       roomVersion: this.roomVersion,
       lastAckSeq: client.lastAckSeq,
       reconnectToken: client.reconnectToken,
-      chat: this.chat,
+      chat: this.chat.filter((message) => this.socialSafety?.canView(client.userId, message.userId) !== false),
       history: this.history,
       id: this.id,
       state: this.state,
@@ -434,7 +435,13 @@ export class Room {
       case "chat":
         if (Date.now() - (client.lastChatAt || 0) < 750) return false;
         client.lastChatAt = Date.now();
-        this.chat.push({ id: client.id, name: client.name, text: msg.text.trim(), at: Date.now() });
+        {
+          const message = { id: randomUUID(), userId: client.userId, name: client.name,
+            text: this.socialSafety?.sanitize(msg.text) || msg.text.trim(), at: Date.now() };
+          this.chat.push(message);
+          this.socialSafety?.recordChat(this.id, client.userId, message.text, message.id).catch((error) =>
+            console.error(JSON.stringify({ event: "chat_audit_failed", roomId: this.id, message: error.message })));
+        }
         this.chat = this.chat.slice(-30);
         break;
       case "kick": {

@@ -1,7 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
 export class MemoryIdentityStore {
-  constructor() { this.sessions = new Map(); this.matches = new Map(); }
+  constructor() { this.sessions = new Map(); this.matches = new Map(); this.blocks = new Set();
+    this.mutes = new Set(); this.reports = []; this.chatMessages = []; }
   async createGuest(displayName = "Guest") {
     const session = { token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 86400000).toISOString(), user: { id: randomUUID(), kind: "guest" },
@@ -50,4 +51,23 @@ export class MemoryIdentityStore {
     Object.assign(match, result);
     return { applied: true, matchId: result.id };
   }
+  async loadSocial(userId) { return { blocks: [...this.blocks].map((key) => key.split(":"))
+    .filter(([a, b]) => a === userId || b === userId),
+  mutes: [...this.mutes].map((key) => key.split(":")).filter(([a]) => a === userId).map(([, b]) => b) }; }
+  async setBlock(userId, targetId, enabled) { const key = `${userId}:${targetId}`;
+    if (enabled) this.blocks.add(key); else this.blocks.delete(key); }
+  async setMute(userId, targetId, enabled) { const key = `${userId}:${targetId}`;
+    if (enabled) this.mutes.add(key); else this.mutes.delete(key); }
+  async createReport(report) { this.reports.push(report); }
+  async recordChat(message) { this.chatMessages.push(message); }
+  async listOpenReports(limit = 100) {
+    return this.reports.filter((report) => report.status === "open" || report.status === "reviewing").slice(0, limit);
+  }
+  async updateReportStatus(id, status) {
+    const report = this.reports.find((item) => item.id === id && item.status !== "closed");
+    if (!report) return null;
+    report.status = status;
+    return report;
+  }
+  async pruneExpiredChat() { return 0; }
 }

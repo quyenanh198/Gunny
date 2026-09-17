@@ -169,19 +169,21 @@ Exit criteria:
 
 ### R3 — Matchmaking, party và social safety
 
-Trạng thái: **đang triển khai — R3A/R3B đã merge; R3C presence/reconnect/leaver policy hoàn thành local, chờ CI/merge**.
+Trạng thái: **R3A–R3D hoàn thành local; chờ CI/merge R3D. R0–R2 và R3A/R3B ghi nhận đã merge vào `main` theo lịch sử git, nhưng field soak/production run thật vẫn là gate của R8.**
 
 - Queue thật theo mode/region/team size; timeout mở rộng tiêu chí có kiểm soát.
 - Party/invite lifecycle tách khỏi match room; leader transfer và leave/kick rõ.
 - Presence và reconnect routing; spectator policy.
-- Mute, block, report, profanity policy, chat retention ngắn và admin review queue.
+- Mute, block, report, profanity policy, chat retention ngắn và admin review queue. (R3D, hoàn thành local)
 - MMR chỉ triển khai sau khi match completion/disconnect data đáng tin.
 
 Exit criteria:
 
 - Solo player vào trận hợp lệ trong SLA đã chốt; không ghép sai team/mode/version.
-- Block/mute có hiệu lực phía server và report có audit trail.
+- Block/mute có hiệu lực phía server và report có audit trail. — **đạt**: `SocialSafety` chặn block lẫn nhau khỏi cùng ticket/room chat, `moderation_reports`/`chat_messages` ghi audit có retention.
 - Leaver/AFK policy nhất quán, không thể farm kết quả bằng reconnect.
+
+R3D bổ sung player-controlled block/mute/report (`POST /api/social/block`, `/mute`, `/report`), lọc chat theo người xem trên mọi snapshot và reconnect, chat retention 7 ngày tự purge theo giờ, và một admin review queue tối thiểu (`GET`/`PATCH /api/admin/reports`) gated bằng `MODERATION_TOKEN` chia sẻ — RBAC/audit theo từng admin identity vẫn là việc của R6. Chi tiết ở `docs/moderation.md`.
 
 ### R4 — Combat engine và content pipeline
 

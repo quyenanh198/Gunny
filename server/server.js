@@ -17,6 +17,7 @@ import { createPool, migrate } from "./database.js";
 import { MatchmakingQueue } from "./matchmaking.js";
 import { PartyService } from "./party.js";
 import { PresenceService } from "./presence.js";
+import { SocialSafety } from "./social-safety.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -58,6 +59,7 @@ const cookieSession = (req) => {
   return item ? item.slice("gunny_session=".length) : "";
 };
 const requestCredential = (req) => bearerToken(req) || cookieSession(req);
+const REPORT_ID = /^\/api\/admin\/reports\/([0-9a-f-]+)$/;
 
 async function serveStatic(req, res) {
   let file = decodeURIComponent(new URL(req.url, "http://x").pathname);
@@ -91,10 +93,13 @@ export function createServer({
   metricsToken = process.env.METRICS_TOKEN || "",
   identityStore = new MemoryIdentityStore(),
   requireRealtimeIdentity = false,
+  moderationToken = process.env.MODERATION_TOKEN || "",
 } = {}) {
-  const roomManager = new RoomManager({ matchLifecycle: identityStore });
+  const socialSafety = new SocialSafety(identityStore);
+  const roomManager = new RoomManager({ matchLifecycle: identityStore, socialSafety });
   const presence = new PresenceService();
-  const matchmaking = new MatchmakingQueue(roomManager, { presence });
+  const matchmaking = new MatchmakingQueue(roomManager, { presence,
+    canMatch: (left, right) => socialSafety.canMatchGroups(left, right) });
   const parties = new PartyService();
   const ipOptions = { trustProxy, trustedProxies };
   const activeByIp = new Map();
@@ -159,8 +164,9 @@ export function createServer({
       const party = parties.partyOf(session.user.id);
       if (body.partyId && (!party || party.id !== body.partyId)) return sendJson(res, 404, { error: "PARTY_NOT_FOUND" });
       if (party && party.leaderId !== session.user.id) return sendJson(res, 403, { error: "LEADER_REQUIRED" });
-      const queued = party ? matchmaking.enqueueGroup(session.user.id,
-        party.members.map((member) => member.userId), body) : matchmaking.enqueue(session.user.id, body);
+      const memberIds = party ? party.members.map((member) => member.userId) : [session.user.id];
+      await Promise.all(memberIds.map((id) => socialSafety.load(id)));
+      const queued = party ? matchmaking.enqueueGroup(session.user.id, memberIds, body) : matchmaking.enqueue(session.user.id, body);
       return queued.error ? sendJson(res, 400, queued) : sendJson(res, 202, queued);
     }
     if (req.url === "/api/presence" && req.method === "GET") {
@@ -232,6 +238,47 @@ export function createServer({
     if (req.url === "/api/privacy/export" && req.method === "GET") {
       const data = await identityStore.exportUser(requestCredential(req));
       return data ? sendJson(res, 200, data) : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/social/block" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      if (typeof body.targetId !== "string" || typeof body.enabled !== "boolean")
+        return sendJson(res, 400, { error: "INVALID_REQUEST" });
+      await socialSafety.load(session.user.id);
+      const ok = await socialSafety.setBlock(session.user.id, body.targetId, body.enabled);
+      return ok ? sendJson(res, 200, { targetId: body.targetId, blocked: body.enabled }) : sendJson(res, 400, { error: "INVALID_TARGET" });
+    }
+    if (req.url === "/api/social/mute" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      if (typeof body.targetId !== "string" || typeof body.enabled !== "boolean")
+        return sendJson(res, 400, { error: "INVALID_REQUEST" });
+      await socialSafety.load(session.user.id);
+      const ok = await socialSafety.setMute(session.user.id, body.targetId, body.enabled);
+      return ok ? sendJson(res, 200, { targetId: body.targetId, muted: body.enabled }) : sendJson(res, 400, { error: "INVALID_TARGET" });
+    }
+    if (req.url === "/api/social/report" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const report = await socialSafety.report(session.user.id, body);
+      return report ? sendJson(res, 201, { report }) : sendJson(res, 400, { error: "INVALID_REPORT" });
+    }
+    if (req.url === "/api/admin/reports" && req.method === "GET") {
+      if (!moderationToken || req.headers.authorization !== `Bearer ${moderationToken}`)
+        return sendJson(res, 401, { error: "MODERATION_AUTH_REQUIRED" });
+      return sendJson(res, 200, { reports: await identityStore.listOpenReports() });
+    }
+    const reportMatch = REPORT_ID.exec(req.url);
+    if (reportMatch && req.method === "PATCH") {
+      if (!moderationToken || req.headers.authorization !== `Bearer ${moderationToken}`)
+        return sendJson(res, 401, { error: "MODERATION_AUTH_REQUIRED" });
+      const body = await jsonBody(req);
+      if (!["reviewing", "closed"].includes(body.status)) return sendJson(res, 400, { error: "INVALID_STATUS" });
+      const report = await identityStore.updateReportStatus(reportMatch[1], body.status);
+      return report ? sendJson(res, 200, { report }) : sendJson(res, 404, { error: "REPORT_NOT_FOUND" });
     }
     if (req.url === "/api/session" && req.method === "DELETE") {
       return await identityStore.revoke(requestCredential(req)) ? sendJson(res, 204, null,
@@ -345,7 +392,10 @@ export function createServer({
       ws.close(1008, "authentication required");
       return;
     }
-    if (identity) presence.set(identity.user.id, "online");
+    if (identity) {
+      presence.set(identity.user.id, "online");
+      await socialSafety.load(identity.user.id);
+    }
     const params = connectionParams(req.url);
     const ip = clientIp(req, ipOptions);
     activeByIp.set(ip, (activeByIp.get(ip) || 0) + 1);
@@ -462,6 +512,7 @@ export function createServer({
   server.matchmaking = matchmaking;
   server.parties = parties;
   server.presence = presence;
+  server.socialSafety = socialSafety;
   return server;
 }
 
@@ -475,6 +526,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     identityStore = new PostgresIdentityStore(pool);
     const recovered = await identityStore.abandonStaleMatches(new Date(Date.now() - 5 * 60 * 1000));
     if (recovered) console.warn(JSON.stringify({ event: "stale_matches_abandoned", count: recovered }));
+    const chatPrune = setInterval(() => {
+      identityStore.pruneExpiredChat()
+        .then((count) => { if (count) console.warn(JSON.stringify({ event: "chat_retention_pruned", count })); })
+        .catch((error) => console.error(JSON.stringify({ event: "chat_retention_prune_failed", message: error.message })));
+    }, 3600000);
+    chatPrune.unref();
   } else {
     if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is required in production");
     console.warn(JSON.stringify({ event: "ephemeral_identity_store", warning: "identity is lost on restart" }));
