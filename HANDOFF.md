@@ -483,3 +483,22 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 
 - Bắt đầu matchmaking queue/party trên identity hiện tại; không dùng room code hoặc display name làm identity.
 - Social safety (block/mute/report), chat moderation và reconnect trong queue là acceptance criteria trước rank/season.
+
+## M18 — R3A matchmaking queue
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Queue authenticated theo mode, region, team size và protocol version; enqueue idempotent, cancel chỉ áp dụng khi còn queued.
+- Hỗ trợ beta `casual-1v1` và `casual-2v2`; không ghép sai mode/team/version.
+- Chỉ mở rộng khác region khi mọi ticket trong nhóm đã chờ đủ 15 giây; kết quả đánh dấu `matchedRegion=global`.
+- Match tạo private room dành chỗ theo user UUID, tắt bot và không thể start trước khi đủ người.
+- API enqueue/status/cancel và SLA được ghi trong `docs/matchmaking.md`.
+- Unit/integration test phủ exact pool, version reject, controlled widening, 2v2 threshold, cancellation và reserved room.
+
+### Phạm vi R3 còn lại
+
+- R3B party/invite lifecycle và team-atomic queue.
+- R3C presence/reconnect routing, spectator policy và leaver/AFK consistency.
+- R3D mute/block/report, profanity/chat retention và admin review queue.

@@ -169,7 +169,7 @@ Exit criteria:
 
 ### R3 — Matchmaking, party và social safety
 
-Trạng thái: **chưa bắt đầu**.
+Trạng thái: **đang triển khai — R3A queue solo theo mode/region/team size/version hoàn thành local; chờ CI/merge**.
 
 - Queue thật theo mode/region/team size; timeout mở rộng tiêu chí có kiểm soát.
 - Party/invite lifecycle tách khỏi match room; leader transfer và leave/kick rõ.

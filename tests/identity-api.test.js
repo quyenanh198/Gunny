@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "../server/server.js";
 import { MemoryIdentityStore } from "../server/memory-identity-store.js";
+import { PROTOCOL_VERSION } from "../src/play/protocol.js";
 
 const listen = () => new Promise((resolve) => {
   const server = createServer({ identityStore: new MemoryIdentityStore() });
@@ -77,6 +78,40 @@ test("identity API validates input and authorization", async () => {
     const authorization = { Authorization: `Bearer ${created.token}` };
     assert.equal((await fetch(`${url}/api/session`, { method: "DELETE", headers: authorization })).status, 204);
     assert.equal((await fetch(`${url}/api/privacy/export`, { headers: authorization })).status, 401);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("authenticated matchmaking API returns one reserved room", async () => {
+  const { server, port } = await listen();
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    const create = async (displayName) => (await (await fetch(`${url}/api/sessions/guest`, {
+      method: "POST", body: JSON.stringify({ displayName }),
+    })).json());
+    const [first, second] = await Promise.all([create("Queue One"), create("Queue Two")]);
+    const body = JSON.stringify({ mode: "casual-1v1", region: "ap", teamSize: 1,
+      protocolVersion: PROTOCOL_VERSION });
+    const enqueue = (session) => fetch(`${url}/api/matchmaking/enqueue`, {
+      method: "POST", headers: { Authorization: `Bearer ${session.token}` }, body,
+    });
+    assert.equal((await enqueue(first)).status, 202);
+    assert.equal((await enqueue(second)).status, 202);
+    const status = await (await fetch(`${url}/api/matchmaking/status`, {
+      headers: { Authorization: `Bearer ${first.token}` },
+    })).json();
+    assert.equal(status.status, "matched");
+    assert.equal(status.roomId.length, 6);
+    const room = server.roomManager.get(status.roomId);
+    assert.deepEqual(room.reservedUserIds, new Set([first.user.id, second.user.id]));
+    assert.deepEqual(room.bots, [0, 0]);
+    assert.equal(room.expectedPlayerCount, 2);
+    assert.equal(room.canStart, false, "a reserved match cannot start before every player arrives");
+    assert.equal((await fetch(`${url}/api/matchmaking/queue`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${first.token}` },
+    })).status, 409, "a matched ticket cannot be cancelled");
   } finally {
     server.closeAllConnections();
     server.close();

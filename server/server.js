@@ -14,6 +14,7 @@ import { clientIp, FixedWindowLimiter } from "./rate-limiter.js";
 import { MemoryIdentityStore } from "./memory-identity-store.js";
 import { PostgresIdentityStore } from "./identity-store.js";
 import { createPool, migrate } from "./database.js";
+import { MatchmakingQueue } from "./matchmaking.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -90,6 +91,7 @@ export function createServer({
   requireRealtimeIdentity = false,
 } = {}) {
   const roomManager = new RoomManager({ matchLifecycle: identityStore });
+  const matchmaking = new MatchmakingQueue(roomManager);
   const ipOptions = { trustProxy, trustedProxies };
   const activeByIp = new Map();
   const handshakeLimiter = new FixedWindowLimiter({ limit: handshakesPerMinute, windowMs: 60000 });
@@ -145,6 +147,24 @@ export function createServer({
       const session = await identityStore.authenticate(credential);
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       return sendJson(res, 200, { matches: await identityStore.listMatches(credential) });
+    }
+    if (req.url === "/api/matchmaking/enqueue" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const queued = matchmaking.enqueue(session.user.id, await jsonBody(req));
+      return queued.error ? sendJson(res, 400, queued) : sendJson(res, 202, queued);
+    }
+    if (req.url === "/api/matchmaking/status" && req.method === "GET") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const ticket = matchmaking.status(session.user.id);
+      return ticket ? sendJson(res, 200, ticket) : sendJson(res, 404, { error: "NOT_QUEUED" });
+    }
+    if (req.url === "/api/matchmaking/queue" && req.method === "DELETE") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      return matchmaking.cancel(session.user.id) ? sendJson(res, 204, null)
+        : sendJson(res, 409, { error: "NOT_CANCELLABLE" });
     }
     if (req.url === "/api/privacy/consent" && req.method === "POST") {
       const consentedAt = await identityStore.recordConsent(requestCredential(req));
@@ -309,6 +329,11 @@ export function createServer({
       return;
     }
     const role = params.mode === "spectate" ? "spectator" : "player";
+    if (role === "player" && room.reservedUserIds.size && !room.reservedUserIds.has(identity?.user.id)) {
+      sendError(ws, "NOT_RESERVED");
+      ws.close(1008, "seat not reserved");
+      return;
+    }
     if (role === "player" && identity && [...room.clients].some((client) => client.userId === identity.user.id)) {
       sendError(ws, "ALREADY_JOINED");
       ws.close(1008, "identity already joined");
@@ -359,6 +384,7 @@ export function createServer({
     server.close();
   };
   server.roomManager = roomManager;
+  server.matchmaking = matchmaking;
   return server;
 }
 
