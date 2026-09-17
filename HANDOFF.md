@@ -407,3 +407,20 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 
 - R2B: cập nhật profile bằng optimistic concurrency, lưu match summary/participant và settlement idempotent.
 - R2C: recovery trận dang dở, revoke/export/delete, consent/retention policy và kiểm thử exit criteria toàn R2.
+
+## M14 — R2B profile concurrency và match history
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- `PATCH /api/profile` yêu cầu `expectedVersion`; cập nhật thành công tăng version, stale write trả `PROFILE_VERSION_CONFLICT`.
+- `GET /api/matches` chỉ trả lịch sử của user đang xác thực, giới hạn tối đa 50 bản ghi mới nhất.
+- Repository settlement ghi match + participant trong một transaction.
+- `result_key` unique và `ON CONFLICT DO NOTHING` tạo idempotency boundary: cùng kết quả gửi lại trả `applied: false` và không ghi participant lần hai.
+- Integration test PostgreSQL kiểm tra optimistic concurrency, match history và replay settlement.
+
+### Phạm vi R2 còn lại
+
+- R2C nối identity vào realtime participant, tự ghi kết quả authoritative, đánh dấu/recover match dang dở.
+- Thêm revoke/export/delete, consent/retention và test exit criteria end-to-end trước khi đóng R2.
