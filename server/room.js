@@ -29,6 +29,7 @@ export class Room {
     this.sinceSnapshot = 0;
     this.idleSeat = 0;
     this.maxTickDrift = 0;
+    this.tickDriftSamples = [];
     this.snapshotBytes = 0;
     this.rejectedMessages = 0;
     this.reconnects = 0;
@@ -106,7 +107,10 @@ export class Room {
   }
   tick() {
     const now = Date.now();
-    this.maxTickDrift = Math.max(this.maxTickDrift, Math.max(0, now - this.last - 1000 / 60));
+    const tickDrift = Math.max(0, now - this.last - 1000 / 60);
+    this.maxTickDrift = Math.max(this.maxTickDrift, tickDrift);
+    this.tickDriftSamples.push(tickDrift);
+    if (this.tickDriftSamples.length > 3600) this.tickDriftSamples.shift();
     if (this.state === "playing") {
       this.acc += Math.min((now - this.last) / 1000, 0.1);
       const m = this.match;

@@ -7,14 +7,16 @@
     "dev": "node server/server.js",
     "start": "node server/server.js",
     "test": "node --test",
-    "check": "find src server -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "check": "node scripts/check-syntax.mjs",
+    "verify": "node scripts/verify.mjs",
     "test:browser": "node scripts/browser-smoke.cjs",
-    "test:load": "node scripts/load-smoke.cjs"
+    "test:load": "node scripts/load-smoke.cjs",
+    "benchmark:load": "node scripts/load-smoke.cjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "playwright": "^1.55.0"
+    "playwright": "^1.55.1"
   }
 }
