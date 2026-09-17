@@ -68,4 +68,55 @@ export class PostgresIdentityStore {
       [hash(rawToken), sessionId, hash(replacement), expiresAt]);
     return result.rowCount ? publicSession(result.rows[0], replacement) : null;
   }
+
+  async updateProfile(rawToken, { displayName, expectedVersion }) {
+    const result = await this.pool.query(`
+      UPDATE profiles p SET display_name = $2, version = version + 1, updated_at = now()
+      FROM sessions s, users u
+      WHERE s.token_hash = $1 AND s.user_id = u.id AND p.user_id = u.id
+        AND s.revoked_at IS NULL AND s.rotated_at IS NULL AND s.expires_at > now()
+        AND u.deleted_at IS NULL AND p.version = $3
+      RETURNING p.display_name, p.version`, [hash(rawToken), displayName, expectedVersion]);
+    return result.rowCount ? { displayName: result.rows[0].display_name, version: result.rows[0].version } : null;
+  }
+
+  async settleMatch({ id = randomUUID(), resultKey, roomId = null, status = "completed", startedAt,
+    endedAt = new Date(), summary = {}, participants = [] }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const inserted = await client.query(`
+        INSERT INTO matches(id, room_id, status, started_at, ended_at, result_key, summary)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (result_key) DO NOTHING RETURNING id`,
+      [id, roomId, status, startedAt, endedAt, resultKey, summary]);
+      if (!inserted.rowCount) {
+        await client.query("ROLLBACK");
+        return { applied: false };
+      }
+      for (const participant of participants) await client.query(`
+        INSERT INTO match_participants(match_id, user_id, team, outcome, disconnected)
+        VALUES ($1, $2, $3, $4, $5)`,
+      [id, participant.userId, participant.team, participant.outcome, !!participant.disconnected]);
+      await client.query("COMMIT");
+      return { applied: true, matchId: id };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async listMatches(rawToken, limit = 20) {
+    const result = await this.pool.query(`
+      SELECT m.id, m.room_id, m.status, m.started_at, m.ended_at, m.summary,
+             mp.team, mp.outcome, mp.disconnected
+      FROM sessions s JOIN match_participants mp ON mp.user_id = s.user_id
+      JOIN matches m ON m.id = mp.match_id
+      WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.rotated_at IS NULL
+        AND s.expires_at > now()
+      ORDER BY m.started_at DESC LIMIT $2`, [hash(rawToken), Math.min(50, Math.max(1, limit))]);
+    return result.rows.map((row) => ({ id: row.id, roomId: row.room_id, status: row.status,
+      startedAt: row.started_at, endedAt: row.ended_at, summary: row.summary, team: row.team,
+      outcome: row.outcome, disconnected: row.disconnected }));
+  }
 }

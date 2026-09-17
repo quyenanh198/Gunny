@@ -118,6 +118,25 @@ export function createServer({
       return session ? sendJson(res, 200, { user: session.user, profile: session.profile })
         : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
+    if (req.url === "/api/profile" && req.method === "PATCH") {
+      const body = await jsonBody(req);
+      const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
+      if (!displayName || displayName.length > 24 || !Number.isInteger(body.expectedVersion) || body.expectedVersion < 1)
+        return sendJson(res, 400, { error: "INVALID_PROFILE" });
+      const credential = bearerToken(req);
+      if (!await identityStore.authenticate(credential)) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const profile = await identityStore.updateProfile(credential, {
+        displayName, expectedVersion: body.expectedVersion,
+      });
+      return profile ? sendJson(res, 200, { profile })
+        : sendJson(res, 409, { error: "PROFILE_VERSION_CONFLICT" });
+    }
+    if (req.url === "/api/matches" && req.method === "GET") {
+      const credential = bearerToken(req);
+      const session = await identityStore.authenticate(credential);
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      return sendJson(res, 200, { matches: await identityStore.listMatches(credential) });
+    }
     if (req.url === "/api/quick-join") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(JSON.stringify({ room: roomManager.quickJoin()?.id || "" }));

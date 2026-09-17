@@ -18,4 +18,11 @@ export class MemoryIdentityStore {
     this.sessions.set(next.token, next);
     return next;
   }
+  async updateProfile(token, { displayName, expectedVersion }) {
+    const session = this.sessions.get(token);
+    if (!session || session.profile.version !== expectedVersion) return null;
+    session.profile = { displayName, version: expectedVersion + 1 };
+    return session.profile;
+  }
+  async listMatches() { return []; }
 }

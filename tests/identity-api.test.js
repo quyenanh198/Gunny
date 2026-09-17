@@ -28,6 +28,17 @@ test("guest session authenticates across requests and rotation rejects replay", 
     const profile = await (await fetch(`${url}/api/profile`, { headers: authorization })).json();
     assert.equal(profile.user.id, created.user.id);
 
+    const updated = await (await fetch(`${url}/api/profile`, {
+      method: "PATCH", headers: { ...authorization, "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "New Name", expectedVersion: 1 }),
+    })).json();
+    assert.deepEqual(updated.profile, { displayName: "New Name", version: 2 });
+    assert.equal((await fetch(`${url}/api/profile`, {
+      method: "PATCH", headers: { ...authorization, "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "Stale Write", expectedVersion: 1 }),
+    })).status, 409);
+    assert.deepEqual((await (await fetch(`${url}/api/matches`, { headers: authorization })).json()).matches, []);
+
     const rotated = await (await fetch(`${url}/api/sessions/rotate`, {
       method: "POST", headers: authorization,
     })).json();
@@ -48,6 +59,7 @@ test("identity API validates input and authorization", async () => {
   const url = `http://127.0.0.1:${port}`;
   try {
     assert.equal((await fetch(`${url}/api/profile`)).status, 401);
+    assert.equal((await fetch(`${url}/api/matches`)).status, 401);
     assert.equal((await fetch(`${url}/api/sessions/guest`, {
       method: "POST", body: JSON.stringify({ displayName: "x".repeat(25) }),
     })).status, 400);
