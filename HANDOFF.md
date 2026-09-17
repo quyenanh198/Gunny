@@ -442,3 +442,19 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 
 - R2D: xác thực user cho WebSocket player, tự mở/chốt match authoritative và ghi disconnect outcome.
 - Sau R2D phải chạy exit test xuyên suốt restart, history và replay settlement trước khi chuyển R3.
+
+## M16 — R2D realtime identity
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Guest/rotate API cấp thêm cookie `gunny_session` HttpOnly, SameSite=Strict và Secure trong production.
+- Browser kiểm tra profile cookie trước khi mở WebSocket; nếu chưa có thì tự bootstrap guest identity bằng display name hiện tại.
+- Production WebSocket bắt buộc session hợp lệ, trả `AUTH_REQUIRED` cho anonymous socket; user UUID được bind vào player server-side.
+- Bearer vẫn dùng được cho API/cross-device client, nhưng token không đi vào WebSocket URL.
+- RoomManager chuyển thành state theo từng server instance, loại bỏ rò rỉ room giữa test/process instance.
+
+### Phạm vi R2 còn lại
+
+- R2E tự ghi match `playing`, chốt authoritative result/participant/disconnect và chạy exit test xuyên restart.
