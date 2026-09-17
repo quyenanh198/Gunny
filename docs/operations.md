@@ -11,9 +11,18 @@
 Biến môi trường production bắt buộc/khuyến nghị:
 
 - `METRICS_TOKEN`: bắt buộc khi `NODE_ENV=production`; gọi metrics bằng `Authorization: Bearer <token>`.
+- `DATABASE_URL`: bắt buộc khi `NODE_ENV=production`; lấy từ secret manager, không commit vào repository.
 - `ALLOWED_ORIGINS`: danh sách origin browser được phép, phân cách dấu phẩy.
 - `TRUST_PROXY=true` chỉ khi `TRUSTED_PROXY_IPS` liệt kê đúng địa chỉ reverse proxy; không tin `X-Forwarded-For` từ Internet.
 - `MAX_CONNECTIONS_PER_IP`, `HANDSHAKES_PER_MINUTE`, `ROOM_CREATES_PER_MINUTE`, `HTTP_REQUESTS_PER_MINUTE`: điều chỉnh theo capacity test, không vô hiệu hóa tùy tiện.
+
+## PostgreSQL và session
+
+- Khi có `DATABASE_URL`, tiến trình chạy các file tăng dần trong `server/db/migrations` trước khi mở cổng HTTP.
+- Migration đã áp dụng được ghi trong `schema_migrations`; không sửa migration đã release, hãy thêm version mới.
+- Development không có database dùng memory store và log cảnh báo; dữ liệu này mất khi restart và không được phép trong production.
+- Session bearer là credential: không ghi raw token vào log, URL hoặc database. Database chỉ giữ SHA-256 digest.
+- CI dùng PostgreSQL thật và kiểm tra session tồn tại qua lần đóng/mở connection pool.
 
 ## Quan sát
 

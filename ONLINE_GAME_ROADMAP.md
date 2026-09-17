@@ -135,7 +135,7 @@ Exit criteria:
 
 ### R1 — Hardening protocol và room lifecycle
 
-Trạng thái: **đã triển khai local qua R1A–R1C; chờ CI/merge R1C**. Field soak trên mạng/device thật vẫn là release gate của R8, không phải lý do mở rộng content sớm.
+Trạng thái: **hoàn thành R1A–R1C và đã merge**. Field soak trên mạng/device thật vẫn là release gate của R8, không phải lý do mở rộng content sớm.
 
 - Tách rõ `create room`, `join room`, `spectate`; room không tồn tại phải trả `ROOM_NOT_FOUND`.
 - Room ID đủ entropy, có private/public flag và capacity invariant tại server boundary.
@@ -153,7 +153,7 @@ Exit criteria:
 
 ### R2 — Identity, profile và persistence
 
-Trạng thái: **chưa bắt đầu**.
+Trạng thái: **đang triển khai — R2A guest identity/session + schema PostgreSQL đã hoàn thành local; chờ CI/merge**.
 
 - Guest identity bằng opaque ID + rotating session; hỗ trợ link email/OAuth sau, không lưu password tự chế.
 - PostgreSQL migrations và repository layer; schema cho user, profile, session, match, participant.

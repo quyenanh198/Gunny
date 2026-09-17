@@ -383,3 +383,27 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 - R1 đã đóng phần foundation trong một process. Volumetric DDoS phải chặn ở edge; network/device soak thật tiếp tục là gate R8.
 - R2 phải xây guest identity, rotating session và PostgreSQL migrations trước profile/progression.
 - Không dùng reconnect token hoặc display name làm player identity.
+
+## M13 — R2A guest identity và PostgreSQL foundation
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Thêm guest user bằng UUID opaque, profile mặc định và bearer session 256-bit.
+- API `POST /api/sessions/guest`, `POST /api/sessions/rotate`, `GET /api/profile`; token rotate một lần và token cũ bị từ chối.
+- Chỉ lưu SHA-256 digest của session token; raw token không đi vào URL hay database.
+- Thêm PostgreSQL migration/repository cho `users`, `profiles`, `sessions`, `matches`, `match_participants` và lịch sử migration.
+- Production bắt buộc có `DATABASE_URL`; memory store chỉ dành cho local/test và phát cảnh báo mất dữ liệu khi restart.
+- CI có PostgreSQL 17 service; integration test đóng pool/mở lại để chứng minh identity vẫn tồn tại.
+
+### Xác minh local
+
+- Node test — 90 pass, 1 PostgreSQL integration test skip khi máy local không có `TEST_DATABASE_URL`.
+- PostgreSQL integration test là bắt buộc trong job `verify` trên CI.
+- `npm audit` — 0 vulnerability.
+
+### Phạm vi R2 còn lại
+
+- R2B: cập nhật profile bằng optimistic concurrency, lưu match summary/participant và settlement idempotent.
+- R2C: recovery trận dang dở, revoke/export/delete, consent/retention policy và kiểm thử exit criteria toàn R2.
