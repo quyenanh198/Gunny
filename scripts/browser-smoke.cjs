@@ -123,10 +123,17 @@ const assert = require("node:assert/strict");
       [1024, 640],
     ]) {
       await page.setViewportSize({ width: w, height: h });
-      // The frame is resized from a ResizeObserver, so let the layout settle.
+      // The frame is resized from a ResizeObserver; the arena clips overflow
+      // so page scrollHeight never reflects a stale frame, and waiting on it
+      // used to "settle" before the observer had actually fired. Wait on the
+      // frame fitting inside its own container instead.
       await page
         .waitForFunction(
-          () => document.documentElement.scrollHeight - innerHeight <= 1,
+          () => {
+            const stage = document.querySelector(".stage").getBoundingClientRect();
+            const frame = document.querySelector(".frame").getBoundingClientRect();
+            return frame.width <= stage.width + 1 && frame.height <= stage.height + 1;
+          },
           { timeout: 3000 },
         )
         .catch(() => {});

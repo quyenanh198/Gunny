@@ -417,3 +417,11 @@ Trong lúc `docs/handoff/` ở trên còn nằm trên nhánh, một session khá
 Đã verify trước khi tin: `npm run check` sạch, `npm test` 70/70, và chạy thật server + Playwright trên trình duyệt thật (không chỉ test giấy) — pass toàn bộ. Lỗ XSS ở mục 19 vẫn còn nguyên vẹn sau refactor, mọi nơi hiện tên người chơi đều dùng `textContent` hoặc canvas `fillText`.
 
 Vì hai hệ hand-off trùng mục đích và một bên đã khớp code thật hơn nhiều, xóa `docs/handoff/` và giữ `HANDOFF.md` của họ làm bản chính; cập nhật lại các link trỏ tới nó ở `ARCHITECTURE.md` mục 10 và `ONLINE_GAME_ROADMAP.md` mục 4b.
+
+### 21. Nút vô hình sau đợt merge M1–M7, và một test tự lừa chính mình
+
+Người dùng gửi ảnh chụp trận thật: ô S1/S2 trong "ĐÒN BẮN" và bốn nút tinh chỉnh góc (−1°/−0,5°/+0,5°/+1°) hiện thành ô trắng trống, không thấy chữ. So khớp bằng `getComputedStyle` trong Playwright thật: `color: rgb(236, 244, 237)` (gần trắng, kế thừa từ `:root`) trên `background-color: rgb(239, 239, 239)` (xám nhạt mặc định của trình duyệt) — chữ gần như cùng màu nền, chỉ hiện được khi nút bị disable (opacity làm nền trong suốt, lộ nền tối phía sau). Nguyên nhân: `.combat-options button` và `.aim-fine button` mới thêm trong đợt M5 chỉ set `min-width`, quên set `background`/màu như mọi nhóm nút khác trong file. Rà toàn bộ `style.css` thấy thêm hai chỗ cùng bệnh: nút "Gửi" trong chat và nút "Mời ra" ở hàng người chơi. Sửa cả bốn bằng `box-shadow: inset` thay vì `border` thật, để không đổi kích thước hộp của phần tử auto-size (bài học từ lần đầu dùng `border` làm `.combat-options`/`.aim-fine` cao thêm 2px, suýt vỡ layout ở màn hình thấp — xem ngay dưới).
+
+Khi verify lại bằng smoke test đầy đủ, phát hiện thêm một lỗi race có sẵn từ trước, không liên quan CSS: bước "chờ layout ổn định" giữa các lần đổi kích thước cửa sổ kiểm tra `scrollHeight - innerHeight <= 1`, nhưng `.arena` có `overflow: hidden` nên điều kiện này luôn đúng ngay lập tức dù khung trận chưa được `ResizeObserver` tính lại — bài test "settled" giả, đôi khi assert ngay trên kích thước cũ. Sửa bằng cách chờ đúng thứ cần chờ: khung trận đã vừa trong khung chứa của nó, thay vì đo gián tiếp qua scroll trang.
+
+Xác minh: `npm run check` sạch, `npm test` 70/70, smoke test chạy 4 lần liên tiếp không còn lần nào fail (trước đó khoảng 1/3 lần fail ngẫu nhiên).
