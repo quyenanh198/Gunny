@@ -362,14 +362,6 @@ function buildUI() {
       updateRoom();
     };
     $("weaponChoices").append(b);
-    const battle = choiceButton(entry, "weapon");
-    battle.title = `${entry.name} · ${entry.desc}`;
-    battle.setAttribute("aria-label", entry.name);
-    battle.onclick = () => {
-      session.setWeapon(entry.id);
-      updateBattleLoadout();
-    };
-    $("battleWeapons").append(battle);
   }
   for (const entry of DIFFICULTIES) {
     const option = document.createElement("option");

@@ -1,4 +1,4 @@
-import { crater, damage, fallDamage } from "../physics.js";
+import { crater, damage, fallDamage, groundUnderFootprint } from "../physics.js";
 
 export const SHOTS = {
   s1: { damageScale: 1, craterScale: 1, delay: 100, ssCost: 0 },
@@ -34,7 +34,7 @@ export function resolveExplosion(terrain, actors, projectile, rules = combatLoad
   crater(terrain, projectile.x, projectile.y, projectile.ammo.craterWidth * rules.craterScale, projectile.ammo.craterDepth * rules.craterScale);
   return actors.map((actor) => {
     if (actor.hp <= 0) return 0;
-    const floor = terrain[Math.floor(actor.x)];
+    const floor = groundUnderFootprint(terrain, actor.x);
     const hit = Math.round(damage(actor, projectile.x, projectile.y, projectile.ammo) * rules.damageScale) + fallDamage(floor - actor.y);
     actor.hp = Math.max(0, actor.hp - hit);
     actor.y = floor;

@@ -113,8 +113,6 @@ test("aim stays in the weapon range and flips across the dead zone", () => {
   m.keys.add("up");
   run(m, 0.5);
   assert.ok(m.actors[0].angle > 95);
-  m.setLoadout({ weapon: "carrot" });
-  assert.ok(m.actors[0].angle >= 105 || m.actors[0].angle <= 75);
 });
 
 test("movement spends energy and is blocked outside the player's aim phase", () => {
@@ -129,17 +127,6 @@ test("movement spends energy and is blocked outside the player's aim phase", () 
   const energy = m.energy;
   m.move(1, 0.1);
   assert.equal(m.energy, energy);
-});
-
-test("loadout changes are refused while charging or off turn", () => {
-  const m = new Match({ seed: 2 });
-  m.beginCharge();
-  assert.equal(m.setLoadout({ character: "bzz" }), false);
-  m.cancelCharge();
-  assert.equal(m.setLoadout({ character: "bzz" }), true);
-  assert.equal(m.actors[0].name, "Bzz");
-  m.nextTurn();
-  assert.equal(m.setLoadout({ weapon: "star" }), false);
 });
 
 test("changing the map restarts on that map's terrain", () => {

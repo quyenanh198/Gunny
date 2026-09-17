@@ -45,10 +45,6 @@ function sync(m) {
   $("status").textContent = m.status;
   const disabled = !m.playerCanAct || paused;
   ["fire", "angle", "left", "right"].forEach((id) => ($(id).disabled = disabled));
-  document.querySelectorAll("#battleWeapons button").forEach((b) => {
-    b.disabled = disabled || m.charging;
-    b.setAttribute("aria-pressed", String(b.dataset.id === m.current.weapon));
-  });
   $("battleHint").textContent = m.playerCanAct ? "" : `chờ ${m.current.name}…`;
   $("ssValue").textContent = `SS ${Math.round(m.current.ss || 0)}%`;
   $("battleItem").value = m.item || "";

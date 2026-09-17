@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TurnQueue } from "../src/core/turn-queue.js";
-import { combatLoadout, gainSs } from "../src/core/combat.js";
+import { combatLoadout, gainSs, resolveExplosion } from "../src/core/combat.js";
 import { chooseBotAction } from "../src/core/bot.js";
 import { Match } from "../src/match.js";
+import { FOOT_WIDTH } from "../src/physics.js";
 
 test("low delay can grant the same actor two consecutive turns", () => {
   const queue = new TurnQueue([{ team: 0 }, { team: 1 }]);
@@ -31,6 +32,22 @@ test("SS requires a full gauge and consumes it", () => {
   assert.equal(ready.shot, "ss");
   assert.equal(ready.ssCost, 100);
   assert.equal(gainSs(95, 20), 100);
+});
+
+test("a crater narrower than the stance doesn't drop the actor standing over it", () => {
+  const terrain = Array(1200).fill(440);
+  const actor = { x: 600, y: 440, hp: 100 };
+  const ammo = { craterWidth: FOOT_WIDTH / 2, craterDepth: FOOT_WIDTH / 2, damageMax: 0, damageRadius: 50 };
+  resolveExplosion(terrain, [actor], { x: 600, y: 440, ammo }, combatLoadout("s1", null, 0));
+  assert.equal(actor.y, 440);
+});
+
+test("a crater as wide as the stance does drop the actor standing over it", () => {
+  const terrain = Array(1200).fill(440);
+  const actor = { x: 600, y: 440, hp: 100 };
+  const ammo = { craterWidth: FOOT_WIDTH * 2, craterDepth: FOOT_WIDTH * 2, damageMax: 0, damageRadius: 50 };
+  resolveExplosion(terrain, [actor], { x: 600, y: 440, ammo }, combatLoadout("s1", null, 0));
+  assert.ok(actor.y > 440);
 });
 
 test("match owns shot delay, SS spending and item cost", () => {

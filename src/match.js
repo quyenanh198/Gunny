@@ -199,25 +199,6 @@ export class Match {
     actor.angle = settleAim(value, actor.angle, ammoOf(actor).angles);
     return actor.angle;
   }
-  // Loadout changes are cosmetic mid-turn except the weapon's angle range.
-  setLoadout({ character, weapon }) {
-    if (!this.playerCanAct || this.charging) return false;
-    const a = this.current;
-    if (character) {
-      if (a.player === 1) this.character = character;
-      a.skin = character;
-      const typed = this.roster?.[a.team]?.find((mem, i) => this.actors.filter((b) => b.team === a.team)[i] === a)?.name;
-      a.name = typed || CHARACTERS.find((c) => c.id === character).name;
-      a.animation = createAnimation();
-    }
-    if (weapon) {
-      if (a.player === 1) this.weapon = weapon;
-      a.weapon = weapon;
-      this.setAim(a.angle, a);
-    }
-    this.keys.clear();
-    return true;
-  }
   // Changing the map or the team makeup restarts the match.
   setMap(id) {
     const map = MAPS.find((m) => m.id === id);

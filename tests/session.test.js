@@ -37,9 +37,11 @@ test("an empty team blocks the start, and the lobby comes back after a match", (
   assert.equal(s.match, null);
 });
 
-test("changing weapon mid-match reaches the running match", () => {
+test("loadout is a lobby-only choice: changing weapon mid-match doesn't touch the running match", () => {
   const s = new LocalSession();
   s.start();
+  const before = s.match.current.weapon;
   s.setWeapon("honey");
-  assert.equal(s.match.current.weapon, "honey");
+  assert.equal(s.match.current.weapon, before);
+  assert.equal(s.you.weapon, "honey");
 });

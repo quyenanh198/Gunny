@@ -32,11 +32,9 @@ export class LocalSession {
   setReady() {}
   setCharacter(id) {
     this.you.character = id;
-    this.match?.setLoadout({ character: id });
   }
   setWeapon(id) {
     this.you.weapon = id;
-    this.match?.setLoadout({ weapon: id });
   }
   setSetup({ map, difficulty, bots }) {
     if (map && MAPS.some((m) => m.id === map)) this.map = map;

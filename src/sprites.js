@@ -1,5 +1,5 @@
 import { animationFrame, recoilOffset } from "./animation.js";
-import { WIDTH, HEIGHT, ROCK_Y } from "./physics.js";
+import { WIDTH, HEIGHT, ROCK_Y, FOOT_WIDTH } from "./physics.js";
 
 // Rebuild only after terrain changes, not for every animation frame.
 // Texture stays fixed to the original soil; craters reveal soil, not new grass.
@@ -48,7 +48,7 @@ export function drawCharacter(
   ctx.translate(actor.x, actor.y);
   ctx.fillStyle = "#183a3e35";
   ctx.beginPath();
-  ctx.ellipse(0, 0, 25, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, FOOT_WIDTH, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.scale(facing, 1);
   const draw = () => {

@@ -1,6 +1,8 @@
 export const WIDTH=1200, HEIGHT=620, DT=1/120, GRAVITY=290, BODY_OFFSET=20;
 // A blast within HIT_RADIUS of the body center is a direct hit: full damage. Splash falls off linearly past it.
 export const HIT_RADIUS=24;
+// Half the character's stance width, matching the shadow drawn under the sprite: a crater narrower than FOOT_WIDTH*2 leaves them standing on one edge instead of dropping them.
+export const FOOT_WIDTH=25;
 // Below ROCK_Y the ground is rock: craters only dig ROCK_SOFTNESS of their depth into it.
 export const ROCK_Y=540, ROCK_SOFTNESS=0.4;
 // angles: [min,max] elevation above horizontal the weapon can aim at, mirrored for left shots.
@@ -26,8 +28,10 @@ export function launch(actor,angle,power,ammo=DEFAULT_AMMO){const r=angle*Math.P
 export function step(p,wind,dt=DT){p.vx+=wind*p.ammo.windScale*dt;p.vy+=GRAVITY*p.ammo.gravityScale*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.age+=dt;return p;}
 export function collides(p,terrain){return p.x>=0&&p.x<WIDTH&&p.y>=terrain[Math.floor(p.x)];}
 // Half-ellipse hole: rx is the half width, ry the depth at the impact point.
-export function crater(terrain,x,y,rx=48,ry=rx){for(let i=Math.max(0,Math.floor(x-rx));i<Math.min(WIDTH,x+rx);i++){const bottom=y+ry*Math.sqrt(1-((i-x)/rx)**2),rock=Math.max(0,bottom-ROCK_Y)*ROCK_SOFTNESS;terrain[i]=Math.max(terrain[i],Math.min(bottom,ROCK_Y)+rock);}}
+export function crater(terrain,x,y,rx=48,ry=rx){for(let i=Math.max(0,Math.floor(x-rx));i<Math.min(WIDTH,x+rx);i++){const bottom=y+ry*Math.sqrt(Math.max(0,1-((i-x)/rx)**2)),rock=Math.max(0,bottom-ROCK_Y)*ROCK_SOFTNESS;terrain[i]=Math.max(terrain[i],Math.min(bottom,ROCK_Y)+rock);}}
 export function fallDamage(drop){return drop>40?Math.round(drop/4):0;}
+// The ground a stance-width actor actually rests on: the highest point under their feet, not just the center pixel.
+export function groundUnderFootprint(terrain,x,half=FOOT_WIDTH){let floor=Infinity;for(let i=Math.max(0,Math.floor(x-half));i<=Math.min(WIDTH-1,Math.floor(x+half));i++)floor=Math.min(floor,terrain[i]);return floor;}
 export function damage(actor,x,y,ammo=DEFAULT_AMMO){const d=Math.hypot(actor.x-x,actor.y-BODY_OFFSET-y),t=Math.max(0,d-HIT_RADIUS)/(ammo.damageRadius-HIT_RADIUS);return Math.round(Math.max(0,ammo.damageMax*(1-t)));}
 // Stops at terrain, off-screen, or when passing within HIT_RADIUS of target's body center (a direct hit).
 export function simulate(actor,angle,power,wind,terrain,ammo=DEFAULT_AMMO,target=null){let p=launch(actor,angle,power,ammo);for(let i=0;i<1800;i++){step(p,wind);if(collides(p,terrain)||p.x<0||p.x>=WIDTH||p.y>HEIGHT)return p;if(target&&Math.hypot(p.x-target.x,p.y-(target.y-BODY_OFFSET))<HIT_RADIUS)return p;}return p;}

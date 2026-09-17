@@ -2,7 +2,6 @@
 // the screens in game.js work the same as with a LocalSession.
 import { step, launch, launchAngle, settleAim, slopeAngle } from "./physics.js";
 import { MAPS } from "./maps.js";
-import { CHARACTERS } from "./assets.js";
 import { Match, DIFFICULTIES, ammoOf } from "./match.js";
 import { advanceAnimation } from "./animation.js";
 import { PROTOCOL_VERSION } from "./play/protocol.js";
@@ -188,17 +187,6 @@ class RemoteMatch {
     this.keys.clear();
     this.session.send({ t: "cancel" });
   }
-  setLoadout({ character, weapon }) {
-    if (!this.playerCanAct || this.charging) return false;
-    const a = this.current;
-    if (character) {
-      a.skin = character;
-      a.name = CHARACTERS.find((c) => c.id === character).name;
-    }
-    if (weapon) a.weapon = weapon;
-    this.session.send({ t: "loadout", character, weapon });
-    return true;
-  }
   setAction(action) {
     if (!this.playerCanAct || this.charging) return false;
     if (action.shot) this.shotType = action.shot;
@@ -294,14 +282,12 @@ export class OnlineSession {
   setReady(value) {
     this.send({ t: "ready", value });
   }
-  // In a match the RemoteMatch sends the message itself, so only one goes out.
+  // Loadout is a lobby-only choice; the server ignores this once the match starts.
   setCharacter(id) {
-    if (this.state === "playing") this.match.setLoadout({ character: id });
-    else this.send({ t: "loadout", character: id });
+    this.send({ t: "loadout", character: id });
   }
   setWeapon(id) {
-    if (this.state === "playing") this.match.setLoadout({ weapon: id });
-    else this.send({ t: "loadout", weapon: id });
+    this.send({ t: "loadout", weapon: id });
   }
   setSetup(setup) {
     this.send({ t: "setup", ...setup });

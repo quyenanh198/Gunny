@@ -285,12 +285,11 @@ export class Room {
         if (this.state !== "lobby") return false;
         client.ready = !!msg.value;
         break;
-      case "loadout": {
+      case "loadout":
+        if (this.state !== "lobby") return false;
         if (msg.character && CHARACTERS.some((c) => c.id === msg.character)) client.character = msg.character;
         if (msg.weapon && WEAPONS.some((w) => w.id === msg.weapon)) client.weapon = msg.weapon;
-        if (mine) m.setLoadout({ character: msg.character, weapon: msg.weapon });
         break;
-      }
       case "setup":
         if (!client.host || this.state !== "lobby") return false;
         if (msg.map && MAPS.some((x) => x.id === msg.map)) this.map = msg.map;

@@ -106,6 +106,9 @@ const assert = require("node:assert/strict");
     assert.match(await page.locator("#mapName").innerText(), /death valley/i);
     assert.equal(await page.locator("#health0").innerText(), "100 / 100 HP");
     // A match must fit the window at any height: no page scrolling, ever.
+    // "Fits" is checked against the real browser window (innerWidth/innerHeight),
+    // never against any element's own box size — a button's border or padding
+    // must never be mistaken for what the arena is fitting itself against.
     const fits = () =>
       page.evaluate(() => {
         const doc = document.documentElement;
@@ -114,7 +117,11 @@ const assert = require("node:assert/strict");
           overflowY: doc.scrollHeight - innerHeight,
           overflowX: doc.scrollWidth - innerWidth,
           ratio: frame.width / frame.height,
-          visible: frame.top >= 0 && frame.bottom <= innerHeight + 1,
+          visible:
+            frame.top >= 0 &&
+            frame.left >= 0 &&
+            frame.bottom <= innerHeight + 1 &&
+            frame.right <= innerWidth + 1,
         };
       });
     for (const [w, h] of [
