@@ -13,14 +13,15 @@ export class RoomManager {
 
   newCode() {
     let code = "";
-    for (let i = 0; i < 4; i++) code += "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random() * 24)];
+    for (let i = 0; i < 6; i++) code += "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random() * 24)];
     return this.rooms.has(code) ? this.newCode() : code;
   }
 
-  getOrCreate(wanted) {
-    const id = wanted && this.rooms.has(wanted) ? wanted : wanted || this.newCode();
-    if (!this.rooms.has(id)) this.rooms.set(id, new Room(id, (roomId) => this.rooms.delete(roomId)));
-    return this.rooms.get(id);
+  create(visibility = "private") {
+    const id = this.newCode();
+    const room = new Room(id, (roomId) => this.rooms.delete(roomId), visibility);
+    this.rooms.set(id, room);
+    return room;
   }
 
   get(id) {
@@ -29,7 +30,7 @@ export class RoomManager {
 
   quickJoin() {
     return [...this.rooms.values()].find((room) =>
-      room.state === "lobby" && [...room.clients].filter((client) => client.connected && client.team !== null).length < 6,
+      room.visibility === "public" && room.state === "lobby" && room.canJoin("player"),
     ) || null;
   }
 
@@ -56,10 +57,11 @@ export class RoomManager {
   }
 
   list() {
-    return [...this.rooms.values()].map((room) => ({
+    return [...this.rooms.values()].filter((room) => room.visibility === "public").map((room) => ({
       id: room.id,
       state: room.state,
-      players: room.clients.size,
+      players: [...room.clients].filter((client) => client.role === "player").length,
+      spectators: room.spectatorCount(),
       teams: [room.teamSize(0), room.teamSize(1)],
       map: room.map,
     }));

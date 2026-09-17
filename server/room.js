@@ -8,11 +8,13 @@ const SNAPSHOT_MS = 50;
 const EMPTY_ROOM_TTL_MS = 60000;
 const IDLE_SEAT_S = 30;
 const RECONNECT_GRACE_MS = 30000;
+const MAX_SPECTATORS = 6;
 
 export class Room {
-  constructor(id, onClose) {
+  constructor(id, onClose, visibility = "private") {
     this.onClose = onClose;
     this.id = id;
+    this.visibility = visibility === "public" ? "public" : "private";
     this.clients = new Set();
     this.state = "lobby";
     this.match = null;
@@ -47,6 +49,14 @@ export class Room {
   }
   teamSize(team) {
     return this.teamPlayers(team).length + this.bots[team];
+  }
+  spectatorCount() {
+    return [...this.clients].filter((client) => client.role === "spectator").length;
+  }
+  canJoin(role = "player") {
+    if (role === "spectator") return this.spectatorCount() < MAX_SPECTATORS;
+    if (this.state !== "lobby") return false;
+    return this.teamPlayers(0).length + this.teamPlayers(1).length < MAX_TEAM * 2;
   }
   get canStart() {
     const seated = [...this.clients].filter((c) => c.team !== null);
@@ -168,6 +178,7 @@ export class Room {
         character: c.character,
         weapon: c.weapon,
         connected: c.connected,
+        role: c.role,
       })),
       you: {
         id: client.id,
@@ -177,6 +188,7 @@ export class Room {
         character: client.character,
         weapon: client.weapon,
         player: this.state === "playing" ? this.order.indexOf(client) + 1 || null : null,
+        role: client.role,
       },
     };
     if (this.state === "playing") {
@@ -234,14 +246,19 @@ export class Room {
       c.ws.send(payload);
     }
   }
-  join(client) {
+  join(client, role = "player") {
+    if (!this.canJoin(role)) return false;
+    client.role = role;
     this.clients.add(client);
     this.roomVersion++;
     this.emptySince = Infinity;
     // Fill the emptier team so a fresh player can act right away.
-    client.team = this.state === "lobby" ? (this.teamPlayers(0).length <= this.teamPlayers(1).length ? 0 : 1) : null;
+    client.team = role === "player"
+      ? (this.teamPlayers(0).length <= this.teamPlayers(1).length ? 0 : 1)
+      : null;
     this.promoteHost();
     this.broadcast();
+    return true;
   }
   reconnect(token, ws) {
     const client = [...this.clients].find((candidate) => candidate.reconnectToken === token && !candidate.connected);
@@ -282,6 +299,8 @@ export class Room {
     switch (msg.t) {
       case "team":
         if (this.state !== "lobby") return false;
+        if (client.role !== "player") return false;
+        if (msg.team !== null && msg.team !== client.team && this.teamPlayers(msg.team).length >= MAX_TEAM) return false;
         client.team = [0, 1].includes(msg.team) ? msg.team : null;
         client.ready = client.host;
         break;

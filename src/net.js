@@ -17,6 +17,9 @@ const ERROR_MESSAGES = {
   MESSAGE_TOO_LARGE: "Tin nhắn vượt quá giới hạn.",
   RATE_LIMITED: "Bạn thao tác quá nhanh. Hãy thử lại.",
   RECONNECT_EXPIRED: "Phiên kết nối lại đã hết hạn.",
+  ROOM_NOT_FOUND: "Phòng không tồn tại hoặc đã đóng.",
+  ROOM_FULL: "Phòng đã đủ người chơi.",
+  SPECTATOR_FULL: "Phòng đã đủ khán giả.",
 };
 
 // A read-only view of the server's Match, smoothed between snapshots.
@@ -197,7 +200,7 @@ class RemoteMatch {
 }
 
 export class OnlineSession {
-  constructor({ room, name, onUpdate = () => {} }) {
+  constructor({ room, name, mode = "join", visibility = "private", onUpdate = () => {} }) {
     this.online = true;
     this.id = room || "";
     this.state = "connecting";
@@ -211,6 +214,8 @@ export class OnlineSession {
     this.you = { id: 0, host: false, team: null, ready: false, character: "mochi", weapon: "carrot", player: null };
     this.error = "";
     this.name = name || "";
+    this.mode = mode;
+    this.visibility = visibility;
     this.clientSeq = 0;
     this.lastAckSeq = 0;
     this.serverTick = 0;
@@ -226,6 +231,8 @@ export class OnlineSession {
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     url.searchParams.set("room", this.id);
     url.searchParams.set("name", this.name);
+    url.searchParams.set("mode", this.reconnectToken ? "join" : this.mode);
+    if (this.mode === "create") url.searchParams.set("visibility", this.visibility);
     if (this.reconnectToken) url.searchParams.set("reconnectToken", this.reconnectToken);
     this.ws = new WebSocket(url);
     this.ws.onmessage = (event) => this.receive(JSON.parse(event.data));

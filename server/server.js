@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { randomUUID } from "node:crypto";
 import { RoomManager } from "./room-manager.js";
-import { connectionParams, parseMessage } from "./validation.js";
+import { connectionParams, originAllowed, parseMessage } from "./validation.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -46,7 +46,7 @@ async function serveStatic(req, res) {
   }
 }
 
-export function createServer() {
+export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").filter(Boolean) } = {}) {
   const server = http.createServer((req, res) => {
     if (req.url === "/healthz") {
       res.writeHead(200, { "content-type": "text/plain" }).end("ok");
@@ -78,7 +78,11 @@ export function createServer() {
     }
     serveStatic(req, res);
   });
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  const wss = new WebSocketServer({
+    server,
+    path: "/ws",
+    verifyClient: ({ req }, done) => done(originAllowed(req, allowedOrigins), 403, "origin rejected"),
+  });
   wss.on("connection", (ws, req) => {
     const params = connectionParams(req.url);
     const existing = params.room && params.reconnectToken
@@ -89,8 +93,19 @@ export function createServer() {
       ws.close(1008, "reconnect expired");
       return;
     }
-    // An unknown or empty code opens a new room, so an invite link always works.
-    const room = existing ? roomManager.get(params.room) : roomManager.getOrCreate(params.room);
+    let room = roomManager.get(params.room);
+    if (!room && params.mode === "create") room = roomManager.create(params.visibility);
+    if (!room) {
+      ws.send(JSON.stringify({ t: "error", code: "ROOM_NOT_FOUND" }));
+      ws.close(1008, "room not found");
+      return;
+    }
+    const role = params.mode === "spectate" ? "spectator" : "player";
+    if (!existing && !room.canJoin(role)) {
+      ws.send(JSON.stringify({ t: "error", code: role === "spectator" ? "SPECTATOR_FULL" : "ROOM_FULL" }));
+      ws.close(1008, "room full");
+      return;
+    }
     const client = existing || {
       id: nextClientId++,
       ws,
@@ -107,8 +122,9 @@ export function createServer() {
       weapon: "carrot",
       name: params.name,
       terrainVersion: -1,
+      role,
     };
-    if (!existing) room.join(client);
+    if (!existing) room.join(client, role);
     ws.on("message", (data) => {
       const now = Date.now();
       if (now - client.rateWindow >= 1000) {

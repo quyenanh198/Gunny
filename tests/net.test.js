@@ -23,7 +23,8 @@ test("online session versions and sequences input, then enters reconnecting stat
   globalThis.location = new URL("http://localhost/");
   globalThis.WebSocket = FakeWebSocket;
   const { OnlineSession } = await import("../src/net.js");
-  const session = new OnlineSession({ room: "ABCD", name: "An" });
+  const session = new OnlineSession({ room: "ABCDEF", name: "An" });
+  assert.match(String(session.ws.url), /mode=join/);
   session.send({ t: "ready", value: true });
   assert.deepEqual(session.ws.sent[0], {
     protocolVersion: PROTOCOL_VERSION,
