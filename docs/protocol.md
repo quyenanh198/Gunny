@@ -2,6 +2,8 @@
 
 Production WebSocket authentication uses the opaque `gunny_session` cookie (`HttpOnly`, `SameSite=Strict`, and `Secure` on HTTPS). The browser bootstraps it through `POST /api/sessions/guest`; bearer tokens remain available for explicit API/cross-device clients and never appear in the WebSocket URL.
 
+Matchmade rooms are identity-reserved and return `NOT_RESERVED` to other players or `SPECTATOR_DISABLED` to spectators. Resume requires both the rotating reconnect credential and the same persistent user identity in production.
+
 Endpoint mở socket:
 
 ```text

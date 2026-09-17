@@ -24,6 +24,7 @@ export class Room {
     this.reservedUserIds = new Set();
     this.reservedTeams = new Map();
     this.expectedPlayerCount = 0;
+    this.allowSpectators = true;
     this.state = "lobby";
     this.match = null;
     this.order = [];
@@ -64,7 +65,7 @@ export class Room {
     return [...this.clients].filter((client) => client.role === "spectator").length;
   }
   canJoin(role = "player") {
-    if (role === "spectator") return this.spectatorCount() < MAX_SPECTATORS;
+    if (role === "spectator") return this.allowSpectators && this.spectatorCount() < MAX_SPECTATORS;
     if (this.state !== "lobby") return false;
     return this.teamPlayers(0).length + this.teamPlayers(1).length < MAX_TEAM * 2;
   }
@@ -135,10 +136,12 @@ export class Room {
     const participants = this.order.filter((client) => client.userId).map((client) => ({
       userId: client.userId,
       outcome: status === "abandoned" ? "abandoned" : winner === null ? "draw" : client.team === winner ? "win" : "loss",
-      disconnected: !client.connected,
+      disconnected: !!client.leftMatch || !client.connected,
     }));
     const result = { id: record.id, resultKey: `match:${record.id}`, status, endedAt: new Date(),
-      summary: { map: this.map, rounds: this.match.round, winnerTeam: winner }, participants };
+      summary: { map: this.map, rounds: this.match.round, winnerTeam: winner,
+        leavers: participants.filter((participant) => participant.disconnected).map((participant) => participant.userId) },
+      participants };
     record.finish = record.begin.then((begun) => begun.applied
       ? this.matchLifecycle.completeMatch(result) : { applied: false }).catch((error) => {
       console.error(JSON.stringify({ event: "match_complete_failed", roomId: this.id, message: error.message }));
@@ -178,8 +181,14 @@ export class Room {
           this.idleSeat += DT;
           if (this.idleSeat > IDLE_SEAT_S) {
             this.idleSeat = 0;
+            const idleClient = this.clientOfSeat(m.current.player);
+            idleClient.afkTurns = (idleClient.afkTurns || 0) + 1;
             m.cancelCharge();
-            m.nextTurn();
+            if (idleClient.afkTurns >= 2) {
+              m.current.hp = 0;
+              idleClient.leftMatch = true;
+              m.checkWinner();
+            } else m.nextTurn();
           }
         } else this.idleSeat = 0;
         m.update(DT);
@@ -344,6 +353,7 @@ export class Room {
     this.broadcast();
   }
   remove(client) {
+    if (this.state === "playing" && client.role === "player") client.leftMatch = true;
     this.clients.delete(client);
     client.host = false;
     this.promoteHost();

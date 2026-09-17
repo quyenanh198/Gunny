@@ -24,6 +24,7 @@ test("queue matches exact mode, region, team size and protocol", () => {
   assert.equal(queue.enqueue("u3", request()).status, "matched");
   assert.equal(queue.status("u1").roomId, queue.status("u3").roomId);
   assert.deepEqual(new Set(rooms.created[0].reservedUserIds), new Set(["u1", "u3"]));
+  assert.equal(rooms.created[0].allowSpectators, false);
 });
 
 test("queue widens region only after the controlled timeout", () => {

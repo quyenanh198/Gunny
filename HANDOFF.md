@@ -503,6 +503,23 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 - R3C presence/reconnect routing, spectator policy và leaver/AFK consistency.
 - R3D mute/block/report, profanity/chat retention và admin review queue.
 
+## M20 — R3C presence, reconnect và leaver policy
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Presence theo identity với route room và state online/queued/matched/lobby/playing/spectating/reconnecting/offline.
+- Queue, room join, command transition, disconnect và resume đều cập nhật presence; reconnect route hết hạn cùng grace 30 giây.
+- Matchmade room tắt spectator; direct room vẫn giữ policy tối đa 6 spectator.
+- Player bị remove sau grace mang cờ leaver sticky; reconnect không xóa được disconnect outcome trong settlement.
+- Hai turn AFK do mất kết nối sẽ forfeit actor, đánh dấu leaver và để authoritative engine chốt winner bình thường.
+- Match summary lưu danh sách leaver; API presence được xác thực và chỉ trả state của chính user.
+
+### Phạm vi R3 còn lại
+
+- R3D mute/block/report, profanity/chat retention và admin review queue; đây là phần cuối trước khi đóng R3.
+
 ## M19 — R3B party và team-atomic matchmaking
 
 Trạng thái: **đã triển khai và verify local; chờ CI/merge**.

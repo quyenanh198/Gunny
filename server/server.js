@@ -16,6 +16,7 @@ import { PostgresIdentityStore } from "./identity-store.js";
 import { createPool, migrate } from "./database.js";
 import { MatchmakingQueue } from "./matchmaking.js";
 import { PartyService } from "./party.js";
+import { PresenceService } from "./presence.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -92,7 +93,8 @@ export function createServer({
   requireRealtimeIdentity = false,
 } = {}) {
   const roomManager = new RoomManager({ matchLifecycle: identityStore });
-  const matchmaking = new MatchmakingQueue(roomManager);
+  const presence = new PresenceService();
+  const matchmaking = new MatchmakingQueue(roomManager, { presence });
   const parties = new PartyService();
   const ipOptions = { trustProxy, trustedProxies };
   const activeByIp = new Map();
@@ -160,6 +162,11 @@ export function createServer({
       const queued = party ? matchmaking.enqueueGroup(session.user.id,
         party.members.map((member) => member.userId), body) : matchmaking.enqueue(session.user.id, body);
       return queued.error ? sendJson(res, 400, queued) : sendJson(res, 202, queued);
+    }
+    if (req.url === "/api/presence" && req.method === "GET") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      return session ? sendJson(res, 200, presence.get(session.user.id))
+        : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
     if (req.url === "/api/matchmaking/status" && req.method === "GET") {
       const session = await identityStore.authenticate(requestCredential(req));
@@ -280,6 +287,11 @@ export function createServer({
     },
   });
   const sendError = (ws, code, message = {}) => ws.send(JSON.stringify({ t: "error", code, ...message }));
+  const syncPresence = (room) => {
+    for (const member of room.clients) if (member.userId && member.connected)
+      presence.set(member.userId, member.role === "spectator" ? "spectating" : room.state,
+        { roomId: room.id, role: member.role });
+  };
   const activate = (ws, room, client) => {
     ws.on("message", (data) => {
       const now = Date.now();
@@ -311,8 +323,13 @@ export function createServer({
         return;
       }
       ws.send(JSON.stringify({ t: "ack", requestId: message.requestId, clientSeq: message.clientSeq }));
+      syncPresence(room);
     });
-    ws.on("close", () => room.disconnect(client));
+    ws.on("close", () => {
+      room.disconnect(client);
+      presence.set(client.userId, "reconnecting", { roomId: room.id, role: client.role,
+        reconnectUntil: Date.now() + 30000 });
+    });
   };
   wss.on("connection", async (ws, req) => {
     let identity;
@@ -328,6 +345,7 @@ export function createServer({
       ws.close(1008, "authentication required");
       return;
     }
+    if (identity) presence.set(identity.user.id, "online");
     const params = connectionParams(req.url);
     const ip = clientIp(req, ipOptions);
     activeByIp.set(ip, (activeByIp.get(ip) || 0) + 1);
@@ -363,6 +381,7 @@ export function createServer({
           return;
         }
         activate(ws, room, client);
+        syncPresence(room);
       });
       return;
     }
@@ -392,7 +411,8 @@ export function createServer({
       return;
     }
     if (!room.canJoin(role)) {
-      ws.send(JSON.stringify({ t: "error", code: role === "spectator" ? "SPECTATOR_FULL" : "ROOM_FULL" }));
+      ws.send(JSON.stringify({ t: "error", code: role === "spectator"
+        ? (room.allowSpectators ? "SPECTATOR_FULL" : "SPECTATOR_DISABLED") : "ROOM_FULL" }));
       ws.close(1008, "room full");
       return;
     }
@@ -405,6 +425,8 @@ export function createServer({
       lastAckSeq: 0,
       rateWindow: Date.now(),
       rateCount: 0,
+      afkTurns: 0,
+      leftMatch: false,
       team: null,
       ready: false,
       host: false,
@@ -417,6 +439,7 @@ export function createServer({
     };
     room.join(client, role, room.reservedTeams.get(client.userId));
     activate(ws, room, client);
+    syncPresence(room);
   });
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {
@@ -438,6 +461,7 @@ export function createServer({
   server.roomManager = roomManager;
   server.matchmaking = matchmaking;
   server.parties = parties;
+  server.presence = presence;
   return server;
 }
 
