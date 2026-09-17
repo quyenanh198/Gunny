@@ -9,6 +9,7 @@ import { WebSocketServer } from "ws";
 import { randomUUID } from "node:crypto";
 import { RoomManager } from "./room-manager.js";
 import { connectionParams, originAllowed, parseMessage } from "./validation.js";
+import { validateResumeMessage } from "../src/play/protocol.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -83,14 +84,71 @@ export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || 
     path: "/ws",
     verifyClient: ({ req }, done) => done(originAllowed(req, allowedOrigins), 403, "origin rejected"),
   });
+  const sendError = (ws, code, message = {}) => ws.send(JSON.stringify({ t: "error", code, ...message }));
+  const activate = (ws, room, client) => {
+    ws.on("message", (data) => {
+      const now = Date.now();
+      if (now - client.rateWindow >= 1000) {
+        client.rateWindow = now;
+        client.rateCount = 0;
+      }
+      if (++client.rateCount > 60) {
+        sendError(ws, "RATE_LIMITED");
+        return;
+      }
+      const parsed = parseMessage(data);
+      if (parsed.error) {
+        sendError(ws, parsed.error);
+        return;
+      }
+      const message = parsed.message;
+      if (message.clientSeq <= client.lastAckSeq) {
+        room.rejectedMessages++;
+        sendError(ws, "STALE_SEQUENCE", { requestId: message.requestId, clientSeq: message.clientSeq });
+        return;
+      }
+      const previousAck = client.lastAckSeq;
+      client.lastAckSeq = message.clientSeq;
+      if (!room.handle(client, message)) {
+        client.lastAckSeq = previousAck;
+        room.rejectedMessages++;
+        sendError(ws, "COMMAND_REJECTED", { requestId: message.requestId, clientSeq: message.clientSeq });
+        return;
+      }
+      ws.send(JSON.stringify({ t: "ack", requestId: message.requestId, clientSeq: message.clientSeq }));
+    });
+    ws.on("close", () => room.disconnect(client));
+  };
   wss.on("connection", (ws, req) => {
     const params = connectionParams(req.url);
-    const existing = params.room && params.reconnectToken
-      ? roomManager.get(params.room)?.reconnect(params.reconnectToken, ws)
-      : null;
-    if (params.reconnectToken && !existing) {
-      ws.send(JSON.stringify({ t: "error", code: "RECONNECT_EXPIRED" }));
-      ws.close(1008, "reconnect expired");
+    ws.isAlive = true;
+    ws.on("pong", () => (ws.isAlive = true));
+    if (params.mode === "resume") {
+      const timer = setTimeout(() => {
+        sendError(ws, "RESUME_TIMEOUT");
+        ws.close(1008, "resume timeout");
+      }, 5000);
+      timer.unref();
+      ws.once("message", (data) => {
+        clearTimeout(timer);
+        let message;
+        try { message = JSON.parse(data.toString()); }
+        catch { sendError(ws, "INVALID_JSON"); ws.close(1008, "invalid resume"); return; }
+        const validation = validateResumeMessage(message);
+        if (!validation.ok || message.room !== params.room) {
+          sendError(ws, validation.code || "INVALID_PAYLOAD");
+          ws.close(1008, "invalid resume");
+          return;
+        }
+        const room = roomManager.get(message.room);
+        const client = room?.reconnect(message.reconnectToken, ws, randomUUID());
+        if (!client) {
+          sendError(ws, "RECONNECT_EXPIRED");
+          ws.close(1008, "reconnect expired");
+          return;
+        }
+        activate(ws, room, client);
+      });
       return;
     }
     let room = roomManager.get(params.room);
@@ -101,12 +159,12 @@ export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || 
       return;
     }
     const role = params.mode === "spectate" ? "spectator" : "player";
-    if (!existing && !room.canJoin(role)) {
+    if (!room.canJoin(role)) {
       ws.send(JSON.stringify({ t: "error", code: role === "spectator" ? "SPECTATOR_FULL" : "ROOM_FULL" }));
       ws.close(1008, "room full");
       return;
     }
-    const client = existing || {
+    const client = {
       id: nextClientId++,
       ws,
       connected: true,
@@ -124,27 +182,8 @@ export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || 
       terrainVersion: -1,
       role,
     };
-    if (!existing) room.join(client, role);
-    ws.on("message", (data) => {
-      const now = Date.now();
-      if (now - client.rateWindow >= 1000) {
-        client.rateWindow = now;
-        client.rateCount = 0;
-      }
-      if (++client.rateCount > 60) {
-        ws.send(JSON.stringify({ t: "error", code: "RATE_LIMITED" }));
-        return;
-      }
-      const parsed = parseMessage(data);
-      if (parsed.error) {
-        ws.send(JSON.stringify({ t: "error", code: parsed.error }));
-        return;
-      }
-      room.handle(client, parsed.message);
-    });
-    ws.on("close", () => room.disconnect(client));
-    ws.isAlive = true;
-    ws.on("pong", () => (ws.isAlive = true));
+    room.join(client, role);
+    activate(ws, room, client);
   });
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {

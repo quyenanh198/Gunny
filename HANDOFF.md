@@ -327,3 +327,30 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 
 - R1B: đưa reconnect credential ra khỏi URL; handshake/auth timeout; accepted ack/error và sequence semantics.
 - R1C: IP/handshake/room-create quota, snapshot backpressure, slow-consumer policy và chaos/fuzz tests.
+
+## M11 — R1B session credential và command acknowledgement
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Nâng protocol lên v2; mọi command có `requestId` và `clientSeq`.
+- Server gửi `ack` cho command được chấp nhận và `error` kèm request/sequence cho command bị từ chối.
+- Authorization/phase failure không consume sequence; duplicate/out-of-order trả `STALE_SEQUENCE`.
+- Reconnect token không còn nằm trong WebSocket URL; client gửi token trong resume frame đầu tiên.
+- Resume frame phải đến trong 5 giây, khớp protocol/room/token và không chứa field lạ.
+- Reconnect thành công rotate token trước full snapshot; token cũ không replay được.
+- Client theo dõi pending request theo request ID và đóng pending khi nhận ack/error.
+- Viết lại `docs/protocol.md` theo contract v2.
+
+### Xác minh local
+
+- `npm run verify` — đạt.
+- Node test — 80/80 đạt.
+- Browser smoke — đạt toàn bộ.
+- `npm audit --audit-level=high` — 0 vulnerability.
+- Test mới chứng minh token không xuất hiện trong URL, token rotate/replay fail, rejected sequence được tái sử dụng và accepted command có ack.
+
+### Phạm vi R1 còn lại
+
+- R1C: quota theo IP/handshake/room creation, trusted proxy policy, outbound snapshot backpressure, slow-consumer close code và network chaos/fuzz coverage.

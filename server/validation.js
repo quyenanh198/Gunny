@@ -3,8 +3,7 @@ export function connectionParams(url) {
   return {
     room: (params.get("room") || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6),
     name: (params.get("name") || "Khách").slice(0, 16).trim() || "Khách",
-    reconnectToken: (params.get("reconnectToken") || "").slice(0, 64),
-    mode: ["create", "join", "spectate"].includes(params.get("mode")) ? params.get("mode") : "join",
+    mode: ["create", "join", "spectate", "resume"].includes(params.get("mode")) ? params.get("mode") : "join",
     visibility: params.get("visibility") === "public" ? "public" : "private",
   };
 }
