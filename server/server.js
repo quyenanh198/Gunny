@@ -25,8 +25,6 @@ const TYPES = {
   ".json": "application/json",
   ".md": "text/plain; charset=utf-8",
 };
-const roomManager = new RoomManager();
-export const rooms = roomManager.rooms;
 let nextClientId = 1;
 
 const bearerToken = (req) => {
@@ -46,10 +44,17 @@ async function jsonBody(req, limit = 2048) {
   catch { throw Object.assign(new Error("invalid json"), { status: 400 }); }
 }
 
-const sendJson = (res, status, value) => {
-  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
+const sendJson = (res, status, value, headers = {}) => {
+  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...headers });
   res.end(JSON.stringify(value));
 };
+const sessionCookie = (value) => `gunny_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
+const cookieSession = (req) => {
+  const item = (req.headers.cookie || "").split(";").map((part) => part.trim())
+    .find((part) => part.startsWith("gunny_session="));
+  return item ? item.slice("gunny_session=".length) : "";
+};
+const requestCredential = (req) => bearerToken(req) || cookieSession(req);
 
 async function serveStatic(req, res) {
   let file = decodeURIComponent(new URL(req.url, "http://x").pathname);
@@ -82,7 +87,9 @@ export function createServer({
   httpRequestsPerMinute = Number(process.env.HTTP_REQUESTS_PER_MINUTE || 240),
   metricsToken = process.env.METRICS_TOKEN || "",
   identityStore = new MemoryIdentityStore(),
+  requireRealtimeIdentity = false,
 } = {}) {
+  const roomManager = new RoomManager();
   const ipOptions = { trustProxy, trustedProxies };
   const activeByIp = new Map();
   const handshakeLimiter = new FixedWindowLimiter({ limit: handshakesPerMinute, windowMs: 60000 });
@@ -107,14 +114,16 @@ export function createServer({
       const body = await jsonBody(req);
       const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "Guest";
       if (!displayName || displayName.length > 24) return sendJson(res, 400, { error: "INVALID_DISPLAY_NAME" });
-      return sendJson(res, 201, await identityStore.createGuest(displayName));
+      const session = await identityStore.createGuest(displayName);
+      return sendJson(res, 201, session, { "set-cookie": sessionCookie(session.token) });
     }
     if (req.url === "/api/sessions/rotate" && req.method === "POST") {
-      const session = await identityStore.rotate(bearerToken(req));
-      return session ? sendJson(res, 200, session) : sendJson(res, 401, { error: "INVALID_SESSION" });
+      const session = await identityStore.rotate(requestCredential(req));
+      return session ? sendJson(res, 200, session, { "set-cookie": sessionCookie(session.token) })
+        : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
     if (req.url === "/api/profile" && req.method === "GET") {
-      const session = await identityStore.authenticate(bearerToken(req));
+      const session = await identityStore.authenticate(requestCredential(req));
       return session ? sendJson(res, 200, { user: session.user, profile: session.profile })
         : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
@@ -123,7 +132,7 @@ export function createServer({
       const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
       if (!displayName || displayName.length > 24 || !Number.isInteger(body.expectedVersion) || body.expectedVersion < 1)
         return sendJson(res, 400, { error: "INVALID_PROFILE" });
-      const credential = bearerToken(req);
+      const credential = requestCredential(req);
       if (!await identityStore.authenticate(credential)) return sendJson(res, 401, { error: "INVALID_SESSION" });
       const profile = await identityStore.updateProfile(credential, {
         displayName, expectedVersion: body.expectedVersion,
@@ -132,25 +141,27 @@ export function createServer({
         : sendJson(res, 409, { error: "PROFILE_VERSION_CONFLICT" });
     }
     if (req.url === "/api/matches" && req.method === "GET") {
-      const credential = bearerToken(req);
+      const credential = requestCredential(req);
       const session = await identityStore.authenticate(credential);
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       return sendJson(res, 200, { matches: await identityStore.listMatches(credential) });
     }
     if (req.url === "/api/privacy/consent" && req.method === "POST") {
-      const consentedAt = await identityStore.recordConsent(bearerToken(req));
+      const consentedAt = await identityStore.recordConsent(requestCredential(req));
       return consentedAt ? sendJson(res, 200, { consentedAt }) : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
     if (req.url === "/api/privacy/export" && req.method === "GET") {
-      const data = await identityStore.exportUser(bearerToken(req));
+      const data = await identityStore.exportUser(requestCredential(req));
       return data ? sendJson(res, 200, data) : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
     if (req.url === "/api/session" && req.method === "DELETE") {
-      return await identityStore.revoke(bearerToken(req)) ? sendJson(res, 204, null)
+      return await identityStore.revoke(requestCredential(req)) ? sendJson(res, 204, null,
+        { "set-cookie": "gunny_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" })
         : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
     if (req.url === "/api/account" && req.method === "DELETE") {
-      return await identityStore.deleteUser(bearerToken(req)) ? sendJson(res, 204, null)
+      return await identityStore.deleteUser(requestCredential(req)) ? sendJson(res, 204, null,
+        { "set-cookie": "gunny_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" })
         : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
     if (req.url === "/api/quick-join") {
@@ -231,7 +242,13 @@ export function createServer({
     });
     ws.on("close", () => room.disconnect(client));
   };
-  wss.on("connection", (ws, req) => {
+  wss.on("connection", async (ws, req) => {
+    const identity = await identityStore.authenticate(cookieSession(req));
+    if (requireRealtimeIdentity && !identity) {
+      sendError(ws, "AUTH_REQUIRED");
+      ws.close(1008, "authentication required");
+      return;
+    }
     const params = connectionParams(req.url);
     const ip = clientIp(req, ipOptions);
     activeByIp.set(ip, (activeByIp.get(ip) || 0) + 1);
@@ -305,6 +322,7 @@ export function createServer({
       character: "mochi",
       weapon: "carrot",
       name: params.name,
+      userId: identity?.user.id || null,
       terrainVersion: -1,
       role,
     };
@@ -328,6 +346,7 @@ export function createServer({
     server.closeAllConnections();
     server.close();
   };
+  server.roomManager = roomManager;
   return server;
 }
 
@@ -346,7 +365,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.warn(JSON.stringify({ event: "ephemeral_identity_store", warning: "identity is lost on restart" }));
     identityStore = new MemoryIdentityStore();
   }
-  const server = createServer({ identityStore });
+  const server = createServer({ identityStore, requireRealtimeIdentity: !!process.env.DATABASE_URL });
   server.listen(port, () => console.log(JSON.stringify({ event: "server_started", port })));
   for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, async () => {
     server.gracefulShutdown();

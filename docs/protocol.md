@@ -1,5 +1,7 @@
 # Protocol WebSocket v2
 
+Production WebSocket authentication uses the opaque `gunny_session` cookie (`HttpOnly`, `SameSite=Strict`, and `Secure` on HTTPS). The browser bootstraps it through `POST /api/sessions/guest`; bearer tokens remain available for explicit API/cross-device clients and never appear in the WebSocket URL.
+
 Endpoint mở socket:
 
 ```text

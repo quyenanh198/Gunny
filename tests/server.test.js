@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "../server/server.js";
 import { PROTOCOL_VERSION } from "../src/play/protocol.js";
 import WebSocketClient from "ws";
+import { MemoryIdentityStore } from "../server/memory-identity-store.js";
 
 const listen = (options) =>
   new Promise((resolve) => {
@@ -337,6 +338,31 @@ test("production metrics fail closed without a bearer secret", async () => {
   } finally {
     if (previous === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previous;
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("realtime identity rejects anonymous sockets and binds an authenticated user", async () => {
+  const identityStore = new MemoryIdentityStore();
+  const session = await identityStore.createGuest("Known Player");
+  const { server, port } = await listen({ identityStore, requireRealtimeIdentity: true });
+  try {
+    const anonymous = await connect(port, "mode=create&name=Anonymous");
+    assert.equal((await until(anonymous, (message) => message.t === "error")).code, "AUTH_REQUIRED");
+
+    const authenticated = await new Promise((resolve, reject) => {
+      const ws = new WebSocketClient(`ws://127.0.0.1:${port}/ws?mode=create&name=Known`, {
+        headers: { Cookie: `gunny_session=${session.token}` },
+      });
+      ws.once("error", reject);
+      ws.once("message", (data) => resolve({ ws, snapshot: JSON.parse(data.toString()) }));
+    });
+    assert.equal(authenticated.snapshot.you.host, true);
+    const bound = [...server.roomManager.rooms.values()].find((room) => room.host?.userId === session.user.id);
+    assert.ok(bound, "the authenticated identity is bound to its realtime player");
+    authenticated.ws.close();
+  } finally {
     server.closeAllConnections();
     server.close();
   }

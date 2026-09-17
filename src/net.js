@@ -234,6 +234,26 @@ export class OnlineSession {
     this.connect();
   }
   connect() {
+    if (typeof document !== "undefined") {
+      this.ensureIdentity().then(() => this.openSocket()).catch(() => {
+        this.state = "offline";
+        this.error = "Không thể tạo phiên người chơi.";
+        this.onUpdate(this);
+      });
+      return;
+    }
+    this.openSocket();
+  }
+  async ensureIdentity() {
+    const current = await fetch("/api/profile", { credentials: "same-origin" });
+    if (current.ok) return;
+    const created = await fetch("/api/sessions/guest", {
+      method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: this.name || "Guest" }),
+    });
+    if (!created.ok) throw new Error("identity bootstrap failed");
+  }
+  openSocket() {
     const url = new URL("/ws", location.href);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     url.searchParams.set("room", this.id);
