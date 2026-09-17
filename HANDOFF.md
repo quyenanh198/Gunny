@@ -1,5 +1,7 @@
 # Hand-off
 
+> Cập nhật 2026-09-17: M1–M7 bên dưới là lịch sử triển khai prototype. Các nhãn “sẵn sàng beta/staging” cũ không còn là kết luận phát hành. Kế hoạch hiện hành là **M8 — Product reset audit** và `ONLINE_GAME_ROADMAP.md` v2.
+
 ## M1 — Tách code, giữ nguyên hành vi
 
 Trạng thái: hoàn thành; đích tích hợp là nhánh `main`.
@@ -176,3 +178,123 @@ Trạng thái: đã merge vào nhánh `main`; M7 chờ benchmark trên máy đí
 ### Bước tiếp theo
 
 - Chạy load smoke trên Mac mini để chốt tick p95 và thêm UI mute chat trước khi tuyên bố hoàn tất tuyệt đối.
+
+## M8 — Product reset audit: từ room demo thành webgame online
+
+Trạng thái: **audit hoàn thành; chưa triển khai remediation**. Đây là hand-off đang có hiệu lực.
+
+### Vì sao phải reset
+
+M1–M7 đã tạo một combat/room prototype đáng giữ, nhưng thứ tự đầu tư bị lệch: gameplay, animation, map, item và responsive đi trước identity, persistence, matchmaking, moderation và release safety. Kết quả hiện tại chơi demo tốt nhưng chưa có vòng đời của một webgame online và chưa đủ điều kiện public beta.
+
+### Bằng chứng đã kiểm tra trên `main`
+
+- `server/server.js` tự serve static, API và WebSocket trong một process; comment đầu file xác nhận không database.
+- `server/room.js` giữ client, chat, history, reconnect token và match hoàn toàn trong RAM.
+- `src/game.js` chỉ lưu display name trong `localStorage`; không có account/player identity bền vững.
+- `/api/quick-join` gọi `RoomManager.quickJoin()`, chỉ lấy phòng lobby đầu tiên còn chỗ; chưa phải queue/matchmaking.
+- WebSocket nhận reconnect token từ query string; chưa có `Origin` allowlist.
+- Rate limit là counter 60 message/giây trên từng socket; chưa có handshake/IP/room-create limit.
+- `Room.handle("team")` chưa enforce capacity; direct join không có hard cap tổng client/seat.
+- `Room.broadcast()` gửi trực tiếp mà không kiểm tra `ws.bufferedAmount`.
+- `/readyz` luôn trả `ready: true`; `/metrics` và `/api/rooms` không có access control.
+- `game.js` 419 dòng, `match.js` 442 dòng, `room.js` 368 dòng và `net.js` 316 dòng; tuyên bố M1 hoàn tất cần hiểu là refactor bước đầu, chưa đạt ranh giới module mục tiêu.
+- Repository có 74 test khai báo, nhưng máy audit không có Node/npm nên chưa chạy lại suite; không được kế thừa con số pass cũ như bằng chứng mới.
+- Không tìm thấy CI workflow trong repository ở thời điểm audit.
+
+### Quyết định giữ, sửa và dừng
+
+Giữ:
+
+- Pure combat rules, fixed-step simulation, authoritative room match, snapshot buffer, responsive battle shell và test hiện có.
+- Vanilla JS hiện tại trong giai đoạn foundation; chưa có lý do đổi framework.
+
+Sửa:
+
+- Định nghĩa lại sản phẩm quanh loop identity → queue/party → match → settlement → progression.
+- Đổi roadmap sang R0–R8 trong `ONLINE_GAME_ROADMAP.md`; thu hồi nhãn beta/staging cũ.
+- Hardening protocol/room trước khi thêm account economy hoặc content.
+- Thêm PostgreSQL cho identity/profile/result; Redis chỉ khi chạy nhiều process thực sự cần.
+- Biến Quick Join thành matchmaking rõ mode/region/team/version.
+- Bổ sung moderation, admin, telemetry, SLO, CI và recovery trước public beta.
+
+Dừng/hoãn:
+
+- Không thêm map, nhân vật, vũ khí, animation hoặc item cho tới khi R0–R2 qua exit criteria.
+- Không làm rank/guild/season/shop/battle pass trước persistence và settlement idempotent.
+- Không tách microservice hoặc đổi framework trước khi modular monolith và baseline tải chứng minh cần thiết.
+
+### Backlog remediation ưu tiên
+
+P0 — Product và delivery baseline:
+
+1. Chốt product brief, beta slice, IP/name policy và capacity target.
+2. Thêm `npm run verify` portable, CI required checks và branch protection.
+3. Ghi benchmark có thể lặp lại: tick p50/p95/p99, event-loop lag, heap, snapshot bytes/s.
+
+P0 — Network/security:
+
+1. Tách create/join/spectate; bỏ hành vi room lạ tự động được tạo.
+2. Kiểm tra room/team capacity ở server boundary.
+3. Bỏ reconnect token khỏi URL; thêm origin allowlist và trusted-proxy policy.
+4. Thêm handshake/IP/rate/backpressure controls và error/ack có ngữ nghĩa.
+5. Viết chaos tests cho duplicate, reorder, loss, latency và reconnect race.
+
+P1 — Nền tảng sản phẩm:
+
+1. Guest identity, session rotation và account linking.
+2. PostgreSQL migrations cho profile, match và result settlement idempotent.
+3. Party/matchmaking/presence; sau đó mới tới MMR.
+4. Mute/block/report/ban và admin audit trail.
+
+P2 — Nội dung và kinh tế:
+
+1. Engine/content version per match, deterministic replay và checksum.
+2. Balance simulator trước khi mở rộng content.
+3. Cosmetic-first progression, inventory và currency ledger sau persistence.
+4. LiveOps/config rollout, kill switch và analytics funnel.
+
+### Hợp đồng cho người tiếp nhận
+
+- Bắt đầu tại R0, không tiếp tục “bước kế tiếp M5” trong hand-off cũ.
+- Mọi PR phải ghi rõ roadmap item, user outcome, threat/failure case và cách verify.
+- Không nâng trạng thái một milestone chỉ dựa trên code tồn tại; phải đạt exit criteria và có CI run/link hoặc benchmark artifact.
+- Khi code và tài liệu lệch nhau, cập nhật cả `ONLINE_GAME_ROADMAP.md` và mục M8 này trong cùng PR.
+- Thay đổi đầu tiên được khuyến nghị là một PR foundation nhỏ: product brief + verify/CI + protocol/room threat model; chưa đổi gameplay.
+
+### Rủi ro chưa được giải quyết
+
+- Pháp lý/IP của tên “Gunny” và mức độ tương đồng với game tham chiếu.
+- Chưa có quyết định audience/độ tuổi, privacy, monetization và fairness.
+- Chưa có capacity target nên chưa thể kết luận một process/Mac mini đủ hay không.
+- Chưa có Node/npm trong môi trường audit này; 74 test chỉ là số lượng khai báo, không phải kết quả chạy mới.
+
+## M9 — R0 product contract và delivery baseline
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Thay roadmap cũ bằng Product Reset v2 và chốt working product contract trong `PRODUCT_BRIEF.md`.
+- Ghi threat model cho browser/HTTP/WebSocket/room/match trong `docs/threat-model.md`.
+- Thêm feature flags có default an toàn; Quick Join và room chat có thể tắt ở deployment boundary.
+- Thay syntax check phụ thuộc Unix bằng `scripts/check-syntax.mjs` chạy được trên Windows/Linux.
+- Thêm `npm run verify`: syntax → unit/integration → khởi động server → browser smoke → shutdown.
+- Thêm GitHub Actions cho verify và baseline 30 client; baseline được upload làm artifact 30 ngày.
+- Thêm tick drift p50/p95/p99, heap metric và snapshot throughput report.
+- Nâng Playwright 1.55.0 lên 1.55.1 để xử lý security advisory của browser download.
+
+### Xác minh local 2026-09-17
+
+- `npm run verify` — đạt.
+- Syntax — 46 JavaScript files đạt.
+- `node --test` — 76/76 đạt.
+- Browser smoke — đạt: 27 assets, 5 maps, 80 animation frames, bốn viewport và fallback.
+- `npm audit --audit-level=high` — 0 vulnerability.
+- 30-client baseline — connect 73 ms; tick drift p50 9,33 ms, p95 12,33 ms, p99 23,33 ms; 263.606 snapshot bytes/s; heap 10.044.288 bytes.
+
+### Điều kiện merge
+
+- PR required checks `verify` và `baseline` phải xanh.
+- Sau merge, bật branch protection cho `main` với required status check và pull-request workflow.
+- R1 bắt đầu từ threat/invariant list; không thêm gameplay content trong PR kế tiếp.

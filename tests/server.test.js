@@ -205,6 +205,8 @@ test("quick join and production probes expose live room state", async () => {
     const metrics = await (await fetch(`http://127.0.0.1:${port}/metrics`)).text();
     assert.match(metrics, /gunny_active_connections [1-9]\d*/);
     assert.match(metrics, /gunny_rooms [1-9]\d*/);
+    assert.match(metrics, /gunny_tick_drift_p95 \d/);
+    assert.match(metrics, /gunny_heap_used_bytes [1-9]\d*/);
     client.ws.close();
   } finally {
     server.closeAllConnections();

@@ -10,10 +10,14 @@ import { bindResponsive } from "./ui/responsive.js";
 import { createScreenController } from "./ui/screens.js";
 import { LocalSession } from "./session.js";
 import { OnlineSession } from "./net.js";
+import { featureFlags } from "./content/feature-flags.js";
 
 const $ = (id) => document.getElementById(id),
   canvas = $("canvas"),
   ctx = canvas.getContext("2d");
+const features = featureFlags();
+$("quickJoin").hidden = !features.quickJoin;
+$("chatForm").hidden = !features.roomChat;
 const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 let reducedMotion = motionPreference.matches;
 motionPreference.addEventListener("change", (e) => (reducedMotion = e.matches));

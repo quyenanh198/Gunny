@@ -1,5 +1,11 @@
 import { Room } from "./room.js";
 
+export function percentile(values, fraction) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)];
+}
+
 export class RoomManager {
   constructor() {
     this.rooms = new Map();
@@ -29,10 +35,15 @@ export class RoomManager {
 
   metrics() {
     const rooms = [...this.rooms.values()];
+    const drift = rooms.flatMap((room) => room.tickDriftSamples);
     return {
       rooms: rooms.length,
       activeConnections: rooms.reduce((sum, room) => sum + [...room.clients].filter((client) => client.connected).length, 0),
       tickDrift: Math.max(0, ...rooms.map((room) => room.maxTickDrift)),
+      tickDriftP50: percentile(drift, 0.5),
+      tickDriftP95: percentile(drift, 0.95),
+      tickDriftP99: percentile(drift, 0.99),
+      heapUsedBytes: process.memoryUsage().heapUsed,
       snapshotBytes: rooms.reduce((sum, room) => sum + room.snapshotBytes, 0),
       rejectedMessages: rooms.reduce((sum, room) => sum + room.rejectedMessages, 0),
       reconnects: rooms.reduce((sum, room) => sum + room.reconnects, 0),
