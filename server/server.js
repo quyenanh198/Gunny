@@ -1,6 +1,6 @@
 // Gunny online server: serves the game and runs rooms. A room is a lobby until
 // the host starts it, then an authoritative Match ticking at the fixed step.
-// One Node process, no database. Run: npm start
+// One Node process with PostgreSQL-backed identity in production. Run: npm start
 import http from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -11,6 +11,9 @@ import { RoomManager } from "./room-manager.js";
 import { connectionParams, originAllowed, parseMessage } from "./validation.js";
 import { validateResumeMessage } from "../src/play/protocol.js";
 import { clientIp, FixedWindowLimiter } from "./rate-limiter.js";
+import { MemoryIdentityStore } from "./memory-identity-store.js";
+import { PostgresIdentityStore } from "./identity-store.js";
+import { createPool, migrate } from "./database.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -26,6 +29,27 @@ const roomManager = new RoomManager();
 export const rooms = roomManager.rooms;
 let nextClientId = 1;
 
+const bearerToken = (req) => {
+  const match = /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(req.headers.authorization || "");
+  return match?.[1] || "";
+};
+
+async function jsonBody(req, limit = 2048) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw Object.assign(new Error("body too large"), { status: 413 });
+    chunks.push(chunk);
+  }
+  try { return chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}; }
+  catch { throw Object.assign(new Error("invalid json"), { status: 400 }); }
+}
+
+const sendJson = (res, status, value) => {
+  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
+  res.end(JSON.stringify(value));
+};
 
 async function serveStatic(req, res) {
   let file = decodeURIComponent(new URL(req.url, "http://x").pathname);
@@ -57,13 +81,15 @@ export function createServer({
   roomCreatesPerMinute = Number(process.env.ROOM_CREATES_PER_MINUTE || 10),
   httpRequestsPerMinute = Number(process.env.HTTP_REQUESTS_PER_MINUTE || 240),
   metricsToken = process.env.METRICS_TOKEN || "",
+  identityStore = new MemoryIdentityStore(),
 } = {}) {
   const ipOptions = { trustProxy, trustedProxies };
   const activeByIp = new Map();
   const handshakeLimiter = new FixedWindowLimiter({ limit: handshakesPerMinute, windowMs: 60000 });
   const roomCreateLimiter = new FixedWindowLimiter({ limit: roomCreatesPerMinute, windowMs: 60000 });
   const httpLimiter = new FixedWindowLimiter({ limit: httpRequestsPerMinute, windowMs: 60000 });
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
+    try {
     if ((req.url.startsWith("/api/") || req.url === "/metrics") && !httpLimiter.take(clientIp(req, ipOptions))) {
       res.writeHead(429, { "content-type": "application/json", "retry-after": "60" });
       res.end(JSON.stringify({ error: "RATE_LIMITED" }));
@@ -76,6 +102,21 @@ export function createServer({
     if (req.url === "/readyz") {
       res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ready: true }));
       return;
+    }
+    if (req.url === "/api/sessions/guest" && req.method === "POST") {
+      const body = await jsonBody(req);
+      const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "Guest";
+      if (!displayName || displayName.length > 24) return sendJson(res, 400, { error: "INVALID_DISPLAY_NAME" });
+      return sendJson(res, 201, await identityStore.createGuest(displayName));
+    }
+    if (req.url === "/api/sessions/rotate" && req.method === "POST") {
+      const session = await identityStore.rotate(bearerToken(req));
+      return session ? sendJson(res, 200, session) : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/profile" && req.method === "GET") {
+      const session = await identityStore.authenticate(bearerToken(req));
+      return session ? sendJson(res, 200, { user: session.user, profile: session.profile })
+        : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
     if (req.url === "/api/quick-join") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
@@ -102,7 +143,12 @@ export function createServer({
       );
       return;
     }
-    serveStatic(req, res);
+    await serveStatic(req, res);
+    } catch (error) {
+      if (!res.headersSent) sendJson(res, error.status || 500,
+        { error: error.status ? "INVALID_REQUEST" : "INTERNAL_ERROR" });
+      if (!error.status) console.error(JSON.stringify({ event: "http_error", message: error.message }));
+    }
   });
   const wss = new WebSocketServer({
     server,
@@ -252,7 +298,21 @@ export function createServer({
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = +process.env.PORT || 8080;
-  const server = createServer();
+  let identityStore;
+  let pool;
+  if (process.env.DATABASE_URL) {
+    pool = createPool();
+    await migrate(pool);
+    identityStore = new PostgresIdentityStore(pool);
+  } else {
+    if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is required in production");
+    console.warn(JSON.stringify({ event: "ephemeral_identity_store", warning: "identity is lost on restart" }));
+    identityStore = new MemoryIdentityStore();
+  }
+  const server = createServer({ identityStore });
   server.listen(port, () => console.log(JSON.stringify({ event: "server_started", port })));
-  for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => server.gracefulShutdown());
+  for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, async () => {
+    server.gracefulShutdown();
+    await pool?.end();
+  });
 }
