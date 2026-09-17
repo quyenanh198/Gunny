@@ -21,6 +21,8 @@ export class Room {
     this.matchLifecycle = matchLifecycle;
     this.matchRecord = null;
     this.clients = new Set();
+    this.reservedUserIds = new Set();
+    this.expectedPlayerCount = 0;
     this.state = "lobby";
     this.match = null;
     this.order = [];
@@ -67,7 +69,8 @@ export class Room {
   }
   get canStart() {
     const seated = [...this.clients].filter((c) => c.team !== null);
-    return this.teamSize(0) > 0 && this.teamSize(1) > 0 && seated.every((c) => c.ready || c.host);
+    return (!this.expectedPlayerCount || seated.length === this.expectedPlayerCount) &&
+      this.teamSize(0) > 0 && this.teamSize(1) > 0 && seated.every((c) => c.ready || c.host);
   }
   promoteHost() {
     if (this.host || !this.clients.size) return;
