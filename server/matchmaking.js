@@ -22,9 +22,9 @@ function assignTeams(tickets, teamSize, index = 0, teamZero = []) {
 
 export class MatchmakingQueue {
   constructor(roomManager, { now = () => Date.now(), widenAfterMs = 15000, ticketTtlMs = 120000,
-    presence = null } = {}) {
+    presence = null, canMatch = () => true } = {}) {
     this.roomManager = roomManager; this.now = now; this.widenAfterMs = widenAfterMs;
-    this.ticketTtlMs = ticketTtlMs; this.byUser = new Map(); this.presence = presence;
+    this.ticketTtlMs = ticketTtlMs; this.byUser = new Map(); this.presence = presence; this.canMatch = canMatch;
   }
   valid(config) { return config.mode in MATCH_MODES && MATCH_MODES[config.mode] === config.teamSize &&
     REGIONS.has(config.region) && config.protocolVersion === PROTOCOL_VERSION; }
@@ -46,7 +46,7 @@ export class MatchmakingQueue {
     this.match(); return this.public(ticket, ownerId);
   }
   compatible(a, b, now) { return a.mode === b.mode && a.teamSize === b.teamSize &&
-    a.protocolVersion === b.protocolVersion && (a.region === b.region ||
+    a.protocolVersion === b.protocolVersion && this.canMatch(a.userIds, b.userIds) && (a.region === b.region ||
       (now - a.queuedAt >= this.widenAfterMs && now - b.queuedAt >= this.widenAfterMs)); }
   match() {
     const now = this.now(); this.prune(now);

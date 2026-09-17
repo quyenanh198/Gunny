@@ -204,4 +204,48 @@ export class PostgresIdentityStore {
       WHERE status = 'playing' AND started_at < $1 RETURNING id`, [before]);
     return result.rowCount;
   }
+
+  async loadSocial(userId) {
+    const [blocks, mutes] = await Promise.all([
+      this.pool.query("SELECT blocker_id, blocked_id FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1", [userId]),
+      this.pool.query("SELECT muted_id FROM user_mutes WHERE user_id = $1", [userId]),
+    ]);
+    return { blocks: blocks.rows.map((row) => [row.blocker_id, row.blocked_id]),
+      mutes: mutes.rows.map((row) => row.muted_id) };
+  }
+  async setBlock(userId, targetId, enabled) {
+    if (enabled) await this.pool.query(`INSERT INTO user_blocks(blocker_id, blocked_id) VALUES ($1, $2)
+      ON CONFLICT DO NOTHING`, [userId, targetId]);
+    else await this.pool.query("DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2", [userId, targetId]);
+  }
+  async setMute(userId, targetId, enabled) {
+    if (enabled) await this.pool.query(`INSERT INTO user_mutes(user_id, muted_id) VALUES ($1, $2)
+      ON CONFLICT DO NOTHING`, [userId, targetId]);
+    else await this.pool.query("DELETE FROM user_mutes WHERE user_id = $1 AND muted_id = $2", [userId, targetId]);
+  }
+  async createReport(report) {
+    await this.pool.query(`INSERT INTO moderation_reports(id, reporter_id, target_id, room_id, category, details)
+      VALUES ($1, $2, $3, $4, $5, $6)`, [report.id, report.reporterId, report.targetId,
+      report.roomId, report.category, report.details]);
+  }
+  async recordChat(message) {
+    await this.pool.query(`INSERT INTO chat_messages(id, room_id, sender_id, text)
+      VALUES ($1, $2, $3, $4)`, [message.id, message.roomId, message.senderId, message.text]);
+  }
+  async listOpenReports(limit = 100) {
+    const result = await this.pool.query(`SELECT id, reporter_id, target_id, room_id, category, details, status, created_at
+      FROM moderation_reports WHERE status IN ('open', 'reviewing') ORDER BY created_at ASC LIMIT $1`,
+    [Math.min(100, Math.max(1, limit))]);
+    return result.rows;
+  }
+  async updateReportStatus(id, status) {
+    const result = await this.pool.query(`UPDATE moderation_reports SET status = $2
+      WHERE id = $1 AND status <> 'closed'
+      RETURNING id, reporter_id, target_id, room_id, category, details, status, created_at`, [id, status]);
+    return result.rows[0] || null;
+  }
+  async pruneExpiredChat() {
+    const result = await this.pool.query("DELETE FROM chat_messages WHERE expires_at < now() RETURNING id");
+    return result.rowCount;
+  }
 }

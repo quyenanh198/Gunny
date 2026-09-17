@@ -537,3 +537,32 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 
 - R3C presence/reconnect routing, spectator policy và leaver/AFK consistency.
 - R3D mute/block/report, profanity/chat retention và admin review queue.
+
+## M21 — R3D social safety, chat moderation và admin review queue
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**. Đây là milestone đóng R3 (sau M18 R3A, M19 R3B, M20 R3C).
+
+### Đã thay đổi
+
+- `SocialSafety` (`server/social-safety.js`) là cache block/mute theo identity, nạp qua `loadSocial()` khi authenticate HTTP, khi WebSocket connect và trước khi enqueue matchmaking, để chặn ngay không cần reconnect.
+- API mới: `POST /api/social/block`, `POST /api/social/mute` (`{targetId, enabled}`), `POST /api/social/report` (`{targetId, roomId, category, details}`).
+- Block chặn hai chiều: `MatchmakingQueue` nhận `canMatch` hook để không ghép hai identity đã block nhau vào cùng ticket; `Room.snapshot()` lọc `chat` theo `SocialSafety.canView(viewer, sender)` trên từng client, kể cả khi reconnect nhận full snapshot.
+- Chat được lọc tục tĩu server-side (`sanitize()`) trước khi broadcast và trước khi ghi audit; bản ghi audit tách khỏi buffer 30 tin nhắn trong RAM của room.
+- Migration `003_social_safety.sql` thêm `user_blocks`, `user_mutes`, `moderation_reports`, `chat_messages` (retention mặc định 7 ngày). PostgreSQL store purge chat hết hạn mỗi giờ qua `pruneExpiredChat()`; memory store (dev/test) không cần vì ephemeral.
+- Admin review queue tối thiểu: `GET /api/admin/reports`, `PATCH /api/admin/reports/:id` (`status: reviewing|closed`), gated bằng `Authorization: Bearer <MODERATION_TOKEN>` — không có fallback cho phép khi thiếu token, giống pattern `/metrics`. Đây chưa phải admin RBAC/audit-by-identity; phần đó là R6.
+- Sửa một bug cú pháp còn sót lại trong `MemoryIdentityStore.loadSocial` (`split(":"")`) từ một phiên làm việc trước đó chưa commit.
+- Viết `docs/moderation.md` ghi contract block/mute/report, chat pipeline và giới hạn đã biết chuyển sang R6.
+
+### Xác minh local 2026-09-17
+
+- `node scripts/check-syntax.mjs` — 65 JavaScript files đạt.
+- `node --test` — 115 pass / 3 skip (skip là PostgreSQL integration test cần `TEST_DATABASE_URL`, không chạy được trên máy dev này).
+- `npm audit --audit-level=high` — 0 vulnerability.
+- Test mới: `tests/social-safety.test.js` (unit, 8 test cho load cache, block hai chiều, canView, sanitize, report validation) và `tests/moderation-api.test.js` (tích hợp HTTP + WebSocket thật, 5 test cho block/mute API validation, report + admin queue auth, matchmaking từ chối cặp bị block, và chat filtering theo viewer qua reconnect/broadcast thật).
+- Chưa chạy `npm run verify` đầy đủ (browser smoke) vì môi trường không có Chromium/Playwright, nhất quán với các milestone trước.
+
+### Hand-off sang R4
+
+- R3 đóng ở đây: matchmaking, party, presence/leaver và social safety đều có server-side enforcement và test. MMR, guild, season vẫn hoãn tới sau R5/R6 theo roadmap.
+- R4 tiếp tục tách `Match` thành state machine/combat/terrain/turn module rõ ràng, deterministic replay + checksum, và content schema versioning — không mở rộng map/vũ khí/item mới cho tới khi pipeline đó xong.
+- `MODERATION_TOKEN` phải được set trong mọi environment không phải dev trước khi admin review queue được dùng thật; hiện chưa có UI admin, chỉ có API.

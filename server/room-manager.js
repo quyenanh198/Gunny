@@ -7,9 +7,10 @@ export function percentile(values, fraction) {
 }
 
 export class RoomManager {
-  constructor({ matchLifecycle = null } = {}) {
+  constructor({ matchLifecycle = null, socialSafety = null } = {}) {
     this.rooms = new Map();
     this.matchLifecycle = matchLifecycle;
+    this.socialSafety = socialSafety;
   }
 
   newCode() {
@@ -20,7 +21,8 @@ export class RoomManager {
 
   create(visibility = "private", { reservedUserIds = [], reservedTeams = new Map(), allowSpectators = true } = {}) {
     const id = this.newCode();
-    const room = new Room(id, (roomId) => this.rooms.delete(roomId), visibility, this.matchLifecycle);
+    const room = new Room(id, (roomId) => this.rooms.delete(roomId), visibility,
+      this.matchLifecycle, this.socialSafety);
     room.reservedUserIds = new Set(reservedUserIds);
     room.reservedTeams = new Map(reservedTeams);
     room.allowSpectators = allowSpectators;
