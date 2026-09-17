@@ -298,3 +298,32 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
 - PR required checks `verify` và `baseline` phải xanh.
 - Sau merge, bật branch protection cho `main` với required status check và pull-request workflow.
 - R1 bắt đầu từ threat/invariant list; không thêm gameplay content trong PR kế tiếp.
+
+## M10 — R1A room lifecycle, capacity và Origin policy
+
+Trạng thái: **đã triển khai và verify local; chờ CI/merge**.
+
+### Đã thay đổi
+
+- Tách rõ WebSocket mode `create`, `join`, `spectate`; join mã không tồn tại trả `ROOM_NOT_FOUND`, không âm thầm tạo room.
+- Tăng room code từ 4 lên 6 ký tự và cập nhật client/input/invite flow.
+- Room có visibility `public`/`private`; danh sách phòng và Quick Join chỉ thấy phòng public.
+- Join đang chơi phải dùng spectator mode; spectator không được cấp team/seat gameplay.
+- Enforce tối đa 6 player và 6 spectator tại server boundary; chuyển team không thể vượt `MAX_TEAM`.
+- Thêm same-origin WebSocket policy và allowlist cấu hình bằng `ALLOWED_ORIGINS`.
+- Load benchmark tạo room explicit để tiếp tục đo đúng lifecycle mới.
+- Snapshot trả role; room listing tách số player/spectator.
+
+### Xác minh local
+
+- `npm run verify` — đạt.
+- Syntax — 46 JavaScript files đạt.
+- Node test — 77/77 đạt.
+- Browser smoke — đạt toàn bộ.
+- `npm audit --audit-level=high` — 0 vulnerability.
+- Integration test mới phủ unknown-room join, cross-origin rejection và client thứ bảy bị `ROOM_FULL`.
+
+### Phạm vi R1 còn lại
+
+- R1B: đưa reconnect credential ra khỏi URL; handshake/auth timeout; accepted ack/error và sequence semantics.
+- R1C: IP/handshake/room-create quota, snapshot backpressure, slow-consumer policy và chaos/fuzz tests.

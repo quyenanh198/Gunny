@@ -20,7 +20,7 @@ async function metrics() {
 metrics().then((value) => {
   initialMetrics = value;
   return Promise.all(Array.from({ length: clients }, (_, index) => new Promise((resolve, reject) => {
-  const ws = new WebSocket(`${url}?name=Load${index}`);
+  const ws = new WebSocket(`${url}?mode=create&visibility=private&name=Load${index}`);
   sockets.push(ws);
   ws.once("open", resolve);
   ws.once("error", reject);

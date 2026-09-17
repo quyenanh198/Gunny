@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "../server/server.js";
 import { PROTOCOL_VERSION } from "../src/play/protocol.js";
+import WebSocketClient from "ws";
 
 const listen = () =>
   new Promise((resolve) => {
@@ -12,7 +13,9 @@ const listen = () =>
 // that carries a transition just because it was not awaiting yet.
 const connect = (port, query) =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?${query}`);
+    const params = new URLSearchParams(query);
+    if (!params.has("mode")) params.set("mode", params.get("room") ? "join" : "create");
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?${params}`);
     const queue = [];
     let clientSeq = 0;
     const client = {
@@ -62,10 +65,10 @@ test("static files are served and server internals are not", async () => {
 test("the lobby seats players, only the host configures, and only the host starts", async () => {
   const { server, port } = await listen();
   try {
-    const host = await connect(port, "room=&name=An");
+    const host = await connect(port, "room=&mode=create&visibility=public&name=An");
     const first = await until(host, (s) => s.you.host);
     assert.equal(first.state, "lobby");
-    assert.equal(first.id.length, 4);
+    assert.equal(first.id.length, 6);
     assert.equal(first.you.team, 0, "first player fills team 1");
     assert.equal(first.protocolVersion, PROTOCOL_VERSION);
     assert.equal(first.serverTick, 0);
@@ -180,7 +183,7 @@ test("reconnect token keeps the same seat and forces a full resync", async () =>
 test("oversized messages and input floods return machine-readable errors", async () => {
   const { server, port } = await listen();
   try {
-    const client = await connect(port, "room=&name=An");
+    const client = await connect(port, "room=&mode=create&visibility=public&name=An");
     await until(client, (message) => message.t === "room");
     client.ws.send("x".repeat(4097));
     assert.equal((await until(client, (message) => message.t === "error")).code, "MESSAGE_TOO_LARGE");
@@ -197,10 +200,10 @@ test("oversized messages and input floods return machine-readable errors", async
 test("quick join and production probes expose live room state", async () => {
   const { server, port } = await listen();
   try {
-    const client = await connect(port, "room=&name=An");
+    const client = await connect(port, "room=&mode=create&visibility=public&name=An");
     const room = await until(client, (message) => message.t === "room");
     const quick = await (await fetch(`http://127.0.0.1:${port}/api/quick-join`)).json();
-    assert.equal(quick.room.length, 4);
+    assert.equal(quick.room.length, 6);
     assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 200);
     const metrics = await (await fetch(`http://127.0.0.1:${port}/metrics`)).text();
     assert.match(metrics, /gunny_active_connections [1-9]\d*/);
@@ -208,6 +211,37 @@ test("quick join and production probes expose live room state", async () => {
     assert.match(metrics, /gunny_tick_drift_p95 \d/);
     assert.match(metrics, /gunny_heap_used_bytes [1-9]\d*/);
     client.ws.close();
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("room lifecycle rejects unknown joins, cross-origin sockets and seat overflow", async () => {
+  const { server, port } = await listen();
+  try {
+    const missing = await connect(port, "mode=join&room=ABCDEF&name=Lost");
+    assert.equal((await until(missing, (message) => message.t === "error")).code, "ROOM_NOT_FOUND");
+
+    await assert.rejects(new Promise((resolve, reject) => {
+      const socket = new WebSocketClient(`ws://127.0.0.1:${port}/ws?mode=create&name=Cross`, {
+        origin: "https://evil.example",
+      });
+      socket.once("open", resolve);
+      socket.once("error", reject);
+    }));
+
+    const host = await connect(port, "mode=create&visibility=private&name=P0");
+    const first = await until(host, (message) => message.t === "room");
+    const players = [host];
+    for (let index = 1; index < 6; index++) {
+      const player = await connect(port, `mode=join&room=${first.id}&name=P${index}`);
+      players.push(player);
+      await until(player, (message) => message.t === "room");
+    }
+    const overflow = await connect(port, `mode=join&room=${first.id}&name=P6`);
+    assert.equal((await until(overflow, (message) => message.t === "error")).code, "ROOM_FULL");
+    players.forEach((player) => player.ws.close());
   } finally {
     server.closeAllConnections();
     server.close();
