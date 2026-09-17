@@ -3,6 +3,7 @@ import { DT } from "../src/physics.js";
 import { MAPS } from "../src/maps.js";
 import { CHARACTERS, WEAPONS } from "../src/assets.js";
 import { PROTOCOL_VERSION } from "../src/play/protocol.js";
+import { randomUUID } from "node:crypto";
 
 const SNAPSHOT_MS = 50;
 const EMPTY_ROOM_TTL_MS = 60000;
@@ -13,10 +14,12 @@ export const SOFT_BACKPRESSURE_BYTES = 256 * 1024;
 export const HARD_BACKPRESSURE_BYTES = 1024 * 1024;
 
 export class Room {
-  constructor(id, onClose, visibility = "private") {
+  constructor(id, onClose, visibility = "private", matchLifecycle = null) {
     this.onClose = onClose;
     this.id = id;
     this.visibility = visibility === "public" ? "public" : "private";
+    this.matchLifecycle = matchLifecycle;
+    this.matchRecord = null;
     this.clients = new Set();
     this.state = "lobby";
     this.match = null;
@@ -103,15 +106,52 @@ export class Room {
     this.state = "playing";
     this.acc = 0;
     this.last = Date.now();
+    this.beginMatchRecord();
     return true;
   }
+  beginMatchRecord() {
+    const participants = this.order.filter((client) => client.userId)
+      .map((client) => ({ userId: client.userId, team: client.team }));
+    const record = { id: randomUUID(), roomId: this.id, startedAt: new Date(), participants };
+    this.matchRecord = record;
+    record.begin = this.matchLifecycle?.beginMatch?.(record).catch((error) => {
+      console.error(JSON.stringify({ event: "match_begin_failed", roomId: this.id, message: error.message }));
+      return { applied: false };
+    }) || Promise.resolve({ applied: false });
+  }
+  winnerTeam() {
+    const hp = [this.match.teamHp(0), this.match.teamHp(1)];
+    return hp[0] === hp[1] ? null : hp[0] > hp[1] ? 0 : 1;
+  }
+  finalizeMatch(status = "completed") {
+    const record = this.matchRecord;
+    if (!record || record.finalized) return record?.finish;
+    record.finalized = true;
+    const winner = status === "completed" ? this.winnerTeam() : null;
+    const participants = this.order.filter((client) => client.userId).map((client) => ({
+      userId: client.userId,
+      outcome: status === "abandoned" ? "abandoned" : winner === null ? "draw" : client.team === winner ? "win" : "loss",
+      disconnected: !client.connected,
+    }));
+    const result = { id: record.id, resultKey: `match:${record.id}`, status, endedAt: new Date(),
+      summary: { map: this.map, rounds: this.match.round, winnerTeam: winner }, participants };
+    record.finish = record.begin.then((begun) => begun.applied
+      ? this.matchLifecycle.completeMatch(result) : { applied: false }).catch((error) => {
+      console.error(JSON.stringify({ event: "match_complete_failed", roomId: this.id, message: error.message }));
+      return { applied: false };
+    });
+    return record.finish;
+  }
   restart() {
+    this.finalizeMatch(this.match.phase === "over" ? "completed" : "abandoned");
     this.match.reset();
     this.terrainVersion++;
     this.match.terrainDirty = false;
+    this.beginMatchRecord();
   }
   backToLobby() {
     if (this.match) {
+      this.finalizeMatch(this.match.phase === "over" ? "completed" : "abandoned");
       this.history.push({ at: Date.now(), status: this.match.status, rounds: this.match.round });
       this.history = this.history.slice(-10);
     }
@@ -146,6 +186,7 @@ export class Room {
         this.terrainVersion++;
         m.terrainDirty = false;
       }
+      if (m.phase === "over") this.finalizeMatch("completed");
     }
     this.sinceSnapshot += now - this.last;
     this.last = now;
@@ -275,9 +316,10 @@ export class Room {
     this.broadcast();
     return true;
   }
-  reconnect(token, ws, nextToken = token) {
+  reconnect(token, ws, nextToken = token, expectedUserId = null) {
     const client = [...this.clients].find((candidate) => candidate.reconnectToken === token && !candidate.connected);
-    if (!client || Date.now() - client.disconnectedAt > RECONNECT_GRACE_MS) return null;
+    if (!client || (expectedUserId && client.userId !== expectedUserId) ||
+        Date.now() - client.disconnectedAt > RECONNECT_GRACE_MS) return null;
     client.ws = ws;
     client.reconnectToken = nextToken;
     client.connected = true;

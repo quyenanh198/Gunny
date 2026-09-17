@@ -24,6 +24,7 @@ Biến môi trường production bắt buộc/khuyến nghị:
 - Session bearer là credential: không ghi raw token vào log, URL hoặc database. Database chỉ giữ SHA-256 digest.
 - CI dùng PostgreSQL thật và kiểm tra session tồn tại qua lần đóng/mở connection pool.
 - Khi khởi động, match `playing` cũ hơn 5 phút được chuyển sang `abandoned` với recovery reason; không tự cấp kết quả/reward sau crash.
+- Realtime server ghi match `playing` trước, sau đó finalize đúng hàng đó bằng result key duy nhất. Lỗi persistence được log bằng `match_begin_failed`/`match_complete_failed` và phải alert; không retry bằng cách tạo result key mới.
 - Thực thi retention trong `docs/privacy.md` bằng scheduled database job có audit cho tới khi có automation ở R7/R8.
 
 ## Quan sát

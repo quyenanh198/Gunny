@@ -106,6 +106,46 @@ export class PostgresIdentityStore {
     } finally { client.release(); }
   }
 
+  async beginMatch({ id, roomId, startedAt, participants }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`INSERT INTO matches(id, room_id, status, started_at)
+        VALUES ($1, $2, 'playing', $3)`, [id, roomId, startedAt]);
+      for (const participant of participants) await client.query(`
+        INSERT INTO match_participants(match_id, user_id, team, disconnected)
+        VALUES ($1, $2, $3, false)`, [id, participant.userId, participant.team]);
+      await client.query("COMMIT");
+      return { applied: true, matchId: id };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async completeMatch({ id, resultKey, status = "completed", endedAt = new Date(), summary, participants }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const updated = await client.query(`UPDATE matches SET status = $2, ended_at = $3,
+        result_key = $4, summary = $5 WHERE id = $1 AND status = 'playing' RETURNING id`,
+      [id, status, endedAt, resultKey, summary]);
+      if (!updated.rowCount) {
+        await client.query("ROLLBACK");
+        return { applied: false };
+      }
+      for (const participant of participants) await client.query(`UPDATE match_participants
+        SET outcome = $3, disconnected = $4 WHERE match_id = $1 AND user_id = $2`,
+      [id, participant.userId, participant.outcome, !!participant.disconnected]);
+      await client.query("COMMIT");
+      return { applied: true, matchId: id };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if (error.code === "23505") return { applied: false };
+      throw error;
+    } finally { client.release(); }
+  }
+
   async listMatches(rawToken, limit = 20) {
     const result = await this.pool.query(`
       SELECT m.id, m.room_id, m.status, m.started_at, m.ended_at, m.summary,
