@@ -35,7 +35,7 @@ jobs:
       - name: Run 30-client baseline
         run: |
           mkdir -p artifacts
-          node server/server.js > artifacts/server.log 2>&1 &
+          MAX_CONNECTIONS_PER_IP=100 HANDSHAKES_PER_MINUTE=120 ROOM_CREATES_PER_MINUTE=100 node server/server.js > artifacts/server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
           for i in $(seq 1 50); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 0.1; done

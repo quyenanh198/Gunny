@@ -9,6 +9,8 @@ const EMPTY_ROOM_TTL_MS = 60000;
 const IDLE_SEAT_S = 30;
 const RECONNECT_GRACE_MS = 30000;
 const MAX_SPECTATORS = 6;
+export const SOFT_BACKPRESSURE_BYTES = 256 * 1024;
+export const HARD_BACKPRESSURE_BYTES = 1024 * 1024;
 
 export class Room {
   constructor(id, onClose, visibility = "private") {
@@ -35,6 +37,8 @@ export class Room {
     this.snapshotBytes = 0;
     this.rejectedMessages = 0;
     this.reconnects = 0;
+    this.slowConsumerDrops = 0;
+    this.slowConsumerCloses = 0;
     this.chat = [];
     this.history = [];
     // unref: an idle room must not keep the process alive on its own.
@@ -241,6 +245,17 @@ export class Room {
   }
   broadcast() {
     for (const c of this.clients) if (c.connected && c.ws.readyState === 1) {
+      if (c.ws.bufferedAmount > HARD_BACKPRESSURE_BYTES) {
+        this.slowConsumerCloses++;
+        c.connected = false;
+        c.disconnectedAt = Date.now();
+        c.ws.close(1013, "slow consumer");
+        continue;
+      }
+      if (c.ws.bufferedAmount > SOFT_BACKPRESSURE_BYTES) {
+        this.slowConsumerDrops++;
+        continue;
+      }
       const payload = JSON.stringify(this.snapshot(c));
       this.snapshotBytes += Buffer.byteLength(payload);
       c.ws.send(payload);

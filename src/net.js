@@ -25,6 +25,7 @@ const ERROR_MESSAGES = {
   INVALID_REQUEST_ID: "Mã thao tác không hợp lệ.",
   STALE_SEQUENCE: "Thao tác cũ hoặc trùng đã bị bỏ qua.",
   COMMAND_REJECTED: "Thao tác không hợp lệ ở trạng thái hiện tại.",
+  ROOM_CREATE_LIMITED: "Bạn đã tạo quá nhiều phòng. Hãy thử lại sau.",
 };
 
 // A read-only view of the server's Match, smoothed between snapshots.

@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { RoomManager } from "./room-manager.js";
 import { connectionParams, originAllowed, parseMessage } from "./validation.js";
 import { validateResumeMessage } from "../src/play/protocol.js";
+import { clientIp, FixedWindowLimiter } from "./rate-limiter.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -47,8 +48,27 @@ async function serveStatic(req, res) {
   }
 }
 
-export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").filter(Boolean) } = {}) {
+export function createServer({
+  allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").filter(Boolean),
+  trustProxy = process.env.TRUST_PROXY === "true",
+  trustedProxies = (process.env.TRUSTED_PROXY_IPS || "").split(",").filter(Boolean),
+  maxConnectionsPerIp = Number(process.env.MAX_CONNECTIONS_PER_IP || 20),
+  handshakesPerMinute = Number(process.env.HANDSHAKES_PER_MINUTE || 60),
+  roomCreatesPerMinute = Number(process.env.ROOM_CREATES_PER_MINUTE || 10),
+  httpRequestsPerMinute = Number(process.env.HTTP_REQUESTS_PER_MINUTE || 240),
+  metricsToken = process.env.METRICS_TOKEN || "",
+} = {}) {
+  const ipOptions = { trustProxy, trustedProxies };
+  const activeByIp = new Map();
+  const handshakeLimiter = new FixedWindowLimiter({ limit: handshakesPerMinute, windowMs: 60000 });
+  const roomCreateLimiter = new FixedWindowLimiter({ limit: roomCreatesPerMinute, windowMs: 60000 });
+  const httpLimiter = new FixedWindowLimiter({ limit: httpRequestsPerMinute, windowMs: 60000 });
   const server = http.createServer((req, res) => {
+    if ((req.url.startsWith("/api/") || req.url === "/metrics") && !httpLimiter.take(clientIp(req, ipOptions))) {
+      res.writeHead(429, { "content-type": "application/json", "retry-after": "60" });
+      res.end(JSON.stringify({ error: "RATE_LIMITED" }));
+      return;
+    }
     if (req.url === "/healthz") {
       res.writeHead(200, { "content-type": "text/plain" }).end("ok");
       return;
@@ -63,6 +83,11 @@ export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || 
       return;
     }
     if (req.url === "/metrics") {
+      if ((metricsToken && req.headers.authorization !== `Bearer ${metricsToken}`) ||
+          (!metricsToken && process.env.NODE_ENV === "production")) {
+        res.writeHead(401, { "content-type": "text/plain", "www-authenticate": "Bearer" }).end("unauthorized");
+        return;
+      }
       const metrics = roomManager.metrics();
       res.writeHead(200, { "content-type": "text/plain; version=0.0.4" });
       res.end(Object.entries(metrics).map(([name, value]) => `gunny_${name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)} ${value}`).join("\n") + "\n");
@@ -82,7 +107,13 @@ export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || 
   const wss = new WebSocketServer({
     server,
     path: "/ws",
-    verifyClient: ({ req }, done) => done(originAllowed(req, allowedOrigins), 403, "origin rejected"),
+    verifyClient: ({ req }, done) => {
+      if (!originAllowed(req, allowedOrigins)) return done(false, 403, "origin rejected");
+      const ip = clientIp(req, ipOptions);
+      if (!handshakeLimiter.take(ip) || (activeByIp.get(ip) || 0) >= maxConnectionsPerIp)
+        return done(false, 429, "connection rate limited");
+      done(true);
+    },
   });
   const sendError = (ws, code, message = {}) => ws.send(JSON.stringify({ t: "error", code, ...message }));
   const activate = (ws, room, client) => {
@@ -121,6 +152,13 @@ export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || 
   };
   wss.on("connection", (ws, req) => {
     const params = connectionParams(req.url);
+    const ip = clientIp(req, ipOptions);
+    activeByIp.set(ip, (activeByIp.get(ip) || 0) + 1);
+    ws.once("close", () => {
+      const remaining = Math.max(0, (activeByIp.get(ip) || 1) - 1);
+      if (remaining) activeByIp.set(ip, remaining);
+      else activeByIp.delete(ip);
+    });
     ws.isAlive = true;
     ws.on("pong", () => (ws.isAlive = true));
     if (params.mode === "resume") {
@@ -152,7 +190,14 @@ export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || 
       return;
     }
     let room = roomManager.get(params.room);
-    if (!room && params.mode === "create") room = roomManager.create(params.visibility);
+    if (!room && params.mode === "create") {
+      if (!roomCreateLimiter.take(ip)) {
+        sendError(ws, "ROOM_CREATE_LIMITED");
+        ws.close(1008, "room creation rate limited");
+        return;
+      }
+      room = roomManager.create(params.visibility);
+    }
     if (!room) {
       ws.send(JSON.stringify({ t: "error", code: "ROOM_NOT_FOUND" }));
       ws.close(1008, "room not found");

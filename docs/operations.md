@@ -8,10 +8,17 @@
 4. Đặt Caddy/Cloudflare Tunnel phía trước và xác minh WebSocket upgrade tại `/ws`.
 5. Kiểm tra `GET /healthz`, `GET /readyz` và `GET /metrics`.
 
+Biến môi trường production bắt buộc/khuyến nghị:
+
+- `METRICS_TOKEN`: bắt buộc khi `NODE_ENV=production`; gọi metrics bằng `Authorization: Bearer <token>`.
+- `ALLOWED_ORIGINS`: danh sách origin browser được phép, phân cách dấu phẩy.
+- `TRUST_PROXY=true` chỉ khi `TRUSTED_PROXY_IPS` liệt kê đúng địa chỉ reverse proxy; không tin `X-Forwarded-For` từ Internet.
+- `MAX_CONNECTIONS_PER_IP`, `HANDSHAKES_PER_MINUTE`, `ROOM_CREATES_PER_MINUTE`, `HTTP_REQUESTS_PER_MINUTE`: điều chỉnh theo capacity test, không vô hiệu hóa tùy tiện.
+
 ## Quan sát
 
 - Log bootstrap là JSON trên stdout; launchd ghi tại `/tmp/gunny-server.log`.
-- Metrics gồm connections, rooms, tick drift lớn nhất, snapshot bytes, message reject và reconnect.
+- Metrics gồm connections, rooms, tick drift p50/p95/p99, heap, snapshot bytes, message reject, reconnect và slow-consumer drop/close.
 - Chạy `CLIENTS=30 npm run test:load` trên staging; tăng tới 100 và theo dõi tick drift thay vì suy đoán tải.
 
 ## Rollback

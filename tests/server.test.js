@@ -4,9 +4,9 @@ import { createServer } from "../server/server.js";
 import { PROTOCOL_VERSION } from "../src/play/protocol.js";
 import WebSocketClient from "ws";
 
-const listen = () =>
+const listen = (options) =>
   new Promise((resolve) => {
-    const server = createServer();
+    const server = createServer(options);
     server.listen(0, () => resolve({ server, port: server.address().port }));
   });
 // Snapshots arrive continuously, so queue them: a test must never miss the one
@@ -288,6 +288,55 @@ test("room lifecycle rejects unknown joins, cross-origin sockets and seat overfl
     assert.equal((await until(overflow, (message) => message.t === "error")).code, "ROOM_FULL");
     players.forEach((player) => player.ws.close());
   } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("connection, room creation and HTTP quotas are enforced per direct IP", async () => {
+  const { server, port } = await listen({
+    maxConnectionsPerIp: 1,
+    handshakesPerMinute: 10,
+    roomCreatesPerMinute: 1,
+    httpRequestsPerMinute: 1,
+  });
+  try {
+    const first = await connect(port, "mode=create&visibility=public&name=First");
+    await until(first, (message) => message.t === "room");
+    await assert.rejects(connect(port, "mode=create&visibility=public&name=Second"));
+    assert.equal((await fetch(`http://127.0.0.1:${port}/api/rooms`)).status, 200);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/api/rooms`)).status, 429);
+    first.ws.close();
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+
+  const next = await listen({ maxConnectionsPerIp: 10, roomCreatesPerMinute: 1 });
+  try {
+    const first = await connect(next.port, "mode=create&name=First");
+    await until(first, (message) => message.t === "room");
+    const limited = await connect(next.port, "mode=create&name=Second");
+    assert.equal((await until(limited, (message) => message.t === "error")).code, "ROOM_CREATE_LIMITED");
+    first.ws.close();
+  } finally {
+    next.server.closeAllConnections();
+    next.server.close();
+  }
+});
+
+test("production metrics fail closed without a bearer secret", async () => {
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  const { server, port } = await listen({ metricsToken: "metrics-secret" });
+  try {
+    assert.equal((await fetch(`http://127.0.0.1:${port}/metrics`)).status, 401);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/metrics`, {
+      headers: { Authorization: "Bearer metrics-secret" },
+    })).status, 200);
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
     server.closeAllConnections();
     server.close();
   }
