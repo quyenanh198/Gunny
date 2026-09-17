@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { createPool, migrate } from "../server/database.js";
 import { PostgresIdentityStore } from "../server/identity-store.js";
 
@@ -37,15 +38,43 @@ test("PostgreSQL persists guest identity and rotates session atomically", { skip
     assert.equal(history[0].id, settled.matchId);
     assert.equal(history[0].outcome, "win");
     assert.equal(history[0].summary.rounds, 2);
+    assert.ok(await restartedStore.recordConsent(created.token));
+    const exported = await restartedStore.exportUser(created.token);
+    assert.equal(exported.user.id, created.user.id);
+    assert.equal(exported.matches.length, 1);
 
     const rotated = await restartedStore.rotate(created.token);
     assert.equal(rotated.user.id, created.user.id);
     assert.equal(await restartedStore.authenticate(created.token), null);
     assert.equal((await restartedStore.authenticate(rotated.token)).profile.displayName, "Renamed");
     assert.equal(await restartedStore.rotate(created.token), null, "rotated token cannot be replayed");
+    assert.equal(await restartedStore.deleteUser(rotated.token), true);
+    assert.equal(await restartedStore.authenticate(rotated.token), null);
   } finally {
     await restartedPool.query("DELETE FROM matches WHERE result_key = $1", [`result-${created.user.id}`]);
     await restartedPool.query("DELETE FROM users WHERE id = $1", [created.user.id]);
     await restartedPool.end();
+  }
+});
+
+test("PostgreSQL recovery abandons stale playing matches only", { skip: !databaseUrl }, async () => {
+  const pool = createPool(databaseUrl);
+  await migrate(pool);
+  const store = new PostgresIdentityStore(pool);
+  const staleId = randomUUID();
+  const freshId = randomUUID();
+  try {
+    await pool.query(`INSERT INTO matches(id, status, started_at, result_key) VALUES
+      ($1, 'playing', now() - interval '10 minutes', $3), ($2, 'playing', now(), $4)`,
+    [staleId, freshId, `stale-${staleId}`, `fresh-${freshId}`]);
+    assert.equal(await store.abandonStaleMatches(new Date(Date.now() - 5 * 60 * 1000)), 1);
+    const rows = await pool.query("SELECT id, status, summary FROM matches WHERE id = ANY($1::uuid[]) ORDER BY id",
+      [[staleId, freshId]]);
+    assert.equal(rows.rows.find((row) => row.id === staleId).status, "abandoned");
+    assert.equal(rows.rows.find((row) => row.id === staleId).summary.recovery, "process_restart");
+    assert.equal(rows.rows.find((row) => row.id === freshId).status, "playing");
+  } finally {
+    await pool.query("DELETE FROM matches WHERE id = ANY($1::uuid[])", [[staleId, freshId]]);
+    await pool.end();
   }
 });

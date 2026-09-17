@@ -25,4 +25,17 @@ export class MemoryIdentityStore {
     return session.profile;
   }
   async listMatches() { return []; }
+  async recordConsent(token) {
+    const session = this.sessions.get(token);
+    if (!session) return null;
+    session.privacyConsentAt ||= new Date().toISOString();
+    return session.privacyConsentAt;
+  }
+  async revoke(token) { return this.sessions.delete(token); }
+  async exportUser(token) {
+    const session = this.sessions.get(token);
+    return session ? { exportedAt: new Date().toISOString(), user: session.user, profile: session.profile, matches: [] } : null;
+  }
+  async deleteUser(token) { return this.sessions.delete(token); }
+  async abandonStaleMatches() { return 0; }
 }

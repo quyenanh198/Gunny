@@ -153,7 +153,7 @@ Exit criteria:
 
 ### R2 — Identity, profile và persistence
 
-Trạng thái: **đang triển khai — R2A đã merge; R2B profile/history/idempotent settlement hoàn thành local, chờ CI/merge**.
+Trạng thái: **đang triển khai — R2A/R2B đã merge; R2C privacy/recovery hoàn thành local, chờ CI/merge; còn R2D realtime settlement**.
 
 - Guest identity bằng opaque ID + rotating session; hỗ trợ link email/OAuth sau, không lưu password tự chế.
 - PostgreSQL migrations và repository layer; schema cho user, profile, session, match, participant.
