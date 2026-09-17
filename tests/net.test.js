@@ -26,12 +26,11 @@ test("online session versions and sequences input, then enters reconnecting stat
   const session = new OnlineSession({ room: "ABCDEF", name: "An" });
   assert.match(String(session.ws.url), /mode=join/);
   session.send({ t: "ready", value: true });
-  assert.deepEqual(session.ws.sent[0], {
-    protocolVersion: PROTOCOL_VERSION,
-    clientSeq: 1,
-    t: "ready",
-    value: true,
-  });
+  assert.equal(session.ws.sent[0].protocolVersion, PROTOCOL_VERSION);
+  assert.equal(session.ws.sent[0].clientSeq, 1);
+  assert.equal(session.ws.sent[0].t, "ready");
+  assert.equal(session.ws.sent[0].value, true);
+  assert.match(session.ws.sent[0].requestId, /^[A-Za-z0-9_-]+$/);
   session.receive({
     t: "room",
     protocolVersion: PROTOCOL_VERSION,
@@ -51,5 +50,21 @@ test("online session versions and sequences input, then enters reconnecting stat
   session.ws.onclose();
   assert.equal(session.state, "reconnecting");
   assert.match(session.error, /đang thử nối lại/);
+  session.leave();
+});
+
+test("reconnect credential is sent in the resume frame, never in the URL", async () => {
+  globalThis.location = new URL("https://game.example/");
+  globalThis.WebSocket = FakeWebSocket;
+  const { OnlineSession } = await import("../src/net.js");
+  const session = new OnlineSession({ room: "ABCDEF", name: "An" });
+  session.reconnectToken = "1234567890abcdef";
+  session.connect();
+  const socket = session.ws;
+  assert.doesNotMatch(String(socket.url), /reconnectToken|1234567890abcdef/);
+  assert.match(String(socket.url), /mode=resume/);
+  socket.onopen();
+  assert.deepEqual(socket.sent[0], { t: "resume", protocolVersion: PROTOCOL_VERSION,
+    room: "ABCDEF", reconnectToken: "1234567890abcdef" });
   session.leave();
 });

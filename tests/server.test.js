@@ -14,13 +14,20 @@ const listen = () =>
 const connect = (port, query) =>
   new Promise((resolve, reject) => {
     const params = new URLSearchParams(query);
+    const resumeToken = params.get("reconnectToken");
+    params.delete("reconnectToken");
+    if (resumeToken) params.set("mode", "resume");
     if (!params.has("mode")) params.set("mode", params.get("room") ? "join" : "create");
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?${params}`);
     const queue = [];
     let clientSeq = 0;
     const client = {
       ws,
-      send: (msg) => ws.send(JSON.stringify({ protocolVersion: PROTOCOL_VERSION, clientSeq: ++clientSeq, ...msg })),
+      send: (msg) => {
+        clientSeq++;
+        ws.send(JSON.stringify({ protocolVersion: PROTOCOL_VERSION, clientSeq,
+          requestId: `request-${clientSeq}`, ...msg }));
+      },
       sendRaw: (msg) => ws.send(JSON.stringify(msg)),
       next: () => (queue.length ? Promise.resolve(queue.shift()) : new Promise((r) => (client.waiter = r))),
     };
@@ -32,7 +39,11 @@ const connect = (port, query) =>
         w(s);
       } else queue.push(s);
     };
-    ws.onopen = () => resolve(client);
+    ws.onopen = () => {
+      if (resumeToken) ws.send(JSON.stringify({ t: "resume", protocolVersion: PROTOCOL_VERSION,
+        room: params.get("room"), reconnectToken: resumeToken }));
+      resolve(client);
+    };
     ws.onerror = reject;
   });
 const until = async (client, pred, tries = 80) => {
@@ -87,21 +98,21 @@ test("the lobby seats players, only the host configures, and only the host start
     guest.send({ t: "setup", map: "death" });
     guest.send({ t: "start" });
     await new Promise((r) => setTimeout(r, 150));
-    const ignored = await until(guest, (s) => s.players.length === 2);
+    const ignored = await until(guest, (s) => s.t === "room" && s.players.length === 2);
     assert.equal(ignored.map, "sky", "a guest cannot change the setup");
     assert.equal(ignored.state, "lobby", "a guest cannot start the match");
 
     guest.send({ t: "loadout", character: "bzz", weapon: "star" });
     guest.send({ t: "ready", value: true });
-    await until(host, (s) => s.canStart && s.players.some((p) => p.character === "bzz"));
+    await until(host, (s) => s.t === "room" && s.canStart && s.players.some((p) => p.character === "bzz"));
     host.send({ t: "setup", map: "death", difficulty: "easy", bots: [1, 0] });
     host.send({ t: "start" });
-    const playing = await until(host, (s) => s.state === "playing");
+    const playing = await until(host, (s) => s.t === "room" && s.state === "playing");
     assert.equal(playing.match.map, "death");
     assert.equal(playing.match.actors.length, 3, "two players and one bot");
     assert.equal(playing.you.player, 1);
     assert.ok(Array.isArray(playing.match.terrain));
-    const gp = await until(guest, (s) => s.state === "playing");
+    const gp = await until(guest, (s) => s.t === "room" && s.state === "playing");
     assert.equal(gp.you.player, 2);
     const mine = gp.match.actors.find((a) => a.player === 2);
     assert.equal(mine.skin, "bzz", "the lobby loadout carries into the match");
@@ -111,19 +122,19 @@ test("the lobby seats players, only the host configures, and only the host start
     // Only the player whose turn it is can aim.
     guest.send({ t: "aim", angle: 70 });
     host.send({ t: "aim", angle: 70 });
-    const aimed = await until(host, (s) => s.match.actors[0].angle === 70);
+    const aimed = await until(host, (s) => s.t === "room" && s.match.actors[0].angle === 70);
     assert.equal(aimed.match.turn, 0);
     host.send({ t: "charge" });
     await new Promise((r) => setTimeout(r, 300));
     host.send({ t: "release" });
-    assert.ok(await until(host, (s) => s.match.phase === "flight"));
-    assert.ok(await until(guest, (s) => s.match.phase !== "aim" || s.match.turn !== 0, 200));
+    assert.ok(await until(host, (s) => s.t === "room" && s.match.phase === "flight"));
+    assert.ok(await until(guest, (s) => s.t === "room" && (s.match.phase !== "aim" || s.match.turn !== 0), 200));
 
     host.send({ t: "lobby" });
-    const back = await until(guest, (s) => s.state === "lobby");
+    const back = await until(guest, (s) => s.t === "room" && s.state === "lobby");
     assert.equal(back.you.ready, false, "everyone re-readies for the next match");
     host.ws.close();
-    const retained = await until(guest, (s) => s.players.some((player) => player.id === first.you.id && !player.connected));
+    const retained = await until(guest, (s) => s.t === "room" && s.players.some((player) => player.id === first.you.id && !player.connected));
     assert.equal(retained.you.host, false, "host ownership is retained during the reconnect grace period");
     assert.equal(retained.players.length, 2);
     guest.ws.close();
@@ -141,12 +152,15 @@ test("invalid and duplicate messages are rejected without applying twice", async
     host.sendRaw({ t: "ready", value: true });
     assert.equal((await until(host, (message) => message.t === "error")).code, "VERSION_MISMATCH");
 
-    const input = { protocolVersion: PROTOCOL_VERSION, clientSeq: 1, t: "team", team: 1 };
+    const input = { protocolVersion: PROTOCOL_VERSION, clientSeq: 1, requestId: "raw-1", t: "team", team: 1 };
     host.sendRaw(input);
-    const changed = await until(host, (snapshot) => snapshot.you.team === 1);
+    const changed = await until(host, (snapshot) => snapshot.t === "room" && snapshot.you.team === 1);
     assert.equal(changed.lastAckSeq, 1);
+    const accepted = await until(host, (message) => message.t === "ack");
+    assert.equal(accepted.requestId, "raw-1");
     host.sendRaw({ ...input, team: 0 });
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    const stale = await until(host, (message) => message.t === "error");
+    assert.equal(stale.code, "STALE_SEQUENCE");
     const unchanged = await until(host, (snapshot) => snapshot.t === "room");
     assert.equal(unchanged.you.team, 1);
     assert.equal(unchanged.lastAckSeq, 1);
@@ -173,7 +187,37 @@ test("reconnect token keeps the same seat and forces a full resync", async () =>
     assert.equal(snapshot.you.host, true);
     assert.equal(snapshot.you.team, first.you.team);
     assert.ok(snapshot.roomVersion > first.roomVersion);
+    assert.notEqual(snapshot.reconnectToken, first.reconnectToken, "resume rotates the credential");
+    const replay = await connect(port,
+      `room=${first.id}&name=Replay&reconnectToken=${encodeURIComponent(first.reconnectToken)}`);
+    assert.equal((await until(replay, (message) => message.t === "error")).code, "RECONNECT_EXPIRED");
     resumed.ws.close();
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("rejected commands do not consume sequence and accepted commands are acknowledged", async () => {
+  const { server, port } = await listen();
+  try {
+    const host = await connect(port, "mode=create&visibility=private&name=Host");
+    const room = await until(host, (message) => message.t === "room");
+    const guest = await connect(port, `mode=join&room=${room.id}&name=Guest`);
+    await until(guest, (message) => message.t === "room");
+    guest.sendRaw({ protocolVersion: PROTOCOL_VERSION, clientSeq: 1, requestId: "denied-1",
+      t: "setup", map: "death" });
+    const denied = await until(guest, (message) => message.t === "error");
+    assert.equal(denied.code, "COMMAND_REJECTED");
+    assert.equal(denied.clientSeq, 1);
+    guest.sendRaw({ protocolVersion: PROTOCOL_VERSION, clientSeq: 1, requestId: "accepted-1",
+      t: "ready", value: true });
+    const ack = await until(guest, (message) => message.t === "ack");
+    assert.equal(ack.requestId, "accepted-1");
+    assert.equal(ack.clientSeq, 1);
+    const snapshot = await until(guest, (message) => message.t === "room" && message.lastAckSeq === 1);
+    assert.equal(snapshot.you.ready, true);
+    host.ws.close(); guest.ws.close();
   } finally {
     server.closeAllConnections();
     server.close();
@@ -188,7 +232,8 @@ test("oversized messages and input floods return machine-readable errors", async
     client.ws.send("x".repeat(4097));
     assert.equal((await until(client, (message) => message.t === "error")).code, "MESSAGE_TOO_LARGE");
     for (let sequence = 1; sequence <= 61; sequence++)
-      client.sendRaw({ protocolVersion: PROTOCOL_VERSION, clientSeq: sequence, t: "ready", value: true });
+      client.sendRaw({ protocolVersion: PROTOCOL_VERSION, clientSeq: sequence,
+        requestId: `flood-${sequence}`, t: "ready", value: true });
     assert.equal((await until(client, (message) => message.t === "error", 200)).code, "RATE_LIMITED");
     client.ws.close();
   } finally {

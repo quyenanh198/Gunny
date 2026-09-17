@@ -20,6 +20,11 @@ const ERROR_MESSAGES = {
   ROOM_NOT_FOUND: "Phòng không tồn tại hoặc đã đóng.",
   ROOM_FULL: "Phòng đã đủ người chơi.",
   SPECTATOR_FULL: "Phòng đã đủ khán giả.",
+  RESUME_TIMEOUT: "Kết nối lại không được xác thực kịp thời.",
+  RESUME_REQUIRED: "Máy chủ yêu cầu xác thực kết nối lại.",
+  INVALID_REQUEST_ID: "Mã thao tác không hợp lệ.",
+  STALE_SEQUENCE: "Thao tác cũ hoặc trùng đã bị bỏ qua.",
+  COMMAND_REJECTED: "Thao tác không hợp lệ ở trạng thái hiện tại.",
 };
 
 // A read-only view of the server's Match, smoothed between snapshots.
@@ -221,6 +226,7 @@ export class OnlineSession {
     this.serverTick = 0;
     this.roomVersion = 0;
     this.reconnectToken = "";
+    this.pending = new Map();
     this.closed = false;
     this.onUpdate = onUpdate;
     this.match = new RemoteMatch(this);
@@ -231,10 +237,17 @@ export class OnlineSession {
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     url.searchParams.set("room", this.id);
     url.searchParams.set("name", this.name);
-    url.searchParams.set("mode", this.reconnectToken ? "join" : this.mode);
+    url.searchParams.set("mode", this.reconnectToken ? "resume" : this.mode);
     if (this.mode === "create") url.searchParams.set("visibility", this.visibility);
-    if (this.reconnectToken) url.searchParams.set("reconnectToken", this.reconnectToken);
     this.ws = new WebSocket(url);
+    this.ws.onopen = () => {
+      if (this.reconnectToken) this.ws.send(JSON.stringify({
+        t: "resume",
+        protocolVersion: PROTOCOL_VERSION,
+        room: this.id,
+        reconnectToken: this.reconnectToken,
+      }));
+    };
     this.ws.onmessage = (event) => this.receive(JSON.parse(event.data));
     this.ws.onclose = () => {
       if (this.closed) return;
@@ -251,11 +264,23 @@ export class OnlineSession {
     return this.players.filter((p) => p.team === team).length + this.bots[team];
   }
   send(msg) {
-    if (this.ws.readyState === 1)
-      this.ws.send(JSON.stringify({ protocolVersion: PROTOCOL_VERSION, clientSeq: ++this.clientSeq, ...msg }));
+    if (this.ws.readyState === 1) {
+      const clientSeq = ++this.clientSeq;
+      const requestId = globalThis.crypto?.randomUUID?.() || `r${Date.now()}_${clientSeq}`;
+      this.pending.set(requestId, { clientSeq, type: msg.t });
+      this.ws.send(JSON.stringify({ protocolVersion: PROTOCOL_VERSION, clientSeq, requestId, ...msg }));
+      return requestId;
+    }
+    return null;
   }
   receive(s) {
+    if (s.t === "ack") {
+      this.pending.delete(s.requestId);
+      this.lastAckSeq = Math.max(this.lastAckSeq, s.clientSeq || 0);
+      return;
+    }
     if (s.t === "error") {
+      if (s.requestId) this.pending.delete(s.requestId);
       this.error = ERROR_MESSAGES[s.code] || "Máy chủ từ chối thao tác.";
       if (s.code === "RECONNECT_EXPIRED" || s.code === "VERSION_MISMATCH") {
         this.closed = true;

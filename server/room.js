@@ -260,10 +260,11 @@ export class Room {
     this.broadcast();
     return true;
   }
-  reconnect(token, ws) {
+  reconnect(token, ws, nextToken = token) {
     const client = [...this.clients].find((candidate) => candidate.reconnectToken === token && !candidate.connected);
     if (!client || Date.now() - client.disconnectedAt > RECONNECT_GRACE_MS) return null;
     client.ws = ws;
+    client.reconnectToken = nextToken;
     client.connected = true;
     client.disconnectedAt = 0;
     client.terrainVersion = -1;
@@ -289,11 +290,6 @@ export class Room {
     if (this.clients.size) this.broadcast();
   }
   handle(client, msg) {
-    if (msg.clientSeq <= client.lastAckSeq) {
-      this.rejectedMessages++;
-      return false;
-    }
-    client.lastAckSeq = msg.clientSeq;
     const m = this.match,
       mine = this.state === "playing" && m.current.control === "human" && this.clientOfSeat(m.current.player) === client;
     switch (msg.t) {

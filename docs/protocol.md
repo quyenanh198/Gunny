@@ -1,30 +1,70 @@
-# Protocol WebSocket v1
+# Protocol WebSocket v2
 
-Endpoint: `/ws?room=ABCD&name=An&reconnectToken=...`.
+Endpoint mở socket:
 
-## Client → server
+```text
+/ws?mode=create&visibility=private&name=An
+/ws?mode=join&room=ABCDEF&name=An
+/ws?mode=spectate&room=ABCDEF&name=An
+/ws?mode=resume&room=ABCDEF
+```
 
-Mọi message là JSON object, tối đa 4096 byte, có:
+Reconnect credential không được đặt trong URL.
 
-- `protocolVersion: 1`.
-- `clientSeq`: số nguyên dương tăng đơn điệu trong một phiên người chơi.
-- `t`: một trong `team`, `ready`, `loadout`, `setup`, `start`, `restart`, `lobby`, `keys`, `aim`, `charge`, `release`, `cancel`, `action`, `chat`, `kick`. `action` chỉ gửi lựa chọn shot/item; server tự tính SS, HP cost, damage và delay. Chat tối đa 160 ký tự; chỉ host được kick trước trận.
+## Resume handshake
 
-Server xác thực schema trước khi chuyển message cho phòng. Message có sequence cũ hoặc trùng bị bỏ qua; message sai trả `{ "t": "error", "code": "..." }`. Mỗi kết nối nhận tối đa 60 message/giây.
+Sau khi socket `mode=resume` mở, client phải gửi trong 5 giây:
 
-## Server → client
+```json
+{
+  "t": "resume",
+  "protocolVersion": 2,
+  "room": "ABCDEF",
+  "reconnectToken": "opaque-secret"
+}
+```
+
+Server kiểm tra room/token/disconnect grace, rotate token ngay khi thành công và gửi full snapshot. Token cũ không thể replay. Handshake lỗi đóng socket bằng policy violation.
+
+## Client command
+
+Mọi command gameplay/lobby là JSON object tối đa 4096 byte:
+
+- `protocolVersion: 2`.
+- `clientSeq`: số nguyên dương tăng đơn điệu trên logical session, giữ nguyên qua reconnect.
+- `requestId`: chuỗi `[A-Za-z0-9_-]`, dài 1–64, duy nhất cho thao tác.
+- `t`: `team`, `ready`, `loadout`, `setup`, `start`, `restart`, `lobby`, `keys`, `aim`, `charge`, `release`, `cancel`, `action`, `chat` hoặc `kick`.
+
+Server chỉ tăng `lastAckSeq` sau khi command qua schema, authorization, phase và room invariant. Command bị từ chối không consume sequence, nên client có thể gửi command hợp lệ với cùng sequence kế tiếp.
+
+Command được nhận:
+
+```json
+{ "t": "ack", "requestId": "...", "clientSeq": 12 }
+```
+
+Command bị từ chối:
+
+```json
+{ "t": "error", "code": "COMMAND_REJECTED", "requestId": "...", "clientSeq": 12 }
+```
+
+Client dùng `requestId` để đóng pending operation; snapshot `lastAckSeq` vẫn là mốc resync authoritative.
+
+## Server snapshot
 
 Snapshot `room` có:
 
-- `protocolVersion`: version server đang dùng.
-- `serverTick`: fixed-step authoritative hiện tại.
-- `lastAckSeq`: input cuối server đã nhận từ client này.
-- `roomVersion`: revision của phòng/input đã chấp nhận.
-- `reconnectToken`: token bí mật dùng lại trong 30 giây sau khi mất kết nối.
-- State phòng và, khi đang chơi, full match snapshot. Terrain chỉ gửi khi `terrainVersion` thay đổi hoặc client reconnect.
+- `protocolVersion`, `serverTick`, `lastAckSeq`, `roomVersion`.
+- Reconnect token hiện hành, room/player/role state và match snapshot khi đang chơi.
+- Terrain chỉ gửi khi `terrainVersion` đổi hoặc sau reconnect.
 
-Error code hiện có: `INVALID_JSON`, `INVALID_MESSAGE`, `INVALID_PAYLOAD`, `INVALID_SEQUENCE`, `VERSION_MISMATCH`, `UNKNOWN_MESSAGE`, `MESSAGE_TOO_LARGE`, `RATE_LIMITED`, `RECONNECT_EXPIRED`.
+## Error codes
 
-## Reconnect và heartbeat
+- Schema/version: `INVALID_JSON`, `INVALID_MESSAGE`, `INVALID_PAYLOAD`, `INVALID_SEQUENCE`, `INVALID_REQUEST_ID`, `VERSION_MISMATCH`, `UNKNOWN_MESSAGE`, `MESSAGE_TOO_LARGE`.
+- Lifecycle: `ROOM_NOT_FOUND`, `ROOM_FULL`, `SPECTATOR_FULL`, `RECONNECT_EXPIRED`, `RESUME_REQUIRED`, `RESUME_TIMEOUT`.
+- Command/rate: `STALE_SEQUENCE`, `COMMAND_REJECTED`, `RATE_LIMITED`.
 
-Server ping WebSocket mỗi 10 giây và đóng kết nối không pong. Client chuyển sang `reconnecting`, thử lại sau 1 giây với room ID và token. Trong grace period 30 giây, server giữ ID, ghế, host và match state; reconnect thành công luôn buộc full terrain resync.
+## Heartbeat và reconnect
+
+Server ping mỗi 10 giây và đóng socket không pong. Client reconnect sau 1 giây; server giữ seat/host/match trong 30 giây. Resume thành công rotate credential và buộc full terrain resync.

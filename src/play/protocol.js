@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const MAX_MESSAGE_BYTES = 4096;
 
 const keys = new Set(["left", "right", "up", "down"]);
@@ -36,9 +36,22 @@ export function validateClientMessage(message) {
   if (!message || typeof message !== "object" || Array.isArray(message)) return { code: "INVALID_MESSAGE" };
   if (message.protocolVersion !== PROTOCOL_VERSION) return { code: "VERSION_MISMATCH" };
   if (!Number.isSafeInteger(message.clientSeq) || message.clientSeq < 1) return { code: "INVALID_SEQUENCE" };
+  if (typeof message.requestId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(message.requestId))
+    return { code: "INVALID_REQUEST_ID" };
   const validate = validators[message.t];
   if (!validate) return { code: "UNKNOWN_MESSAGE" };
-  const allowed = new Set(["protocolVersion", "clientSeq", "t", ...fields[message.t]]);
+  const allowed = new Set(["protocolVersion", "clientSeq", "requestId", "t", ...fields[message.t]]);
   if (Object.keys(message).some((key) => !allowed.has(key))) return { code: "INVALID_PAYLOAD" };
   return validate(message) ? { ok: true } : { code: "INVALID_PAYLOAD" };
+}
+
+export function validateResumeMessage(message) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return { code: "INVALID_MESSAGE" };
+  if (message.protocolVersion !== PROTOCOL_VERSION) return { code: "VERSION_MISMATCH" };
+  if (message.t !== "resume") return { code: "RESUME_REQUIRED" };
+  if (!/^[A-Z]{6}$/.test(message.room || "")) return { code: "INVALID_PAYLOAD" };
+  if (typeof message.reconnectToken !== "string" || message.reconnectToken.length < 16 || message.reconnectToken.length > 64)
+    return { code: "INVALID_PAYLOAD" };
+  const allowed = new Set(["protocolVersion", "t", "room", "reconnectToken"]);
+  return Object.keys(message).every((key) => allowed.has(key)) ? { ok: true } : { code: "INVALID_PAYLOAD" };
 }
