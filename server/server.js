@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { randomUUID } from "node:crypto";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { RoomManager } from "./room-manager.js";
 import { connectionParams, originAllowed, parseMessage } from "./validation.js";
 import { validateResumeMessage } from "../src/play/protocol.js";
@@ -53,6 +54,24 @@ const sendJson = (res, status, value, headers = {}) => {
   res.end(JSON.stringify(value));
 };
 const sessionCookie = (value) => `gunny_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
+// index.html loads only same-origin scripts/assets plus Google Fonts (see
+// style.css's @import). Verified against the real page structure, not just
+// assumed — but confirm with a real browser (npm run verify's browser smoke,
+// or `npm run test:browser`) after touching this; this environment has no
+// Chromium/Playwright to check it locally.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "media-src 'self'",
+  "connect-src 'self' ws: wss:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
 const cookieSession = (req) => {
   const item = (req.headers.cookie || "").split(";").map((part) => part.trim())
     .find((part) => part.startsWith("gunny_session="));
@@ -94,7 +113,11 @@ export function createServer({
   identityStore = new MemoryIdentityStore(),
   requireRealtimeIdentity = false,
   moderationToken = process.env.MODERATION_TOKEN || "",
+  readyEventLoopLagMs = Number(process.env.READY_EVENT_LOOP_LAG_MS || 200),
 } = {}) {
+  const eventLoopDelay = monitorEventLoopDelay({ resolution: 20 });
+  eventLoopDelay.enable();
+  let shuttingDown = false;
   const socialSafety = new SocialSafety(identityStore);
   const roomManager = new RoomManager({ matchLifecycle: identityStore, socialSafety });
   const presence = new PresenceService();
@@ -108,6 +131,12 @@ export function createServer({
   const httpLimiter = new FixedWindowLimiter({ limit: httpRequestsPerMinute, windowMs: 60000 });
   const server = http.createServer(async (req, res) => {
     try {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+    if (trustProxy && req.headers["x-forwarded-proto"] === "https")
+      res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
     if ((req.url.startsWith("/api/") || req.url === "/metrics") && !httpLimiter.take(clientIp(req, ipOptions))) {
       res.writeHead(429, { "content-type": "application/json", "retry-after": "60" });
       res.end(JSON.stringify({ error: "RATE_LIMITED" }));
@@ -118,7 +147,16 @@ export function createServer({
       return;
     }
     if (req.url === "/readyz") {
-      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ready: true }));
+      const lagMs = Math.round(eventLoopDelay.mean / 1e6) || 0;
+      eventLoopDelay.reset();
+      let dbOk = true, dbError;
+      try { await identityStore.ping?.(); }
+      catch (error) { dbOk = false; dbError = error.message; }
+      const lagOk = lagMs < readyEventLoopLagMs;
+      const ready = dbOk && lagOk && !shuttingDown;
+      res.writeHead(ready ? 200 : 503, { "content-type": "application/json" }).end(JSON.stringify({
+        ready, db: dbOk, eventLoopLagMs: lagMs, shuttingDown, ...(dbError ? { dbError } : {}),
+      }));
       return;
     }
     if (req.url === "/api/sessions/guest" && req.method === "POST") {
@@ -588,6 +626,8 @@ export function createServer({
   heartbeat.unref();
   server.on("close", () => clearInterval(heartbeat));
   server.gracefulShutdown = () => {
+    shuttingDown = true;
+    eventLoopDelay.disable();
     for (const ws of wss.clients) ws.close(1001, "server shutdown");
     roomManager.close();
     server.closeAllConnections();
