@@ -240,20 +240,22 @@ Exit criteria:
 
 ### R7 — Production reliability và delivery
 
-Trạng thái: **chưa đạt; runbook hiện tại chỉ là baseline**.
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Readiness/security headers/dependency scan/SLO giấy đã có; CDN tách asset, OpenTelemetry, canary/blue-green và DDoS/WAF ở edge chưa làm — đều cần hạ tầng thật ngoài phạm vi một phiên code.
 
-- Tách static asset khỏi game process khi public; asset hash/CDN/cache immutable.
-- Readiness phản ánh DB, event-loop lag và khả năng nhận trận; metrics không public trực tiếp.
-- OpenTelemetry/error tracking, structured log có correlation ID và redaction.
-- SLO: API availability, queue latency, match tick delay, disconnect rate; alert dựa trên SLO.
-- Backup/restore drill, migration rollback, canary/blue-green và capacity/load test.
-- Dependency scan, secret scan, CSP/security headers, DDoS/WAF ở edge.
+- Tách static asset khỏi game process khi public; asset hash/CDN/cache immutable — **chưa làm**, cần hạ tầng CDN thật.
+- Readiness phản ánh DB, event-loop lag và khả năng nhận trận; metrics không public trực tiếp — **đạt phần lõi**: `/readyz` giờ trả `{ready, db, eventLoopLagMs, shuttingDown}` thật (trước đây luôn `ready:true` — bug đã ghi từ M8), `db` ping Postgres thật, lag đo bằng `perf_hooks.monitorEventLoopDelay()`, cờ `shuttingDown` bật ngay khi graceful shutdown bắt đầu. `/metrics` đã yêu cầu bearer token khi production từ R1C, không đổi thêm ở đây.
+- OpenTelemetry/error tracking, structured log có correlation ID và redaction — **chưa làm**.
+- SLO: API availability, queue latency, match tick delay, disconnect rate; alert dựa trên SLO — **chỉ có "paper SLO"**: bảng ngưỡng ghi trong `docs/operations.md` đối chiếu với `/metrics`/`/readyz` hiện có, **chưa có hệ alert thật chạy** (không có Alertmanager/Grafana hay tương đương được kết nối).
+- Backup/restore drill, migration rollback, canary/blue-green và capacity/load test — **một phần**: `migrate()` đã có test idempotent (chạy lại không áp lại migration cũ, điều kiện cần cho redeploy an toàn); quy trình backup/restore bằng `pg_dump`/`pg_restore` đã viết thành runbook trong `docs/operations.md` nhưng **chưa từng chạy drill thật** (cần Postgres thật ngoài phạm vi phiên này). Canary/blue-green và capacity/load test ở quy mô đã công bố chưa làm vì chưa có quyết định capacity target (mục 8.7).
+- Dependency scan, secret scan, CSP/security headers, DDoS/WAF ở edge — **một phần**: `npm run verify` giờ chạy `npm audit --audit-level=high` (trước đây chỉ chạy thủ công, không gate CI); mọi response có `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Content-Security-Policy` cùng-origin + Google Fonts, và `Strict-Transport-Security` khi proxy tin cậy xác nhận HTTPS — **đã xác minh bằng browser smoke thật** (Playwright/Chromium chạy được trong môi trường này ở thời điểm R7, khác các ghi chú "không có Chromium" ở mọi milestone trước — kiểm tra lại giả định này nếu môi trường đổi). Secret scan tự động và DDoS/WAF ở edge chưa làm.
+
+Chi tiết readiness/security/SLO/backup ở `docs/operations.md`.
 
 Exit criteria:
 
-- Load test đạt capacity đã công bố với tick p95/p99 trong budget.
-- Deploy/rollback không làm tạo hai settlement hoặc orphan queue.
-- On-call có dashboard, alert và runbook đã diễn tập.
+- Load test đạt capacity đã công bố với tick p95/p99 trong budget — **chưa đạt**: chưa có capacity target được chốt để so; baseline 30-client cũ (M9) vẫn là số duy nhất có.
+- Deploy/rollback không làm tạo hai settlement hoặc orphan queue — **đạt về cấu trúc dữ liệu**: `result_key`/`request_id`/trạng thái `playing` guard đã idempotent từ R2E/R5; **chưa diễn tập rollback thật** trên môi trường triển khai thật.
+- On-call có dashboard, alert và runbook đã diễn tập — **chưa đạt**: runbook có (`docs/operations.md`), nhưng dashboard/alert chưa nối vào hệ thống thật và chưa diễn tập.
 
 ### R8 — Closed alpha → online beta
 

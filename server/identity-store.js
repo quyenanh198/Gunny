@@ -342,6 +342,10 @@ export class PostgresIdentityStore {
       [Math.min(200, Math.max(1, limit))]);
     return result.rows;
   }
+  async ping() {
+    await this.pool.query("SELECT 1");
+    return true;
+  }
   async lookupUser(userId) {
     const profile = await this.pool.query(`SELECT u.id, u.kind, u.role, u.created_at, u.deleted_at,
       p.display_name, p.version FROM users u JOIN profiles p ON p.user_id = u.id WHERE u.id = $1`, [userId]);

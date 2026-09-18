@@ -3,11 +3,12 @@ import { spawn } from "node:child_process";
 const port = Number(process.env.VERIFY_PORT || 5173);
 const baseUrl = `http://127.0.0.1:${port}`;
 
-function run(command, args, environment = {}) {
+function run(command, args, environment = {}, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: "inherit",
       env: { ...process.env, ...environment },
+      ...options,
     });
     child.once("error", reject);
     child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`)));
@@ -28,6 +29,10 @@ async function waitForServer() {
 
 await run(process.execPath, ["scripts/check-syntax.mjs"]);
 await run(process.execPath, ["--test"]);
+// npm ships as npm.cmd/npm.ps1 on Windows, which Node's spawn() cannot exec
+// directly without a shell (EINVAL) — see scripts/check-syntax.mjs's own
+// history of Unix-only tooling breaking Windows dev machines.
+await run("npm", ["audit", "--audit-level=high"], {}, { shell: true });
 
 const server = spawn(process.execPath, ["server/server.js"], {
   stdio: ["ignore", "inherit", "inherit"],

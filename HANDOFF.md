@@ -649,3 +649,33 @@ Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Chỉ làm 
 - Phần R6 còn lại — remote feature-flag rollout/kill-switch, maintenance mode/announcement/min-version, dashboard funnel/retention/queue-time/disconnect/report-rate — chưa làm và không phải infra khó, chỉ là chưa tới lượt; có thể tiếp tục trong một PR R6 riêng hoặc gộp vào R7 nếu hợp lý hơn về vận hành.
 - `client.adminMuted`/ban chỉ kiểm tra một lần lúc connect — một sanction ban hành giữa phiên chỉ có hiệu lực ở lần connect tiếp theo, không cắt ngay socket đang mở. Ghi rõ trong `docs/admin.md`; nếu cần cắt ngay, phải thêm cơ chế broadcast sanction tới các Room đang có user đó.
 - R7 (production reliability) là nơi hợp lý để: tách audit log `admin_actions` ra dashboard thật, thêm alert khi có nhiều ban/report bất thường, và readiness/structured logging tổng thể — không tự suy diễn SLO, cần benchmark thật trên máy đích.
+
+## M25 — R7 readiness, security headers, dependency scan và SLO giấy (một phần)
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Chỉ phần code-level làm được trong một phiên; CDN, OpenTelemetry, canary/blue-green, alert thật và DDoS/WAF ở edge đều cần hạ tầng ngoài phạm vi này.
+
+### Phát hiện quan trọng: Playwright/Chromium chạy được trong môi trường này
+
+Mọi ghi chú "chưa chạy được vì không có Chromium/Playwright" từ M2 tới M24 (bao gồm cả ghi chú M24 ngay phía trên) hoá ra chỉ đúng ở CÁC PHIÊN LÀM VIỆC TRƯỚC, không còn đúng ở thời điểm này: chạy `node scripts/verify.mjs` đầy đủ ở đây **pass hoàn toàn**, kể cả browser smoke thật (`PASS: 27 assets, 5 maps, 80 animation frames, home/room/battle screens, 12 selections, rematch, crater pixels, player/bot turns, pause freezes animation, reduced motion, viewport fit at four sizes, mobile layout, asset fallback`). Đừng giả định môi trường không có Chromium chỉ vì handoff cũ ghi vậy — kiểm tra lại bằng `npm run verify` hoặc `npm run test:browser` trước khi kết luận.
+
+### Đã thay đổi
+
+- `/readyz` giờ phản ánh trạng thái thật thay vì luôn `ready:true` (bug đã ghi từ M8 audit): `{ready, db, eventLoopLagMs, shuttingDown}`. `db` là một `SELECT 1` thật qua `identityStore.ping()` (thêm vào `PostgresIdentityStore`; memory store không có ping, coi như luôn khỏe qua optional chaining). `eventLoopLagMs` đo bằng `perf_hooks.monitorEventLoopDelay()`, reset sau mỗi lần đọc để phản ánh độ trễ gần nhất; ngưỡng mặc định 200ms qua `READY_EVENT_LOOP_LAG_MS`. `shuttingDown` bật ngay khi `gracefulShutdown()` bắt đầu, trả `503` để orchestrator ngừng route trước khi đóng hẳn.
+- Security headers cho MỌI response (static lẫn API): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Content-Security-Policy` (same-origin script/style/img/media/connect + Google Fonts cho `style-src`/`font-src` vì `style.css` có `@import` từ `fonts.googleapis.com`, `frame-ancestors 'none'`). `Strict-Transport-Security` chỉ gửi khi `TRUST_PROXY=true` **và** proxy tin cậy xác nhận `X-Forwarded-Proto: https` — không tin client tự khai.
+- `scripts/verify.mjs` thêm bước `npm audit --audit-level=high` sau syntax/test, trước browser smoke — trước đây chỉ chạy thủ công mỗi milestone, giờ gate thật trong CI (`npm run verify`). Sửa luôn một bug Windows: `spawn("npm", ...)` không chạy được trực tiếp trên Windows (npm là `.cmd`, cần `shell:true`) — đã thêm `shell:true` riêng cho lệnh này, không đổi các lệnh `node` khác.
+- `tests/database.test.js`: xác minh `migrate()` idempotent (chạy lại không áp lại migration cũ) — điều kiện cần cho redeploy/rollback an toàn.
+- `docs/operations.md` mở rộng: mục Readiness, Bảo mật HTTP, Dependency/secret scan, bảng SLO tạm thời ("paper SLO", chưa có alert thật chạy), quy trình backup/restore drill bằng `pg_dump`/`pg_restore` (runbook, **chưa từng chạy drill thật**), và ghi rõ idempotency sẵn có ở tầng dữ liệu giúp rollback an toàn.
+
+### Xác minh local 2026-09-17
+
+- `node scripts/check-syntax.mjs` — 78 JavaScript files đạt.
+- `node --test` — 144 pass / 5 skip (skip là PostgreSQL integration, cần `TEST_DATABASE_URL`).
+- `npm audit --audit-level=high` — 0 vulnerability.
+- `node scripts/verify.mjs` chạy **toàn bộ, thành công**: syntax → 144 test → npm audit → khởi động server → browser smoke thật pass 100%. Đây là lần đầu tiên trong lịch sử hand-off này verify chạy hết được, không bị chặn ở bước browser smoke.
+- Test mới: `tests/readiness.test.js` (3 test — readyz khỏe mạnh, readyz fail-closed khi store không ping được, store không có `ping()` vẫn coi là khỏe), `tests/security-headers.test.js` (3 test — header có mặt ở mọi response, HSTS chỉ gửi khi proxy tin cậy xác nhận https, HSTS không gửi khi server không tin proxy nào), `tests/database.test.js` (1 test, skip cục bộ).
+
+### Hand-off sang R8
+
+- Phần R7 còn lại cần hạ tầng thật, không phải code: tách asset ra CDN, OpenTelemetry/error tracking, alert thật nối vào bảng SLO giấy, canary/blue-green, DDoS/WAF ở edge, và **drill backup/restore thật** (runbook đã có, chưa chạy lần nào).
+- Capacity target vẫn chưa được chốt (mục 8.7 roadmap) — không tự suy ra một con số; load test "đạt capacity đã công bố" không thể đóng cho tới khi có quyết định đó.
+- R8 (closed alpha) đứng sau R0–R7; theo "Thứ tự triển khai" trong roadmap, R7 chưa đạt đầy đủ (thiếu phần hạ tầng) nên R8 chưa nên mở thật với người dùng ngoài — phần code có thể chuẩn bị trước (checklist, form feedback, v.v.) nhưng đừng công bố alpha khi capacity/alert chưa có.
