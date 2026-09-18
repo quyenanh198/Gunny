@@ -594,3 +594,29 @@ Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Đúng tinh
 - Replay/checksum hiện chỉ sống trong RAM của `Room`, không có API để lấy ra hay lưu lại sau khi trận kết thúc — nếu cần công cụ chống gian lận hoặc điều tra sự cố dùng lại được sau khi trận đã xong, đó là việc của R6 (admin), không phải mở lại R4.
 - Balance simulator có nhưng chưa có ngưỡng balance được product/design chốt; đừng coi kết quả simulator hiện tại là "đã balance", chỉ là công cụ đo.
 - R5 (progression/economy) chỉ bắt đầu sau khi R2 (đã xong local) thật sự merge; không bán power trong PvP theo nguyên tắc đã chốt ở roadmap.
+
+## M23 — R5 currency ledger, progression và reward settlement
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Chỉ hạ tầng ledger/reward; không có shop, cosmetic catalog, mission content hay UI — đó là quyết định sản phẩm chưa chốt.
+
+### Đã thay đổi
+
+- `server/economy.js`: bảng reward dùng chung `REWARD_TABLE` (win 30xp/20 currency, loss 10xp/5 currency, draw 15xp/10 currency), `rewardFor(participant, status)` (trả về 0/0 nếu `disconnected` hoặc `status !== "completed"` — luật chống AFK/farm), `levelForXp(xp)` (đường cong phẳng 100xp/level, placeholder chưa balance-tune).
+- Migration `004_progression_economy.sql`: `currency_ledger` (append-only, unique `(user_id, request_id)`, không lưu số dư trực tiếp — balance luôn tính lại bằng `SUM(amount)` để tránh hai nguồn sự thật), `progression` (xp/level), `entitlements` (scaffold cho cosmetic tương lai, **chưa có gì cấp vào**).
+- `PostgresIdentityStore.completeMatch()` và `MemoryIdentityStore.completeMatch()`: cấp reward cho từng participant **trong cùng transaction** với kết quả trận (Postgres) hoặc cùng lệnh gọi (memory) — không có đường nào để có reward mà không có kết quả trận hợp lệ tương ứng, và ngược lại. Idempotent theo `request_id = match:<matchId>:<userId>` cộng với guard `resultKey` sẵn có từ R2E.
+- API đọc thuần: `GET /api/economy/wallet`, `GET /api/economy/ledger`, `GET /api/economy/progression` — **không có endpoint ghi nào**; đây là chủ đích, để không thể sửa client tự cấp currency/xp.
+- `docs/economy.md` ghi lại thiết kế, bảng reward, và giới hạn đã biết.
+
+### Xác minh local 2026-09-17
+
+- `node scripts/check-syntax.mjs` — 73 JavaScript files đạt.
+- `node --test` — 131 pass / 3 skip (skip vẫn là PostgreSQL integration, cần `TEST_DATABASE_URL`).
+- `npm audit --audit-level=high` — 0 vulnerability.
+- Test mới: `tests/economy.test.js` (5 test cho `rewardFor`/`levelForXp` thuần), `tests/economy-api.test.js` (4 test — reward đúng qua `MemoryIdentityStore.completeMatch`, participant disconnected không nhận gì, trận abandoned không trả ai, và toàn bộ 3 endpoint qua HTTP thật kể cả trạng thái mặc định cho identity mới). Mở rộng `tests/postgres-identity.test.js`'s "authoritative lifecycle" test với assertion wallet/progression/ledger (chưa chạy được trên máy này vì không có `TEST_DATABASE_URL`, sẽ chạy trên CI khi merge).
+- Chưa chạy `npm run verify` đầy đủ (browser smoke) — môi trường vẫn không có Chromium/Playwright.
+
+### Hand-off sang R6
+
+- Không có UI/API nào để chi tiêu currency hay xem inventory — chưa có gì để hiển thị. Khi có shop/cosmetic catalog, nhớ giữ nguyên tắc "server quyết định toàn bộ, không client-authoritative reward" đã áp dụng ở đây.
+- `entitlements` table tồn tại nhưng rỗng theo thiết kế; đừng coi sự tồn tại của bảng là bằng chứng tính năng cosmetic đã xong.
+- R6 (admin/moderation/LiveOps) là nơi hợp lý để thêm: xem/điều chỉnh currency của một user (grant có audit, dual-control), dashboard economy reconciliation, và daily/weekly mission — tất cả cần quyết định sản phẩm trước, không tự suy diễn số liệu.

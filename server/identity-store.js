@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { rewardFor, levelForXp } from "./economy.js";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const token = () => randomBytes(32).toString("base64url");
@@ -137,6 +138,20 @@ export class PostgresIdentityStore {
       for (const participant of participants) await client.query(`UPDATE match_participants
         SET outcome = $3, disconnected = $4 WHERE match_id = $1 AND user_id = $2`,
       [id, participant.userId, participant.outcome, !!participant.disconnected]);
+      // Reward settlement lives in the same transaction as the match/participant
+      // write it is derived from: either both commit or neither does, so a
+      // crash mid-settlement can never leave a paid-out reward for a match
+      // that didn't actually finalize (or vice versa).
+      for (const participant of participants) {
+        const reward = rewardFor(participant, status);
+        if (reward.currency) await client.query(`INSERT INTO currency_ledger(id, user_id, amount, reason, request_id, match_id)
+          VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (user_id, request_id) DO NOTHING`,
+        [randomUUID(), participant.userId, reward.currency, `match_${participant.outcome}`, `match:${id}:${participant.userId}`, id]);
+        if (reward.xp) await client.query(`INSERT INTO progression(user_id, xp, level) VALUES ($1, $2, $3)
+          ON CONFLICT (user_id) DO UPDATE SET xp = progression.xp + EXCLUDED.xp,
+            level = floor((progression.xp + EXCLUDED.xp) / 100.0) + 1, updated_at = now()`,
+        [participant.userId, reward.xp, levelForXp(reward.xp)]);
+      }
       await client.query("COMMIT");
       return { applied: true, matchId: id };
     } catch (error) {
@@ -247,5 +262,29 @@ export class PostgresIdentityStore {
   async pruneExpiredChat() {
     const result = await this.pool.query("DELETE FROM chat_messages WHERE expires_at < now() RETURNING id");
     return result.rowCount;
+  }
+  // Currency has no direct-write API by design: every ledger row is created
+  // by completeMatch() above, inside the same transaction as the match
+  // result it pays out for. These are read-only.
+  async getWallet(rawToken) {
+    const session = await this.authenticate(rawToken);
+    if (!session) return null;
+    const result = await this.pool.query(
+      "SELECT COALESCE(SUM(amount), 0) AS balance FROM currency_ledger WHERE user_id = $1", [session.user.id]);
+    return { balance: Number(result.rows[0].balance) };
+  }
+  async getLedger(rawToken, limit = 50) {
+    const session = await this.authenticate(rawToken);
+    if (!session) return null;
+    const result = await this.pool.query(`SELECT id, amount, reason, match_id, created_at FROM currency_ledger
+      WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`, [session.user.id, Math.min(100, Math.max(1, limit))]);
+    return result.rows.map((row) => ({ id: row.id, amount: row.amount, reason: row.reason,
+      matchId: row.match_id, createdAt: row.created_at }));
+  }
+  async getProgression(rawToken) {
+    const session = await this.authenticate(rawToken);
+    if (!session) return null;
+    const result = await this.pool.query("SELECT xp, level FROM progression WHERE user_id = $1", [session.user.id]);
+    return result.rows[0] ? { xp: result.rows[0].xp, level: result.rows[0].level } : { xp: 0, level: 1 };
   }
 }
