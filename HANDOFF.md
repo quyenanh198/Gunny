@@ -566,3 +566,31 @@ Trạng thái: **đã triển khai và verify local; chờ CI/merge**. Đây là
 - R3 đóng ở đây: matchmaking, party, presence/leaver và social safety đều có server-side enforcement và test. MMR, guild, season vẫn hoãn tới sau R5/R6 theo roadmap.
 - R4 tiếp tục tách `Match` thành state machine/combat/terrain/turn module rõ ràng, deterministic replay + checksum, và content schema versioning — không mở rộng map/vũ khí/item mới cho tới khi pipeline đó xong.
 - `MODERATION_TOKEN` phải được set trong mọi environment không phải dev trước khi admin review queue được dùng thật; hiện chưa có UI admin, chỉ có API.
+
+## M22 — R4 replay, checksum, content schema và balance simulator
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Đúng tinh thần R4: giữ core combat, không thêm map/vũ khí/nhân vật mới.
+
+### Đã thay đổi
+
+- `src/core/replay.js`: `matchChecksum(match)` (hash sha256 trên state gameplay-relevant, loại particles/trail/blasts/popups/animation), `applyCommand(match, entry)` (áp một command đã log giống hệt `Room.handle()`), `replayMatch({config, commands, totalTicks, checksumLog, dt})` (dựng lại `Match` từ seed/roster, tick lại toàn bộ, so checksum theo tick và trả `divergedAt` nếu lệch).
+- `server/room.js`: thêm `commandLog` (mọi command aim/charge/release/cancel/action/keys, gắn `serverTick`, cap 20.000) và `checksumLog` (một checksum mỗi giây/60 tick, cap 600 mẫu) cho trận đang chạy; reset ở `start()`/`restart()`. Thêm `room.replayConfig()` trả `{seed, map, difficulty, roster}` để dựng lại match y hệt.
+- Sửa 2 lời gọi `Math.random()` còn sót trong `src/match.js` (particle velocity/angle dòng ~302-303, trail sampling dòng ~422) sang `this.random()` — seed giờ quyết định toàn bộ state kể cả phần cosmetic, cần thiết để checksum đầy đủ đáng tin.
+- `src/content/schema.js`: `CONTENT_VERSION`, `validateContent()`, `validateContentOrThrow()` cho character/weapon/map (id duy nhất, field bắt buộc, angle range hợp lệ, spawn zone hợp lệ, `createTerrain` là function). Chưa có migration runner thật, chỉ là marker version.
+- `scripts/balance-simulator.mjs` (+ `npm run benchmark:balance`): chạy hàng trăm trận bot-vs-bot headless qua `Match` trực tiếp (không cần server/browser), quét tổ hợp character/weapon/map theo seed, xuất JSON: win rate theo skin/weapon, win rate/avg rounds/avg damage theo map, first-turn advantage, avg rounds/ticks/damage, và cờ `timedOut` (thất bại nếu có trận không kết thúc trong 200.000 tick).
+- `docs/content-pipeline.md` ghi lại toàn bộ cơ chế replay/checksum/content schema/balance simulator và những gì còn thiếu.
+
+### Xác minh local 2026-09-17
+
+- `node scripts/check-syntax.mjs` — 70 JavaScript files đạt.
+- `node --test` — 124 pass / 3 skip (skip là PostgreSQL integration, cần `TEST_DATABASE_URL`).
+- `npm audit --audit-level=high` — 0 vulnerability.
+- Test mới: `tests/replay.test.js` (4 test — hai `Match` cùng seed giống hệt nhau, replay command log khớp checksum, một command khác bị phát hiện là divergence, và **một `Room` sống thật** điều khiển qua `room.handle()`/`room.tick()` có `commandLog`/`checksumLog` replay khớp state cuối) và `tests/content-schema.test.js` (5 test — content thật pass schema, và validator bắt được duplicate id/angle range sai/map thiếu `createTerrain`).
+- `npm run benchmark:balance 300` chạy trong khoảng 25s, không có trận nào `timedOut`.
+- Chưa chạy `npm run verify` đầy đủ (browser smoke) — môi trường vẫn không có Chromium/Playwright, nhất quán các milestone trước.
+
+### Hand-off sang R5
+
+- Replay/checksum hiện chỉ sống trong RAM của `Room`, không có API để lấy ra hay lưu lại sau khi trận kết thúc — nếu cần công cụ chống gian lận hoặc điều tra sự cố dùng lại được sau khi trận đã xong, đó là việc của R6 (admin), không phải mở lại R4.
+- Balance simulator có nhưng chưa có ngưỡng balance được product/design chốt; đừng coi kết quả simulator hiện tại là "đã balance", chỉ là công cụ đo.
+- R5 (progression/economy) chỉ bắt đầu sau khi R2 (đã xong local) thật sự merge; không bán power trong PvP theo nguyên tắc đã chốt ở roadmap.

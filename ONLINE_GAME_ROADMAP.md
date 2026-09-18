@@ -187,19 +187,21 @@ R3D bổ sung player-controlled block/mute/report (`POST /api/social/block`, `/m
 
 ### R4 — Combat engine và content pipeline
 
-Trạng thái: **một phần; giữ core, ngừng mở rộng bề rộng**.
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Core state machine giữ nguyên (không đổi framework/tách microservice); replay+checksum, content schema và balance simulator đã thêm. Không có map/vũ khí/nhân vật mới nào được thêm trong milestone này.
 
-- Hoàn tất tách `Match` thành state machine/combat/terrain/turn modules với API snapshot/command rõ.
-- Replay deterministic từ seed + command log; lưu checksum định kỳ để phát hiện divergence.
-- Content schema versioned cho character/weapon/map/item; validator và migration.
-- Balance simulator chạy hàng nghìn trận bot; xuất win rate, first-turn advantage, damage và duration.
-- Chốt vertical slice trước: không thêm map/vũ khí mới cho tới khi pipeline/versioning hoàn thành.
+- Tách `Match`/`combat`/`turn-queue`/`bot` module: **đã có từ M1**, giữ nguyên. Chưa có module `terrain` riêng và chưa có snapshot/command envelope hình thức hóa (`Room.snapshot()` vẫn là shape thực tế) — còn mở cho một đợt sau.
+- Replay deterministic từ seed + command log; checksum định kỳ để phát hiện divergence — **đã có**: `src/core/replay.js` (`matchChecksum`, `applyCommand`, `replayMatch`) và `Room.commandLog`/`Room.checksumLog` (mỗi giây một checksum, capture mọi command aim/charge/release/cancel/action/keys). Sửa luôn 2 lời gọi `Math.random()` còn sót trong `match.js` (particle/trail) sang `this.random()` để seed quyết định toàn bộ state, không chỉ gameplay.
+- Content schema versioned cho character/weapon/map; validator — **đã có**: `src/content/schema.js` (`CONTENT_VERSION`, `validateContent`, `validateContentOrThrow`), gate qua `tests/content-schema.test.js`. **Chưa có migration runner thật** — version number mới là marker, chưa giải quyết rename/reinterpret field.
+- Balance simulator chạy hàng loạt trận bot; xuất win rate, first-turn advantage, damage và duration — **đã có**: `scripts/balance-simulator.mjs` (`npm run benchmark:balance`), headless qua `Match` trực tiếp, ~300 trận/~25s mặc định. Chưa gate vào CI (chưa có ngưỡng balance được chốt để so sánh).
+- Chốt vertical slice trước: không thêm map/vũ khí mới cho tới khi pipeline/versioning hoàn thành — **tuân thủ**, R4 này không thêm content mới.
+
+Chi tiết ở `docs/content-pipeline.md`.
 
 Exit criteria:
 
-- Replay server cho checksum giống bản gốc trên CI.
-- Content lỗi bị từ chối trước deploy; trận đang chạy không đổi balance giữa chừng.
-- Không character/shot/item vượt ngưỡng balance được chốt.
+- Replay cho checksum giống bản gốc trên CI — **đạt ở mức test local** (`tests/replay.test.js`, gồm 1 test replay trực tiếp từ command log của một `Room` sống thật); chưa chạy trên CI thật (chờ merge).
+- Content lỗi bị từ chối trước deploy; trận đang chạy không đổi balance giữa chừng — **đạt một phần**: lỗi content bị chặn ở test bắt buộc (không phải runtime loader vì content vẫn là bundled JS); "trận đang chạy không đổi balance giữa chừng" vốn đã đúng vì content không hot-reload.
+- Không character/shot/item vượt ngưỡng balance được chốt — **chưa đạt**: balance simulator có nhưng chưa có ngưỡng balance được product/design chốt để so sánh; đây là quyết định sản phẩm, không phải việc kỹ thuật.
 
 ### R5 — Progression và economy công bằng
 

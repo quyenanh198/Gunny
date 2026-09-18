@@ -3,6 +3,7 @@ import { DT } from "../src/physics.js";
 import { MAPS } from "../src/maps.js";
 import { CHARACTERS, WEAPONS } from "../src/assets.js";
 import { PROTOCOL_VERSION } from "../src/play/protocol.js";
+import { matchChecksum } from "../src/core/replay.js";
 import { randomUUID } from "node:crypto";
 
 const SNAPSHOT_MS = 50;
@@ -10,6 +11,12 @@ const EMPTY_ROOM_TTL_MS = 60000;
 const IDLE_SEAT_S = 30;
 const RECONNECT_GRACE_MS = 30000;
 const MAX_SPECTATORS = 6;
+// A checksum every second (at the 60Hz fixed step) is cheap and dense enough to
+// pinpoint divergence within one round; the log itself is bounded so a very
+// long-running match cannot grow memory without limit.
+const CHECKSUM_INTERVAL_TICKS = 60;
+const COMMAND_LOG_LIMIT = 20000;
+const CHECKSUM_LOG_LIMIT = 600;
 export const SOFT_BACKPRESSURE_BYTES = 256 * 1024;
 export const HARD_BACKPRESSURE_BYTES = 1024 * 1024;
 
@@ -35,6 +42,11 @@ export class Room {
     this.terrainVersion = 0;
     this.serverTick = 0;
     this.roomVersion = 0;
+    // Cleared on every start()/restart(): a per-match record for deterministic
+    // replay (see src/core/replay.js) and divergence detection, not a
+    // cross-match audit log.
+    this.commandLog = [];
+    this.checksumLog = [];
     this.emptySince = Date.now();
     this.last = Date.now();
     this.acc = 0;
@@ -112,8 +124,25 @@ export class Room {
     this.state = "playing";
     this.acc = 0;
     this.last = Date.now();
+    this.serverTick = 0;
+    this.commandLog = [];
+    this.checksumLog = [];
     this.beginMatchRecord();
     return true;
+  }
+  // Snapshot enough to reconstruct this match deterministically with
+  // src/core/replay.js's replayMatch(): same config, same seed, same roster.
+  replayConfig() {
+    return { seed: this.match.seed, map: this.match.map.id, difficulty: this.match.difficulty.id,
+      roster: this.match.roster };
+  }
+  logCommand(msg) {
+    const entry = { tick: this.serverTick, t: msg.t };
+    if (msg.t === "aim") entry.angle = msg.angle;
+    else if (msg.t === "action") { entry.shot = msg.shot; entry.item = msg.item; }
+    else if (msg.t === "keys") entry.keys = [...(msg.keys || [])];
+    this.commandLog.push(entry);
+    if (this.commandLog.length > COMMAND_LOG_LIMIT) this.commandLog.shift();
   }
   beginMatchRecord() {
     const participants = this.order.filter((client) => client.userId)
@@ -155,6 +184,9 @@ export class Room {
     this.match.reset();
     this.terrainVersion++;
     this.match.terrainDirty = false;
+    this.serverTick = 0;
+    this.commandLog = [];
+    this.checksumLog = [];
     this.beginMatchRecord();
   }
   backToLobby() {
@@ -194,6 +226,10 @@ export class Room {
         } else this.idleSeat = 0;
         m.update(DT);
         this.serverTick++;
+        if (this.serverTick % CHECKSUM_INTERVAL_TICKS === 0) {
+          this.checksumLog.push({ tick: this.serverTick, checksum: matchChecksum(m) });
+          if (this.checksumLog.length > CHECKSUM_LOG_LIMIT) this.checksumLog.shift();
+        }
         this.acc -= DT;
       }
       if (m.terrainDirty) {
@@ -401,35 +437,43 @@ export class Room {
         this.backToLobby();
         break;
       // Gameplay input only counts on the sender's own turn.
-      case "keys":
+      case "keys": {
         if (!mine) return false;
+        const keys = (msg.keys || []).filter((k) => ["left", "right", "up", "down"].includes(k));
         m.keys.clear();
-        for (const k of msg.keys || []) if (["left", "right", "up", "down"].includes(k)) m.keys.add(k);
+        for (const k of keys) m.keys.add(k);
+        this.logCommand({ t: "keys", keys });
         this.roomVersion++;
         return true;
+      }
       case "aim":
         if (!mine) return false;
         m.setAim(msg.angle);
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "charge":
         if (!mine) return false;
         m.beginCharge();
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "release":
         if (!mine) return false;
         m.release();
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "cancel":
         if (!mine) return false;
         m.cancelCharge();
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "action":
         if (!mine) return false;
         m.setAction(msg);
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "chat":
