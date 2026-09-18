@@ -299,8 +299,8 @@ export class Match {
     }
     this.shake = 0.3;
     for (let i = 0; i < 28; i++) {
-      const angle = Math.random() * Math.PI * 2,
-        speed = 40 + Math.random() * 150;
+      const angle = this.random() * Math.PI * 2,
+        speed = 40 + this.random() * 150;
       this.particles.push({
         x: p.x,
         y: p.y,
@@ -419,7 +419,7 @@ export class Match {
     } else if (this.phase === "flight") {
       const p = this.projectile;
       step(p, this.wind, dt);
-      if (Math.random() < 0.4) this.trail.push({ x: p.x, y: p.y });
+      if (this.random() < 0.4) this.trail.push({ x: p.x, y: p.y });
       if (this.trail.length > 50) this.trail.shift();
       const direct = this.actors.some(
         (a, i) =>

@@ -11,7 +11,8 @@
     "verify": "node scripts/verify.mjs",
     "test:browser": "node scripts/browser-smoke.cjs",
     "test:load": "node scripts/load-smoke.cjs",
-    "benchmark:load": "node scripts/load-smoke.cjs"
+    "benchmark:load": "node scripts/load-smoke.cjs",
+    "benchmark:balance": "node scripts/balance-simulator.mjs"
   },
   "dependencies": {
     "pg": "^8.23.0",
