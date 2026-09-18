@@ -205,19 +205,21 @@ Exit criteria:
 
 ### R5 — Progression và economy công bằng
 
-Trạng thái: **chưa bắt đầu; chỉ làm sau R2**.
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Hạ tầng ledger/reward xong; chưa có shop, cosmetic catalog, mission content hay UI — đó là quyết định sản phẩm chưa được chốt (mục 8.5/8.6).
 
-- Chốt progression loop: XP/account level, mastery hoặc cosmetic collection.
-- Inventory/entitlement và currency ledger có reason, request ID, before/after balance.
-- Reward settlement từ server match result; anti-AFK/farm rule.
-- Daily/weekly mission và cosmetic unlock qua content config.
-- Không bán power trong PvP; nếu monetization có, ưu tiên cosmetic/battle pass và công bố odds khi pháp lý yêu cầu.
+- Chốt progression loop: XP/account level, mastery hoặc cosmetic collection — **một phần**: có XP/level (`server/economy.js`, đường cong phẳng 100xp/level, đặt tên rõ là placeholder chưa balance-tune), chưa có mastery hay cosmetic collection vì chưa có catalog cosmetic.
+- Inventory/entitlement và currency ledger có reason, request ID, before/after balance — **currency ledger đã có** (`currency_ledger`: append-only, unique theo `(user_id, request_id)`, balance luôn tính lại bằng `SUM(amount)` chứ không lưu số dư riêng để tránh hai nguồn sự thật). Bảng `entitlements` đã tạo làm scaffold nhưng **chưa có gì cấp vào** vì chưa có nội dung cosmetic để entitle.
+- Reward settlement từ server match result; anti-AFK/farm rule — **đã có**: `completeMatch()` cấp reward trong cùng transaction với kết quả trận (R2E); participant `disconnected` hoặc trận `abandoned` không nhận gì, chặn farm bằng cách rời trận/bỏ trận.
+- Daily/weekly mission và cosmetic unlock qua content config — **chưa làm**: đây là nội dung/thiết kế sản phẩm, không phải hạ tầng; milestone này dừng ở cơ chế reward/ledger để mission sau này dựa vào.
+- Không bán power trong PvP; nếu monetization có, ưu tiên cosmetic/battle pass và công bố odds khi pháp lý yêu cầu — **chưa vi phạm được vì chưa có gì để bán**; nguyên tắc giữ nguyên cho thiết kế sau.
+
+Chi tiết ở `docs/economy.md`.
 
 Exit criteria:
 
-- Không thể sửa client để tự cấp item/currency/reward.
-- Economy audit/reconcile được; rollback content không làm mất entitlement.
-- Người chơi free và trả phí có cùng combat power trong mode cạnh tranh.
+- Không thể sửa client để tự cấp item/currency/reward — **đạt**: không có endpoint ghi currency/xp nào; chỉ `completeMatch()` phía server tạo ra ledger/progression.
+- Economy audit/reconcile được; rollback content không làm mất entitlement — **đạt phần audit** (ledger append-only, balance luôn = tổng ledger, tự reconcile được); "rollback content không mất entitlement" chưa áp dụng được vì chưa có entitlement thật nào tồn tại.
+- Người chơi free và trả phí có cùng combat power trong mode cạnh tranh — **đạt vì chưa có gì để mua**; không phải một xác nhận vững chắc cho tương lai, chỉ đúng ở trạng thái hiện tại.
 
 ### R6 — LiveOps, admin và moderation
 

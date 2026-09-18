@@ -1,8 +1,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { rewardFor, levelForXp } from "./economy.js";
 
 export class MemoryIdentityStore {
   constructor() { this.sessions = new Map(); this.matches = new Map(); this.blocks = new Set();
-    this.mutes = new Set(); this.reports = []; this.chatMessages = []; }
+    this.mutes = new Set(); this.reports = []; this.chatMessages = []; this.ledger = [];
+    this.progression = new Map(); }
   async createGuest(displayName = "Guest") {
     const session = { token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 86400000).toISOString(), user: { id: randomUUID(), kind: "guest" },
@@ -49,6 +51,19 @@ export class MemoryIdentityStore {
     if (!match || match.status !== "playing" || [...this.matches.values()].some((item) => item.resultKey === result.resultKey))
       return { applied: false };
     Object.assign(match, result);
+    for (const participant of result.participants || []) {
+      const reward = rewardFor(participant, result.status);
+      const requestId = `match:${result.id}:${participant.userId}`;
+      if (this.ledger.some((entry) => entry.userId === participant.userId && entry.requestId === requestId)) continue;
+      if (reward.currency) this.ledger.push({ id: randomUUID(), userId: participant.userId, amount: reward.currency,
+        reason: `match_${participant.outcome}`, requestId, matchId: result.id, createdAt: new Date().toISOString() });
+      if (reward.xp) {
+        const progress = this.progression.get(participant.userId) || { xp: 0, level: 1 };
+        progress.xp += reward.xp;
+        progress.level = levelForXp(progress.xp);
+        this.progression.set(participant.userId, progress);
+      }
+    }
     return { applied: true, matchId: result.id };
   }
   async loadSocial(userId) { return { blocks: [...this.blocks].map((key) => key.split(":"))
@@ -70,4 +85,20 @@ export class MemoryIdentityStore {
     return report;
   }
   async pruneExpiredChat() { return 0; }
+  async getWallet(token) {
+    const session = this.sessions.get(token);
+    if (!session) return null;
+    return { balance: this.ledger.filter((e) => e.userId === session.user.id).reduce((sum, e) => sum + e.amount, 0) };
+  }
+  async getLedger(token, limit = 50) {
+    const session = this.sessions.get(token);
+    if (!session) return null;
+    return this.ledger.filter((e) => e.userId === session.user.id).slice(-limit).reverse()
+      .map((e) => ({ id: e.id, amount: e.amount, reason: e.reason, matchId: e.matchId, createdAt: e.createdAt }));
+  }
+  async getProgression(token) {
+    const session = this.sessions.get(token);
+    if (!session) return null;
+    return this.progression.get(session.user.id) || { xp: 0, level: 1 };
+  }
 }

@@ -231,6 +231,18 @@ export function createServer({
       const party = parties.kick(session.user.id, kickMember[1]);
       return party.error ? sendJson(res, 409, party) : sendJson(res, 200, party);
     }
+    if (req.url === "/api/economy/wallet" && req.method === "GET") {
+      const wallet = await identityStore.getWallet(requestCredential(req));
+      return wallet ? sendJson(res, 200, wallet) : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/economy/ledger" && req.method === "GET") {
+      const ledger = await identityStore.getLedger(requestCredential(req));
+      return ledger ? sendJson(res, 200, { ledger }) : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/economy/progression" && req.method === "GET") {
+      const progression = await identityStore.getProgression(requestCredential(req));
+      return progression ? sendJson(res, 200, progression) : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
     if (req.url === "/api/privacy/consent" && req.method === "POST") {
       const consentedAt = await identityStore.recordConsent(requestCredential(req));
       return consentedAt ? sendJson(res, 200, { consentedAt }) : sendJson(res, 401, { error: "INVALID_SESSION" });

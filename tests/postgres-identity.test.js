@@ -98,7 +98,18 @@ test("PostgreSQL authoritative lifecycle completes a playing match exactly once"
     assert.equal(history[0].outcome, "win");
     const otherHistory = await store.listMatches(second.token);
     assert.equal(otherHistory[0].disconnected, true);
+
+    // Reward settlement rides in the same transaction as the match result (R5).
+    assert.deepEqual(await store.getWallet(first.token), { balance: 20 });
+    assert.deepEqual(await store.getProgression(first.token), { xp: 30, level: 1 });
+    const ledger = await store.getLedger(first.token);
+    assert.equal(ledger.length, 1);
+    assert.equal(ledger[0].matchId, id);
+    assert.deepEqual(await store.getWallet(second.token), { balance: 0 }, "disconnected loser earns nothing");
+    assert.deepEqual(await store.getProgression(second.token), { xp: 0, level: 1 });
   } finally {
+    await pool.query("DELETE FROM currency_ledger WHERE user_id = ANY($1::uuid[])", [[first.user.id, second.user.id]]);
+    await pool.query("DELETE FROM progression WHERE user_id = ANY($1::uuid[])", [[first.user.id, second.user.id]]);
     await pool.query("DELETE FROM matches WHERE id = $1", [id]);
     await pool.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [[first.user.id, second.user.id]]);
     await pool.end();
