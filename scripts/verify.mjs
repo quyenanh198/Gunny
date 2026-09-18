@@ -29,10 +29,6 @@ async function waitForServer() {
 
 await run(process.execPath, ["scripts/check-syntax.mjs"]);
 await run(process.execPath, ["--test"]);
-// npm ships as npm.cmd/npm.ps1 on Windows, which Node's spawn() cannot exec
-// directly without a shell (EINVAL) — see scripts/check-syntax.mjs's own
-// history of Unix-only tooling breaking Windows dev machines.
-await run("npm", ["audit", "--audit-level=high"], {}, { shell: true });
 
 const server = spawn(process.execPath, ["server/server.js"], {
   stdio: ["ignore", "inherit", "inherit"],
@@ -48,4 +44,11 @@ try {
     new Promise((resolve) => setTimeout(resolve, 3000)),
   ]);
 }
-console.log("verify ok: syntax, unit/integration, browser smoke");
+// Runs last, on purpose: a newly published CVE in an unrelated transitive
+// dependency (no code change on this branch) must not hide whether the
+// actual functional checks above passed or failed.
+// npm ships as npm.cmd/npm.ps1 on Windows, which Node's spawn() cannot exec
+// directly without a shell (EINVAL) — see scripts/check-syntax.mjs's own
+// history of Unix-only tooling breaking Windows dev machines.
+await run("npm", ["audit", "--audit-level=high"], {}, { shell: true });
+console.log("verify ok: syntax, unit/integration, browser smoke, dependency audit");

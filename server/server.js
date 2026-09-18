@@ -361,18 +361,20 @@ export function createServer({
       }
       if (req.url === "/api/admin/sanctions" && req.method === "POST") {
         const body = await jsonBody(req);
+        const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
         if (typeof body.userId !== "string" || !["mute", "ban"].includes(body.type) ||
-            typeof body.reason !== "string" || !body.reason.trim())
+            typeof body.reason !== "string" || !body.reason.trim() ||
+            (expiresAt && Number.isNaN(expiresAt.getTime())))
           return sendJson(res, 400, { error: "INVALID_SANCTION" });
         const sanction = await identityStore.createSanction({ userId: body.userId, type: body.type,
-          reason: body.reason.trim().slice(0, 500), issuedBy: admin.user.id,
-          expiresAt: body.expiresAt ? new Date(body.expiresAt) : null });
+          reason: body.reason.trim().slice(0, 500), issuedBy: admin.user.id, expiresAt });
         await identityStore.recordAdminAction({ adminUserId: admin.user.id, action: "sanction_create",
           targetUserId: body.userId, reason: sanction.reason, metadata: { type: body.type, sanctionId: sanction.id } });
         return sendJson(res, 201, { sanction });
       }
-      if (req.url === "/api/admin/sanctions" && req.method === "GET") {
-        const userId = new URL(req.url, "http://x").searchParams.get("userId");
+      const sanctionsListUrl = new URL(req.url, "http://x");
+      if (sanctionsListUrl.pathname === "/api/admin/sanctions" && req.method === "GET") {
+        const userId = sanctionsListUrl.searchParams.get("userId");
         if (!userId) return sendJson(res, 400, { error: "USER_ID_REQUIRED" });
         return sendJson(res, 200, { sanctions: await identityStore.listSanctions(userId) });
       }

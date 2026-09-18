@@ -153,6 +153,35 @@ test("sanction creation validates type and requires a non-empty reason", async (
     assert.equal((await fetch(`${url}/api/admin/sanctions`, {
       method: "POST", headers: auth(admin), body: JSON.stringify({ userId: target.user.id, type: "mute", reason: "  " }),
     })).status, 400);
+    assert.equal((await fetch(`${url}/api/admin/sanctions`, {
+      method: "POST", headers: auth(admin),
+      body: JSON.stringify({ userId: target.user.id, type: "mute", reason: "x", expiresAt: "not-a-date" }),
+    })).status, 400, "an unparseable expiresAt must be rejected, not turned into a 500");
+  } finally { server.closeAllConnections(); server.close(); }
+});
+
+test("GET /api/admin/sanctions?userId= actually lists that user's sanction history", async () => {
+  const identityStore = new MemoryIdentityStore();
+  const { server, port } = await listen({ identityStore });
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    const admin = await guest(url, "Admin");
+    await makeAdmin(identityStore, admin);
+    const target = await guest(url, "Target");
+    assert.equal((await fetch(`${url}/api/admin/sanctions`, { headers: auth(admin) })).status, 400,
+      "userId query param is required");
+    const empty = await (await fetch(`${url}/api/admin/sanctions?userId=${target.user.id}`,
+      { headers: auth(admin) })).json();
+    assert.deepEqual(empty.sanctions, []);
+
+    await fetch(`${url}/api/admin/sanctions`, {
+      method: "POST", headers: auth(admin),
+      body: JSON.stringify({ userId: target.user.id, type: "mute", reason: "spam" }),
+    });
+    const listed = await (await fetch(`${url}/api/admin/sanctions?userId=${target.user.id}`,
+      { headers: auth(admin) })).json();
+    assert.equal(listed.sanctions.length, 1);
+    assert.equal(listed.sanctions[0].type, "mute");
   } finally { server.closeAllConnections(); server.close(); }
 });
 

@@ -75,7 +75,14 @@ export class MemoryIdentityStore {
   async setMute(userId, targetId, enabled) { const key = `${userId}:${targetId}`;
     if (enabled) this.mutes.add(key); else this.mutes.delete(key); }
   async createReport(report) { this.reports.push(report); }
-  async recordChat(message) { this.chatMessages.push(message); }
+  // The memory store has no expiry job (pruneExpiredChat is a no-op below,
+  // since there is no real retention window to enforce), so cap the buffer
+  // itself — otherwise a long-running process without DATABASE_URL leaks
+  // memory here without bound.
+  async recordChat(message) {
+    this.chatMessages.push(message);
+    if (this.chatMessages.length > 1000) this.chatMessages = this.chatMessages.slice(-1000);
+  }
   async listOpenReports(limit = 100) {
     return this.reports.filter((report) => report.status === "open" || report.status === "reviewing").slice(0, limit);
   }

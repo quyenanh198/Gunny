@@ -5,6 +5,17 @@ const DEFAULT_TERMS = ["fuck", "shit", "địt", "đụ", "dm"];
 const pair = (a, b) => `${a}:${b}`;
 
 export class SocialSafety {
+  // `loaded`/`blocks`/`mutes` cache every user who has ever connected or
+  // enqueued, for the life of the process, with no eviction. Known
+  // long-running leak (flagged in a code-review audit, not fixed here): a
+  // pair like "A:B" can be populated by either A's or B's load(), so
+  // evicting one user's entries without knowing whether the other side is
+  // still cached risks silently un-blocking them for whichever user stays
+  // connected — a privacy/harassment regression that would be worse than
+  // the leak. A correct fix needs per-user reference counting or a
+  // full-cache reset gated on "no one currently connected", not a quick
+  // patch. Low severity in practice (bounded by distinct users ever seen,
+  // not by messages/connections), but real on a server kept up for weeks.
   constructor(store, { profanityTerms = DEFAULT_TERMS } = {}) {
     this.store = store; this.blocks = new Set(); this.mutes = new Set(); this.loaded = new Set();
     this.profanity = profanityTerms.map((term) => new RegExp(`(^|\\s)${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$)`, "giu"));
