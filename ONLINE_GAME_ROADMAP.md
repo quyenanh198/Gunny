@@ -223,18 +223,20 @@ Exit criteria:
 
 ### R6 — LiveOps, admin và moderation
 
-Trạng thái: **chưa bắt đầu**.
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Admin RBAC/sanctions/audit xong; remote config, maintenance mode và dashboard vận hành chưa làm.
 
-- Admin RBAC, player lookup, mute/ban/unban, room terminate, grant có audit và dual-control cho thao tác nhạy cảm.
-- Remote config/content rollout theo environment, percentage và kill switch.
-- Announcement, maintenance mode, minimum client/protocol version.
-- Dashboard funnel, retention, match completion, queue time, disconnect, report rate.
+- Admin RBAC, player lookup, mute/ban/unban, room terminate, grant có audit và dual-control cho thao tác nhạy cảm — **đã có**: `users.role` ('player'/'admin'), gán qua `scripts/promote-admin.mjs` (không có UI/API tự cấp, chủ đích). `GET /api/admin/users/:id` (lookup tổng hợp: profile, wallet, progression, 10 trận gần nhất, lịch sử sanction). `POST /api/admin/sanctions` (`mute` active ngay; `ban` bắt đầu `pending_confirmation`, **chỉ có hiệu lực sau khi một admin KHÁC xác nhận** qua `POST /api/admin/sanctions/:id/confirm` — dual-control thật cho thao tác rủi ro cao nhất). `POST /api/admin/sanctions/:id/revoke`, `POST /api/admin/rooms/:id/terminate`. Mọi thao tác ghi thay đổi đều ghi vào `admin_actions` (ai/khi nào/lý do/metadata).
+- Remote config/content rollout theo environment, percentage và kill switch — **chưa làm**. `src/content/feature-flags.js` vẫn chỉ đọc default lúc deploy, chưa có runtime override/percentage rollout.
+- Announcement, maintenance mode, minimum client/protocol version — **chưa làm**.
+- Dashboard funnel, retention, match completion, queue time, disconnect, report rate — **chưa làm**. Chỉ có `/metrics` (Prometheus, từ R1C) và `GET /api/admin/actions` (audit log) làm nguồn machine-readable.
+
+Chi tiết ở `docs/admin.md`.
 
 Exit criteria:
 
-- Có thể tắt feature lỗi mà không redeploy client.
-- Mọi thao tác admin quan trọng truy được ai/lúc nào/lý do gì.
-- Moderation xử lý được report mà không đọc log thủ công trên server.
+- Có thể tắt feature lỗi mà không redeploy client — **chưa đạt**: đây là phần remote config/kill switch chưa làm.
+- Mọi thao tác admin quan trọng truy được ai/lúc nào/lý do gì — **đạt** cho slice đã làm: mọi sanction create/confirm/revoke và room terminate đều ghi `admin_actions`; RBAC dựa trên `users.role` phía server, không tin role client khai báo.
+- Moderation xử lý được report mà không đọc log thủ công trên server — **tiến bộ đáng kể**: admin giờ có thể tra cứu một user (`lookupUser`) và hành động (ban/mute có dual-control cho ban) trực tiếp từ report, tất cả qua API; vẫn chưa có UI nối report → hành động trong một luồng.
 
 ### R7 — Production reliability và delivery
 

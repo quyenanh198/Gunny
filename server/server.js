@@ -278,19 +278,83 @@ export function createServer({
       const report = await socialSafety.report(session.user.id, body);
       return report ? sendJson(res, 201, { report }) : sendJson(res, 400, { error: "INVALID_REPORT" });
     }
+    // The shared MODERATION_TOKEN from R3D still works (ops/CI convenience);
+    // an admin session (R6 RBAC) is now an equally valid, individually
+    // audited alternative. Neither replaces the other.
+    const moderationTokenOk = (req) => !!moderationToken && req.headers.authorization === `Bearer ${moderationToken}`;
     if (req.url === "/api/admin/reports" && req.method === "GET") {
-      if (!moderationToken || req.headers.authorization !== `Bearer ${moderationToken}`)
+      if (!moderationTokenOk(req) && !await identityStore.getAdminSession(requestCredential(req)))
         return sendJson(res, 401, { error: "MODERATION_AUTH_REQUIRED" });
       return sendJson(res, 200, { reports: await identityStore.listOpenReports() });
     }
     const reportMatch = REPORT_ID.exec(req.url);
     if (reportMatch && req.method === "PATCH") {
-      if (!moderationToken || req.headers.authorization !== `Bearer ${moderationToken}`)
+      if (!moderationTokenOk(req) && !await identityStore.getAdminSession(requestCredential(req)))
         return sendJson(res, 401, { error: "MODERATION_AUTH_REQUIRED" });
       const body = await jsonBody(req);
       if (!["reviewing", "closed"].includes(body.status)) return sendJson(res, 400, { error: "INVALID_STATUS" });
       const report = await identityStore.updateReportStatus(reportMatch[1], body.status);
       return report ? sendJson(res, 200, { report }) : sendJson(res, 404, { error: "REPORT_NOT_FOUND" });
+    }
+    if (req.url.startsWith("/api/admin/") && req.url !== "/api/admin/reports" && !reportMatch) {
+      const admin = await identityStore.getAdminSession(requestCredential(req));
+      if (!admin) return sendJson(res, 401, { error: "ADMIN_AUTH_REQUIRED" });
+      const lookupMatch = /^\/api\/admin\/users\/([0-9a-f-]+)$/.exec(req.url);
+      if (lookupMatch && req.method === "GET") {
+        const profile = await identityStore.lookupUser(lookupMatch[1]);
+        return profile ? sendJson(res, 200, profile) : sendJson(res, 404, { error: "USER_NOT_FOUND" });
+      }
+      if (req.url === "/api/admin/sanctions" && req.method === "POST") {
+        const body = await jsonBody(req);
+        if (typeof body.userId !== "string" || !["mute", "ban"].includes(body.type) ||
+            typeof body.reason !== "string" || !body.reason.trim())
+          return sendJson(res, 400, { error: "INVALID_SANCTION" });
+        const sanction = await identityStore.createSanction({ userId: body.userId, type: body.type,
+          reason: body.reason.trim().slice(0, 500), issuedBy: admin.user.id,
+          expiresAt: body.expiresAt ? new Date(body.expiresAt) : null });
+        await identityStore.recordAdminAction({ adminUserId: admin.user.id, action: "sanction_create",
+          targetUserId: body.userId, reason: sanction.reason, metadata: { type: body.type, sanctionId: sanction.id } });
+        return sendJson(res, 201, { sanction });
+      }
+      if (req.url === "/api/admin/sanctions" && req.method === "GET") {
+        const userId = new URL(req.url, "http://x").searchParams.get("userId");
+        if (!userId) return sendJson(res, 400, { error: "USER_ID_REQUIRED" });
+        return sendJson(res, 200, { sanctions: await identityStore.listSanctions(userId) });
+      }
+      const confirmMatch = /^\/api\/admin\/sanctions\/([0-9a-f-]+)\/confirm$/.exec(req.url);
+      if (confirmMatch && req.method === "POST") {
+        const sanction = await identityStore.confirmSanction(confirmMatch[1], admin.user.id);
+        if (!sanction) return sendJson(res, 409, { error: "CANNOT_CONFIRM",
+          message: "not pending, already confirmed, or the same admin who issued it" });
+        await identityStore.recordAdminAction({ adminUserId: admin.user.id, action: "sanction_confirm",
+          targetUserId: sanction.userId, metadata: { sanctionId: sanction.id } });
+        return sendJson(res, 200, { sanction });
+      }
+      const revokeMatch = /^\/api\/admin\/sanctions\/([0-9a-f-]+)\/revoke$/.exec(req.url);
+      if (revokeMatch && req.method === "POST") {
+        const body = await jsonBody(req);
+        const sanction = await identityStore.revokeSanction(revokeMatch[1], admin.user.id);
+        if (!sanction) return sendJson(res, 404, { error: "SANCTION_NOT_FOUND" });
+        await identityStore.recordAdminAction({ adminUserId: admin.user.id, action: "sanction_revoke",
+          targetUserId: sanction.userId, reason: typeof body.reason === "string" ? body.reason.slice(0, 500) : null,
+          metadata: { sanctionId: sanction.id } });
+        return sendJson(res, 200, { sanction });
+      }
+      const terminateMatch = /^\/api\/admin\/rooms\/([A-Za-z0-9]+)\/terminate$/.exec(req.url);
+      if (terminateMatch && req.method === "POST") {
+        const body = await jsonBody(req);
+        const room = roomManager.get(terminateMatch[1]);
+        if (!room) return sendJson(res, 404, { error: "ROOM_NOT_FOUND" });
+        for (const client of room.clients) client.ws?.close(1008, "terminated by admin");
+        room.close();
+        await identityStore.recordAdminAction({ adminUserId: admin.user.id, action: "room_terminate",
+          targetRoomId: terminateMatch[1], reason: typeof body.reason === "string" ? body.reason.slice(0, 500) : null });
+        return sendJson(res, 200, { terminated: terminateMatch[1] });
+      }
+      if (req.url === "/api/admin/actions" && req.method === "GET") {
+        return sendJson(res, 200, { actions: await identityStore.listAdminActions() });
+      }
+      return sendJson(res, 404, { error: "NOT_FOUND" });
     }
     if (req.url === "/api/session" && req.method === "DELETE") {
       return await identityStore.revoke(requestCredential(req)) ? sendJson(res, 204, null,
@@ -404,7 +468,14 @@ export function createServer({
       ws.close(1008, "authentication required");
       return;
     }
+    let adminMuted = false;
     if (identity) {
+      if (await identityStore.isBanned(identity.user.id)) {
+        sendError(ws, "BANNED");
+        ws.close(1008, "banned");
+        return;
+      }
+      adminMuted = await identityStore.isMuted(identity.user.id);
       presence.set(identity.user.id, "online");
       await socialSafety.load(identity.user.id);
     }
@@ -442,6 +513,7 @@ export function createServer({
           ws.close(1008, "reconnect expired");
           return;
         }
+        client.adminMuted = adminMuted;
         activate(ws, room, client);
         syncPresence(room);
       });
@@ -498,6 +570,7 @@ export function createServer({
       userId: identity?.user.id || null,
       terrainVersion: -1,
       role,
+      adminMuted,
     };
     room.join(client, role, room.reservedTeams.get(client.userId));
     activate(ws, room, client);

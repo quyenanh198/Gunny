@@ -477,6 +477,7 @@ export class Room {
         this.roomVersion++;
         return true;
       case "chat":
+        if (client.adminMuted) return false;
         if (Date.now() - (client.lastChatAt || 0) < 750) return false;
         client.lastChatAt = Date.now();
         {

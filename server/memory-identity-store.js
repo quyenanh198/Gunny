@@ -4,7 +4,7 @@ import { rewardFor, levelForXp } from "./economy.js";
 export class MemoryIdentityStore {
   constructor() { this.sessions = new Map(); this.matches = new Map(); this.blocks = new Set();
     this.mutes = new Set(); this.reports = []; this.chatMessages = []; this.ledger = [];
-    this.progression = new Map(); }
+    this.progression = new Map(); this.roles = new Map(); this.sanctions = []; this.adminActions = []; }
   async createGuest(displayName = "Guest") {
     const session = { token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 86400000).toISOString(), user: { id: randomUUID(), kind: "guest" },
@@ -85,10 +85,10 @@ export class MemoryIdentityStore {
     return report;
   }
   async pruneExpiredChat() { return 0; }
+  walletBalanceOf(userId) { return this.ledger.filter((e) => e.userId === userId).reduce((sum, e) => sum + e.amount, 0); }
   async getWallet(token) {
     const session = this.sessions.get(token);
-    if (!session) return null;
-    return { balance: this.ledger.filter((e) => e.userId === session.user.id).reduce((sum, e) => sum + e.amount, 0) };
+    return session ? { balance: this.walletBalanceOf(session.user.id) } : null;
   }
   async getLedger(token, limit = 50) {
     const session = this.sessions.get(token);
@@ -100,5 +100,58 @@ export class MemoryIdentityStore {
     const session = this.sessions.get(token);
     if (!session) return null;
     return this.progression.get(session.user.id) || { xp: 0, level: 1 };
+  }
+
+  // --- Admin RBAC, sanctions and audit (R6) ---------------------------------
+
+  async getAdminSession(token) {
+    const session = this.sessions.get(token);
+    return session && this.roles.get(session.user.id) === "admin" ? session : null;
+  }
+  async setUserRole(userId, role) { this.roles.set(userId, role); }
+  async createSanction({ userId, type, reason, issuedBy, expiresAt = null }) {
+    const sanction = { id: randomUUID(), userId, type, reason, status: type === "ban" ? "pending_confirmation" : "active",
+      issuedBy, confirmedBy: null, revokedBy: null, expiresAt, createdAt: new Date().toISOString(), revokedAt: null };
+    this.sanctions.push(sanction);
+    return sanction;
+  }
+  async confirmSanction(id, confirmedBy) {
+    const sanction = this.sanctions.find((s) => s.id === id && s.status === "pending_confirmation" && s.issuedBy !== confirmedBy);
+    if (!sanction) return null;
+    sanction.status = "active"; sanction.confirmedBy = confirmedBy;
+    return sanction;
+  }
+  async revokeSanction(id, revokedBy) {
+    const sanction = this.sanctions.find((s) => s.id === id && ["active", "pending_confirmation"].includes(s.status));
+    if (!sanction) return null;
+    sanction.status = "revoked"; sanction.revokedBy = revokedBy; sanction.revokedAt = new Date().toISOString();
+    return sanction;
+  }
+  async listSanctions(userId) {
+    return this.sanctions.filter((s) => s.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  activeSanction(userId, type) {
+    const now = Date.now();
+    return this.sanctions.some((s) => s.userId === userId && s.type === type && s.status === "active" &&
+      (!s.expiresAt || new Date(s.expiresAt).getTime() > now));
+  }
+  async isBanned(userId) { return this.activeSanction(userId, "ban"); }
+  async isMuted(userId) { return this.activeSanction(userId, "mute"); }
+  async recordAdminAction(entry) {
+    const record = { id: randomUUID(), createdAt: new Date().toISOString(), ...entry };
+    this.adminActions.push(record);
+    return record;
+  }
+  async listAdminActions(limit = 100) { return this.adminActions.slice(-limit).reverse(); }
+  async lookupUser(userId) {
+    const session = [...this.sessions.values()].find((s) => s.user.id === userId);
+    if (!session) return null;
+    return {
+      user: { id: session.user.id, kind: session.user.kind, role: this.roles.get(userId) || "player" },
+      wallet: { balance: this.walletBalanceOf(userId) },
+      progression: this.progression.get(userId) || { xp: 0, level: 1 },
+      recentMatches: [...this.matches.values()].filter((m) => (m.participants || []).some((p) => p.userId === userId)).slice(-10),
+      sanctions: await this.listSanctions(userId),
+    };
   }
 }
