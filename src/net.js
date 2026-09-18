@@ -17,6 +17,15 @@ const ERROR_MESSAGES = {
   MESSAGE_TOO_LARGE: "Tin nhắn vượt quá giới hạn.",
   RATE_LIMITED: "Bạn thao tác quá nhanh. Hãy thử lại.",
   RECONNECT_EXPIRED: "Phiên kết nối lại đã hết hạn.",
+  ROOM_NOT_FOUND: "Phòng không tồn tại hoặc đã đóng.",
+  ROOM_FULL: "Phòng đã đủ người chơi.",
+  SPECTATOR_FULL: "Phòng đã đủ khán giả.",
+  RESUME_TIMEOUT: "Kết nối lại không được xác thực kịp thời.",
+  RESUME_REQUIRED: "Máy chủ yêu cầu xác thực kết nối lại.",
+  INVALID_REQUEST_ID: "Mã thao tác không hợp lệ.",
+  STALE_SEQUENCE: "Thao tác cũ hoặc trùng đã bị bỏ qua.",
+  COMMAND_REJECTED: "Thao tác không hợp lệ ở trạng thái hiện tại.",
+  ROOM_CREATE_LIMITED: "Bạn đã tạo quá nhiều phòng. Hãy thử lại sau.",
 };
 
 // A read-only view of the server's Match, smoothed between snapshots.
@@ -197,7 +206,7 @@ class RemoteMatch {
 }
 
 export class OnlineSession {
-  constructor({ room, name, onUpdate = () => {} }) {
+  constructor({ room, name, mode = "join", visibility = "private", onUpdate = () => {} }) {
     this.online = true;
     this.id = room || "";
     this.state = "connecting";
@@ -211,23 +220,55 @@ export class OnlineSession {
     this.you = { id: 0, host: false, team: null, ready: false, character: "mochi", weapon: "carrot", player: null };
     this.error = "";
     this.name = name || "";
+    this.mode = mode;
+    this.visibility = visibility;
     this.clientSeq = 0;
     this.lastAckSeq = 0;
     this.serverTick = 0;
     this.roomVersion = 0;
     this.reconnectToken = "";
+    this.pending = new Map();
     this.closed = false;
     this.onUpdate = onUpdate;
     this.match = new RemoteMatch(this);
     this.connect();
   }
   connect() {
+    if (typeof document !== "undefined") {
+      this.ensureIdentity().then(() => this.openSocket()).catch(() => {
+        this.state = "offline";
+        this.error = "Không thể tạo phiên người chơi.";
+        this.onUpdate(this);
+      });
+      return;
+    }
+    this.openSocket();
+  }
+  async ensureIdentity() {
+    const current = await fetch("/api/profile", { credentials: "same-origin" });
+    if (current.ok) return;
+    const created = await fetch("/api/sessions/guest", {
+      method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: this.name || "Guest" }),
+    });
+    if (!created.ok) throw new Error("identity bootstrap failed");
+  }
+  openSocket() {
     const url = new URL("/ws", location.href);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     url.searchParams.set("room", this.id);
     url.searchParams.set("name", this.name);
-    if (this.reconnectToken) url.searchParams.set("reconnectToken", this.reconnectToken);
+    url.searchParams.set("mode", this.reconnectToken ? "resume" : this.mode);
+    if (this.mode === "create") url.searchParams.set("visibility", this.visibility);
     this.ws = new WebSocket(url);
+    this.ws.onopen = () => {
+      if (this.reconnectToken) this.ws.send(JSON.stringify({
+        t: "resume",
+        protocolVersion: PROTOCOL_VERSION,
+        room: this.id,
+        reconnectToken: this.reconnectToken,
+      }));
+    };
     this.ws.onmessage = (event) => this.receive(JSON.parse(event.data));
     this.ws.onclose = () => {
       if (this.closed) return;
@@ -244,11 +285,23 @@ export class OnlineSession {
     return this.players.filter((p) => p.team === team).length + this.bots[team];
   }
   send(msg) {
-    if (this.ws.readyState === 1)
-      this.ws.send(JSON.stringify({ protocolVersion: PROTOCOL_VERSION, clientSeq: ++this.clientSeq, ...msg }));
+    if (this.ws.readyState === 1) {
+      const clientSeq = ++this.clientSeq;
+      const requestId = globalThis.crypto?.randomUUID?.() || `r${Date.now()}_${clientSeq}`;
+      this.pending.set(requestId, { clientSeq, type: msg.t });
+      this.ws.send(JSON.stringify({ protocolVersion: PROTOCOL_VERSION, clientSeq, requestId, ...msg }));
+      return requestId;
+    }
+    return null;
   }
   receive(s) {
+    if (s.t === "ack") {
+      this.pending.delete(s.requestId);
+      this.lastAckSeq = Math.max(this.lastAckSeq, s.clientSeq || 0);
+      return;
+    }
     if (s.t === "error") {
+      if (s.requestId) this.pending.delete(s.requestId);
       this.error = ERROR_MESSAGES[s.code] || "Máy chủ từ chối thao tác.";
       if (s.code === "RECONNECT_EXPIRED" || s.code === "VERSION_MISMATCH") {
         this.closed = true;

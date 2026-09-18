@@ -1,10 +1,22 @@
 export function connectionParams(url) {
   const params = new URL(url, "http://x").searchParams;
   return {
-    room: (params.get("room") || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4),
+    room: (params.get("room") || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6),
     name: (params.get("name") || "Khách").slice(0, 16).trim() || "Khách",
-    reconnectToken: (params.get("reconnectToken") || "").slice(0, 64),
+    mode: ["create", "join", "spectate", "resume"].includes(params.get("mode")) ? params.get("mode") : "join",
+    visibility: params.get("visibility") === "public" ? "public" : "private",
   };
+}
+
+export function originAllowed(req, allowlist = []) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  if (allowlist.includes(origin)) return true;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
 }
 
 export function parseMessage(data) {

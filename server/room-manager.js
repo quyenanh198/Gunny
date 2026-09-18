@@ -1,20 +1,35 @@
 import { Room } from "./room.js";
 
+export function percentile(values, fraction) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)];
+}
+
 export class RoomManager {
-  constructor() {
+  constructor({ matchLifecycle = null, socialSafety = null } = {}) {
     this.rooms = new Map();
+    this.matchLifecycle = matchLifecycle;
+    this.socialSafety = socialSafety;
   }
 
   newCode() {
     let code = "";
-    for (let i = 0; i < 4; i++) code += "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random() * 24)];
+    for (let i = 0; i < 6; i++) code += "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random() * 24)];
     return this.rooms.has(code) ? this.newCode() : code;
   }
 
-  getOrCreate(wanted) {
-    const id = wanted && this.rooms.has(wanted) ? wanted : wanted || this.newCode();
-    if (!this.rooms.has(id)) this.rooms.set(id, new Room(id, (roomId) => this.rooms.delete(roomId)));
-    return this.rooms.get(id);
+  create(visibility = "private", { reservedUserIds = [], reservedTeams = new Map(), allowSpectators = true } = {}) {
+    const id = this.newCode();
+    const room = new Room(id, (roomId) => this.rooms.delete(roomId), visibility,
+      this.matchLifecycle, this.socialSafety);
+    room.reservedUserIds = new Set(reservedUserIds);
+    room.reservedTeams = new Map(reservedTeams);
+    room.allowSpectators = allowSpectators;
+    room.expectedPlayerCount = reservedUserIds.length || 0;
+    if (room.expectedPlayerCount) room.bots = [0, 0];
+    this.rooms.set(id, room);
+    return room;
   }
 
   get(id) {
@@ -23,19 +38,26 @@ export class RoomManager {
 
   quickJoin() {
     return [...this.rooms.values()].find((room) =>
-      room.state === "lobby" && [...room.clients].filter((client) => client.connected && client.team !== null).length < 6,
+      room.visibility === "public" && room.state === "lobby" && room.canJoin("player"),
     ) || null;
   }
 
   metrics() {
     const rooms = [...this.rooms.values()];
+    const drift = rooms.flatMap((room) => room.tickDriftSamples);
     return {
       rooms: rooms.length,
       activeConnections: rooms.reduce((sum, room) => sum + [...room.clients].filter((client) => client.connected).length, 0),
       tickDrift: Math.max(0, ...rooms.map((room) => room.maxTickDrift)),
+      tickDriftP50: percentile(drift, 0.5),
+      tickDriftP95: percentile(drift, 0.95),
+      tickDriftP99: percentile(drift, 0.99),
+      heapUsedBytes: process.memoryUsage().heapUsed,
       snapshotBytes: rooms.reduce((sum, room) => sum + room.snapshotBytes, 0),
       rejectedMessages: rooms.reduce((sum, room) => sum + room.rejectedMessages, 0),
       reconnects: rooms.reduce((sum, room) => sum + room.reconnects, 0),
+      slowConsumerDrops: rooms.reduce((sum, room) => sum + room.slowConsumerDrops, 0),
+      slowConsumerCloses: rooms.reduce((sum, room) => sum + room.slowConsumerCloses, 0),
     };
   }
 
@@ -45,10 +67,11 @@ export class RoomManager {
   }
 
   list() {
-    return [...this.rooms.values()].map((room) => ({
+    return [...this.rooms.values()].filter((room) => room.visibility === "public").map((room) => ({
       id: room.id,
       state: room.state,
-      players: room.clients.size,
+      players: [...room.clients].filter((client) => client.role === "player").length,
+      spectators: room.spectatorCount(),
       teams: [room.teamSize(0), room.teamSize(1)],
       map: room.map,
     }));

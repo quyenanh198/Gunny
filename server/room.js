@@ -3,17 +3,36 @@ import { DT } from "../src/physics.js";
 import { MAPS } from "../src/maps.js";
 import { CHARACTERS, WEAPONS } from "../src/assets.js";
 import { PROTOCOL_VERSION } from "../src/play/protocol.js";
+import { matchChecksum } from "../src/core/replay.js";
+import { randomUUID } from "node:crypto";
 
 const SNAPSHOT_MS = 50;
 const EMPTY_ROOM_TTL_MS = 60000;
 const IDLE_SEAT_S = 30;
 const RECONNECT_GRACE_MS = 30000;
+const MAX_SPECTATORS = 6;
+// A checksum every second (at the 60Hz fixed step) is cheap and dense enough to
+// pinpoint divergence within one round; the log itself is bounded so a very
+// long-running match cannot grow memory without limit.
+const CHECKSUM_INTERVAL_TICKS = 60;
+const COMMAND_LOG_LIMIT = 20000;
+const CHECKSUM_LOG_LIMIT = 600;
+export const SOFT_BACKPRESSURE_BYTES = 256 * 1024;
+export const HARD_BACKPRESSURE_BYTES = 1024 * 1024;
 
 export class Room {
-  constructor(id, onClose) {
+  constructor(id, onClose, visibility = "private", matchLifecycle = null, socialSafety = null) {
     this.onClose = onClose;
     this.id = id;
+    this.visibility = visibility === "public" ? "public" : "private";
+    this.matchLifecycle = matchLifecycle;
+    this.socialSafety = socialSafety;
+    this.matchRecord = null;
     this.clients = new Set();
+    this.reservedUserIds = new Set();
+    this.reservedTeams = new Map();
+    this.expectedPlayerCount = 0;
+    this.allowSpectators = true;
     this.state = "lobby";
     this.match = null;
     this.order = [];
@@ -23,15 +42,23 @@ export class Room {
     this.terrainVersion = 0;
     this.serverTick = 0;
     this.roomVersion = 0;
+    // Cleared on every start()/restart(): a per-match record for deterministic
+    // replay (see src/core/replay.js) and divergence detection, not a
+    // cross-match audit log.
+    this.commandLog = [];
+    this.checksumLog = [];
     this.emptySince = Date.now();
     this.last = Date.now();
     this.acc = 0;
     this.sinceSnapshot = 0;
     this.idleSeat = 0;
     this.maxTickDrift = 0;
+    this.tickDriftSamples = [];
     this.snapshotBytes = 0;
     this.rejectedMessages = 0;
     this.reconnects = 0;
+    this.slowConsumerDrops = 0;
+    this.slowConsumerCloses = 0;
     this.chat = [];
     this.history = [];
     // unref: an idle room must not keep the process alive on its own.
@@ -47,9 +74,18 @@ export class Room {
   teamSize(team) {
     return this.teamPlayers(team).length + this.bots[team];
   }
+  spectatorCount() {
+    return [...this.clients].filter((client) => client.role === "spectator").length;
+  }
+  canJoin(role = "player") {
+    if (role === "spectator") return this.allowSpectators && this.spectatorCount() < MAX_SPECTATORS;
+    if (this.state !== "lobby") return false;
+    return this.teamPlayers(0).length + this.teamPlayers(1).length < MAX_TEAM * 2;
+  }
   get canStart() {
     const seated = [...this.clients].filter((c) => c.team !== null);
-    return this.teamSize(0) > 0 && this.teamSize(1) > 0 && seated.every((c) => c.ready || c.host);
+    return (!this.expectedPlayerCount || seated.length === this.expectedPlayerCount) &&
+      this.teamSize(0) > 0 && this.teamSize(1) > 0 && seated.every((c) => c.ready || c.host);
   }
   promoteHost() {
     if (this.host || !this.clients.size) return;
@@ -88,15 +124,74 @@ export class Room {
     this.state = "playing";
     this.acc = 0;
     this.last = Date.now();
+    this.serverTick = 0;
+    this.commandLog = [];
+    this.checksumLog = [];
+    this.beginMatchRecord();
     return true;
   }
+  // Snapshot enough to reconstruct this match deterministically with
+  // src/core/replay.js's replayMatch(): same config, same seed, same roster.
+  replayConfig() {
+    return { seed: this.match.seed, map: this.match.map.id, difficulty: this.match.difficulty.id,
+      roster: this.match.roster };
+  }
+  logCommand(msg) {
+    const entry = { tick: this.serverTick, t: msg.t };
+    if (msg.t === "aim") entry.angle = msg.angle;
+    else if (msg.t === "action") { entry.shot = msg.shot; entry.item = msg.item; }
+    else if (msg.t === "keys") entry.keys = [...(msg.keys || [])];
+    this.commandLog.push(entry);
+    if (this.commandLog.length > COMMAND_LOG_LIMIT) this.commandLog.shift();
+  }
+  beginMatchRecord() {
+    const participants = this.order.filter((client) => client.userId)
+      .map((client) => ({ userId: client.userId, team: client.team }));
+    const record = { id: randomUUID(), roomId: this.id, startedAt: new Date(), participants };
+    this.matchRecord = record;
+    record.begin = this.matchLifecycle?.beginMatch?.(record).catch((error) => {
+      console.error(JSON.stringify({ event: "match_begin_failed", roomId: this.id, message: error.message }));
+      return { applied: false };
+    }) || Promise.resolve({ applied: false });
+  }
+  winnerTeam() {
+    const hp = [this.match.teamHp(0), this.match.teamHp(1)];
+    return hp[0] === hp[1] ? null : hp[0] > hp[1] ? 0 : 1;
+  }
+  finalizeMatch(status = "completed") {
+    const record = this.matchRecord;
+    if (!record || record.finalized) return record?.finish;
+    record.finalized = true;
+    const winner = status === "completed" ? this.winnerTeam() : null;
+    const participants = this.order.filter((client) => client.userId).map((client) => ({
+      userId: client.userId,
+      outcome: status === "abandoned" ? "abandoned" : winner === null ? "draw" : client.team === winner ? "win" : "loss",
+      disconnected: !!client.leftMatch || !client.connected,
+    }));
+    const result = { id: record.id, resultKey: `match:${record.id}`, status, endedAt: new Date(),
+      summary: { map: this.map, rounds: this.match.round, winnerTeam: winner,
+        leavers: participants.filter((participant) => participant.disconnected).map((participant) => participant.userId) },
+      participants };
+    record.finish = record.begin.then((begun) => begun.applied
+      ? this.matchLifecycle.completeMatch(result) : { applied: false }).catch((error) => {
+      console.error(JSON.stringify({ event: "match_complete_failed", roomId: this.id, message: error.message }));
+      return { applied: false };
+    });
+    return record.finish;
+  }
   restart() {
+    this.finalizeMatch(this.match.phase === "over" ? "completed" : "abandoned");
     this.match.reset();
     this.terrainVersion++;
     this.match.terrainDirty = false;
+    this.serverTick = 0;
+    this.commandLog = [];
+    this.checksumLog = [];
+    this.beginMatchRecord();
   }
   backToLobby() {
     if (this.match) {
+      this.finalizeMatch(this.match.phase === "over" ? "completed" : "abandoned");
       this.history.push({ at: Date.now(), status: this.match.status, rounds: this.match.round });
       this.history = this.history.slice(-10);
     }
@@ -106,7 +201,10 @@ export class Room {
   }
   tick() {
     const now = Date.now();
-    this.maxTickDrift = Math.max(this.maxTickDrift, Math.max(0, now - this.last - 1000 / 60));
+    const tickDrift = Math.max(0, now - this.last - 1000 / 60);
+    this.maxTickDrift = Math.max(this.maxTickDrift, tickDrift);
+    this.tickDriftSamples.push(tickDrift);
+    if (this.tickDriftSamples.length > 3600) this.tickDriftSamples.shift();
     if (this.state === "playing") {
       this.acc += Math.min((now - this.last) / 1000, 0.1);
       const m = this.match;
@@ -116,18 +214,29 @@ export class Room {
           this.idleSeat += DT;
           if (this.idleSeat > IDLE_SEAT_S) {
             this.idleSeat = 0;
+            const idleClient = this.clientOfSeat(m.current.player);
+            idleClient.afkTurns = (idleClient.afkTurns || 0) + 1;
             m.cancelCharge();
-            m.nextTurn();
+            if (idleClient.afkTurns >= 2) {
+              m.current.hp = 0;
+              idleClient.leftMatch = true;
+              m.checkWinner();
+            } else m.nextTurn();
           }
         } else this.idleSeat = 0;
         m.update(DT);
         this.serverTick++;
+        if (this.serverTick % CHECKSUM_INTERVAL_TICKS === 0) {
+          this.checksumLog.push({ tick: this.serverTick, checksum: matchChecksum(m) });
+          if (this.checksumLog.length > CHECKSUM_LOG_LIMIT) this.checksumLog.shift();
+        }
         this.acc -= DT;
       }
       if (m.terrainDirty) {
         this.terrainVersion++;
         m.terrainDirty = false;
       }
+      if (m.phase === "over") this.finalizeMatch("completed");
     }
     this.sinceSnapshot += now - this.last;
     this.last = now;
@@ -147,7 +256,7 @@ export class Room {
       roomVersion: this.roomVersion,
       lastAckSeq: client.lastAckSeq,
       reconnectToken: client.reconnectToken,
-      chat: this.chat,
+      chat: this.chat.filter((message) => this.socialSafety?.canView(client.userId, message.userId) !== false),
       history: this.history,
       id: this.id,
       state: this.state,
@@ -164,6 +273,7 @@ export class Room {
         character: c.character,
         weapon: c.weapon,
         connected: c.connected,
+        role: c.role,
       })),
       you: {
         id: client.id,
@@ -173,6 +283,7 @@ export class Room {
         character: client.character,
         weapon: client.weapon,
         player: this.state === "playing" ? this.order.indexOf(client) + 1 || null : null,
+        role: client.role,
       },
     };
     if (this.state === "playing") {
@@ -225,24 +336,43 @@ export class Room {
   }
   broadcast() {
     for (const c of this.clients) if (c.connected && c.ws.readyState === 1) {
+      if (c.ws.bufferedAmount > HARD_BACKPRESSURE_BYTES) {
+        this.slowConsumerCloses++;
+        c.connected = false;
+        c.disconnectedAt = Date.now();
+        c.ws.close(1013, "slow consumer");
+        continue;
+      }
+      if (c.ws.bufferedAmount > SOFT_BACKPRESSURE_BYTES) {
+        this.slowConsumerDrops++;
+        continue;
+      }
       const payload = JSON.stringify(this.snapshot(c));
       this.snapshotBytes += Buffer.byteLength(payload);
       c.ws.send(payload);
     }
   }
-  join(client) {
+  join(client, role = "player", reservedTeam = null) {
+    if (!this.canJoin(role)) return false;
+    client.role = role;
     this.clients.add(client);
     this.roomVersion++;
     this.emptySince = Infinity;
     // Fill the emptier team so a fresh player can act right away.
-    client.team = this.state === "lobby" ? (this.teamPlayers(0).length <= this.teamPlayers(1).length ? 0 : 1) : null;
+    client.team = role === "player"
+      ? ([0, 1].includes(reservedTeam) ? reservedTeam :
+        (this.teamPlayers(0).length <= this.teamPlayers(1).length ? 0 : 1))
+      : null;
     this.promoteHost();
     this.broadcast();
+    return true;
   }
-  reconnect(token, ws) {
+  reconnect(token, ws, nextToken = token, expectedUserId = null) {
     const client = [...this.clients].find((candidate) => candidate.reconnectToken === token && !candidate.connected);
-    if (!client || Date.now() - client.disconnectedAt > RECONNECT_GRACE_MS) return null;
+    if (!client || (expectedUserId && client.userId !== expectedUserId) ||
+        Date.now() - client.disconnectedAt > RECONNECT_GRACE_MS) return null;
     client.ws = ws;
+    client.reconnectToken = nextToken;
     client.connected = true;
     client.disconnectedAt = 0;
     client.terrainVersion = -1;
@@ -260,6 +390,7 @@ export class Room {
     this.broadcast();
   }
   remove(client) {
+    if (this.state === "playing" && client.role === "player") client.leftMatch = true;
     this.clients.delete(client);
     client.host = false;
     this.promoteHost();
@@ -268,16 +399,13 @@ export class Room {
     if (this.clients.size) this.broadcast();
   }
   handle(client, msg) {
-    if (msg.clientSeq <= client.lastAckSeq) {
-      this.rejectedMessages++;
-      return false;
-    }
-    client.lastAckSeq = msg.clientSeq;
     const m = this.match,
       mine = this.state === "playing" && m.current.control === "human" && this.clientOfSeat(m.current.player) === client;
     switch (msg.t) {
       case "team":
         if (this.state !== "lobby") return false;
+        if (client.role !== "player") return false;
+        if (msg.team !== null && msg.team !== client.team && this.teamPlayers(msg.team).length >= MAX_TEAM) return false;
         client.team = [0, 1].includes(msg.team) ? msg.team : null;
         client.ready = client.host;
         break;
@@ -309,41 +437,56 @@ export class Room {
         this.backToLobby();
         break;
       // Gameplay input only counts on the sender's own turn.
-      case "keys":
+      case "keys": {
         if (!mine) return false;
+        const keys = (msg.keys || []).filter((k) => ["left", "right", "up", "down"].includes(k));
         m.keys.clear();
-        for (const k of msg.keys || []) if (["left", "right", "up", "down"].includes(k)) m.keys.add(k);
+        for (const k of keys) m.keys.add(k);
+        this.logCommand({ t: "keys", keys });
         this.roomVersion++;
         return true;
+      }
       case "aim":
         if (!mine) return false;
         m.setAim(msg.angle);
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "charge":
         if (!mine) return false;
         m.beginCharge();
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "release":
         if (!mine) return false;
         m.release();
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "cancel":
         if (!mine) return false;
         m.cancelCharge();
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "action":
         if (!mine) return false;
         m.setAction(msg);
+        this.logCommand(msg);
         this.roomVersion++;
         return true;
       case "chat":
+        if (client.adminMuted) return false;
         if (Date.now() - (client.lastChatAt || 0) < 750) return false;
         client.lastChatAt = Date.now();
-        this.chat.push({ id: client.id, name: client.name, text: msg.text.trim(), at: Date.now() });
+        {
+          const message = { id: randomUUID(), userId: client.userId, name: client.name,
+            text: this.socialSafety?.sanitize(msg.text) || msg.text.trim(), at: Date.now() };
+          this.chat.push(message);
+          this.socialSafety?.recordChat(this.id, client.userId, message.text, message.id).catch((error) =>
+            console.error(JSON.stringify({ event: "chat_audit_failed", roomId: this.id, message: error.message })));
+        }
         this.chat = this.chat.slice(-30);
         break;
       case "kick": {

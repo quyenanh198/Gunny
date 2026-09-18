@@ -1,307 +1,311 @@
-# Lộ trình Gunny Chibi Arena thành game online kiểu Gunbound
+# Roadmap Gunny Webgame Online — Product Reset v2
 
-## 1. Điểm xuất phát
+Ngày cập nhật: 2026-09-17
 
-Code trên `main` đã là **online MVP**, không còn là game offline cần gắn mạng từ đầu:
+Trạng thái tài liệu: nguồn kế hoạch chính, thay thế roadmap M0–M7 cũ.
 
-- `server/server.js` giữ phòng và chạy `Match` authoritative ở 120 Hz.
-- WebSocket gửi snapshot 20 Hz; client chỉ gửi ý định.
-- `OnlineSession`/`RemoteMatch` cho client online; `LocalSession` giữ chế độ luyện tập.
-- Có sảnh, phòng chờ, khán giả, host, đội 1–3 người, bot, 5 map.
-- Màn trận đã khóa trong `100dvh` và tự fit canvas 1200×620.
+Phạm vi hiện tại: prototype phòng đấu online; **chưa phải online beta**.
 
-Vì vậy mục tiêu tiếp theo là: **ổn định mạng, tách kiến trúc, làm sâu gameplay kiểu Gunbound, hoàn thiện responsive và vận hành production**.
+## 1. Tuyên bố sản phẩm
 
-## 2. Nguyên tắc không đổi
+Mục tiêu là một webgame bắn súng tọa độ theo lượt, chơi trực tiếp trên desktop/mobile browser:
 
-1. Server là nguồn sự thật. Client không quyết định damage, lượt, vị trí, RNG hoặc kết quả.
-2. `core` là logic thuần, deterministic, chạy được trên server và test.
-3. Gameplay dùng hệ tọa độ logic cố định 1200×620 trên mọi thiết bị. View chỉ scale/crop UI, không đổi vật lý.
-4. Desktop, tablet và mobile dùng cùng luật; khác layout và input adapter.
-5. Mỗi giai đoạn phải deploy được, test xanh, có thể rollback độc lập.
-6. Không thêm tài khoản, xếp hạng hoặc kinh tế trước khi reconnect và trận online ổn định.
+- Trận 1v1, 2v2 và 3v3, server authoritative.
+- Người mới có thể chơi thử nhanh; người chơi quay lại có tài khoản và tiến trình bền vững.
+- Lobby, party, matchmaking và phòng riêng là các luồng chính, không chỉ là link phòng tạm.
+- Kỹ năng đến từ góc, lực, gió, địa hình, lựa chọn đòn bắn và item.
+- Nội dung, balance và sự kiện có thể vận hành mà không phải sửa trực tiếp source code.
+- Art, tên gọi và nội dung phát hành phải là IP nguyên bản; “Gunny/Gunbound” chỉ là tham chiếu thể loại trong giai đoạn phát triển, không phải tài sản được phép sao chép.
 
-## 3. Kiến trúc đích
+North-star cho beta: một người chơi mới tạo danh tính, vào trận hợp lệ trong dưới 60 giây, hoàn thành trận, nhận kết quả bền vững và quay lại trên thiết bị khác mà không mất dữ liệu.
+
+## 2. Kết luận audit
+
+Code hiện tại làm tốt phần **combat prototype** nhưng đã đi quá sâu vào polish/gameplay trước khi có nền móng của một webgame online.
+
+| Khu vực | Hiện trạng | Quyết định |
+|---|---|---|
+| Combat deterministic | Có core dùng chung, fixed-step, server authoritative, 74 test | Giữ và cô lập thành engine |
+| Phòng/trận WebSocket | Có lobby, room, reconnect 30 giây, snapshot | Giữ, nhưng siết protocol/security/lifecycle |
+| Client | Chạy được desktop/mobile, vẫn còn orchestration lớn trong `game.js`/`net.js` | Tách theo screen/store/transport, chưa đổi framework |
+| Danh tính người chơi | Chỉ có tên trong URL/localStorage | Phải thêm guest identity, account linking, session an toàn |
+| Dữ liệu bền vững | Không database; phòng, lịch sử và reconnect ở RAM | Phải thêm persistence trước progression/rank |
+| Matchmaking | Quick Join chọn phòng đầu tiên còn chỗ | Thay bằng queue có region/mode/team/MMR và timeout |
+| Progression/economy | Chưa có | Thiết kế sau identity/persistence, không pay-to-win |
+| Moderation/admin | Chat rate-limit đơn giản; chưa mute/report/ban/admin | Bắt buộc trước public beta |
+| Vận hành | Một Node process serve asset + API + WS; readiness luôn `true` | Chỉ phù hợp dev/staging nhỏ; chưa production-ready |
+| Observability | Metrics tự viết, chưa histogram/alert/error tracking | Thay bằng telemetry có SLO và dashboard |
+| CI/release | Có test script nhưng repository chưa có workflow CI chuẩn | Phải có quality gate trước feature mới |
+
+Các khẳng định “M6 sẵn sàng beta” và “M7 sẵn sàng staging” trong tài liệu cũ bị thu hồi. Chúng chỉ đúng cho demo RAM trên một process, không đúng cho sản phẩm online public.
+
+## 3. Những lệch hướng cần sửa ngay
+
+### 3.1 Sản phẩm
+
+- Chưa có loop ngoài trận: onboarding → identity → queue/party → trận → kết quả → tiến trình → quay lại.
+- Nội dung S1/S2/SS, item, map và animation được làm trước hồ sơ người chơi, inventory, entitlement và content version.
+- “Quick Join” hiện là chọn phòng đầu tiên, không phải matchmaking.
+- Chưa chốt mô hình kiếm tiền, giới hạn độ tuổi, privacy, retention hoặc nguyên tắc công bằng.
+- Chưa có original-IP checklist; tên dự án và các tham chiếu cần được legal/product review trước public launch.
+
+### 3.2 Kiến trúc và dữ liệu
+
+- `server/server.js` đang gộp static hosting, REST và WebSocket gateway.
+- Mọi room chạy trong RAM của một process; restart làm mất trận, lịch sử và reconnect token.
+- Không có user ID ổn định, database schema, migration, transaction hoặc idempotency.
+- Không có versioned content/balance snapshot gắn với từng trận.
+- `src/match.js`, `src/game.js`, `server/room.js` và `src/net.js` vẫn là các module orchestration lớn; M1 cũ chưa hoàn thành theo chính tiêu chí 300–400 dòng.
+
+### 3.3 Network và security
+
+- Chưa kiểm tra `Origin` khi WebSocket upgrade.
+- Reconnect token nằm trong query string, có thể lọt vào proxy/access log.
+- Mã phòng bốn ký tự và hành vi “mã lạ thì tạo phòng” khiến typo tạo room mới, khó phân biệt join/create.
+- Rate limit hiện chỉ là 60 message/giây trên từng connection; chưa có giới hạn kết nối/IP, room/IP, handshake, HTTP hoặc backpressure.
+- Direct join có thể vượt capacity; chuyển team chưa chặn `MAX_TEAM` ở boundary server.
+- Snapshot gửi full state 20 Hz và không kiểm tra `bufferedAmount`; client chậm có thể tích hàng đợi bộ nhớ.
+- Message bị từ chối không trả error/ack có ngữ nghĩa; sequence được consume trước authorization.
+- `/metrics` và danh sách phòng đang public; readiness luôn trả `ready: true`.
+
+### 3.4 Vận hành và chất lượng
+
+- Chưa có CI workflow bắt buộc, coverage gate, dependency/security scan hoặc preview environment.
+- `npm run check` phụ thuộc `find/xargs`, không portable trên Windows.
+- Chưa có test network chaos thực sự cho latency, jitter, loss, reorder và reconnect race.
+- Metrics `tickDrift` là lifetime maximum, không phải p95; chưa có SLO/alert.
+- Chưa có audit log moderation, data retention, backup/restore drill hoặc incident runbook hoàn chỉnh.
+
+## 4. Kiến trúc đích thực dụng
+
+Không tách microservice sớm. Bắt đầu bằng modular monolith với ranh giới rõ và khả năng tách match worker khi tải yêu cầu.
 
 ```text
-src/
-  content/                 nhân vật, vũ khí, item, map
-  core/                    luật thuần
-    match.js
-    combat.js
-    turn-queue.js
-    bot.js
-    physics.js
-  play/
-    local-session.js
-    online-session.js
-    protocol.js
-    remote-match.js
-  ui/
-    screens/               home, room, battle, result
-    input/                 keyboard, pointer, touch
-    battle-renderer.js
-    hud.js
-    responsive.js
-server/
-  server.js                bootstrap HTTP/WS
-  room-manager.js
-  room.js
-  connection.js
-  validation.js
-  metrics.js
+Browser client
+  ├─ static assets từ CDN/object storage
+  ├─ HTTPS API: identity, profile, inventory, queue, history
+  └─ WSS gateway: party, room, match commands, snapshots
+
+Node application
+  ├─ identity/session module
+  ├─ player/profile module
+  ├─ matchmaking/party module
+  ├─ authoritative match runtime
+  ├─ moderation/admin module
+  └─ telemetry/audit module
+
+PostgreSQL
+  ├─ users, identities, sessions
+  ├─ profiles, inventory, currencies, progression
+  ├─ matches, participants, results
+  └─ sanctions, reports, audit log
+
+Redis (chỉ thêm khi cần nhiều process)
+  ├─ presence, queue, short-lived room routing
+  └─ rate limits, reconnect lease, pub/sub
 ```
 
-Luồng online:
+Nguyên tắc:
+
+1. Server quyết định toàn bộ kết quả gameplay và reward.
+2. Mỗi command có request ID/idempotency; không cấp reward từ callback client đơn thuần.
+3. Mỗi trận khóa `engineVersion`, `contentVersion`, seed và roster.
+4. API schema và protocol được version hóa, có compatibility window và close/error code rõ.
+5. Guest-first nhưng identity không phụ thuộc tên hiển thị; account linking không tạo trùng profile.
+6. Dữ liệu kinh tế dùng transaction/ledger; không chỉ cập nhật số dư trực tiếp.
+
+## 5. Roadmap mới
+
+### R0 — Chốt product contract và baseline
+
+Trạng thái: **đã triển khai local; chờ CI/merge và branch protection**.
+
+- Viết one-page product brief: audience, trận chuẩn, session length, modes, fairness, monetization và IP policy.
+- Chốt beta slice: guest/account, 1v1 + phòng riêng, 3 nhân vật, 3 map, một progression loop; hoãn guild/season/shop trả phí.
+- Chuẩn hóa một lệnh `npm run verify` chạy syntax, unit, integration và browser smoke.
+- Thêm CI trên pull request, branch protection và artifact/log khi fail.
+- Ghi baseline: snapshot bytes/s, tick p50/p95/p99, heap, event-loop lag với 1/10/30 trận.
+- Tách feature flags cho gameplay thử nghiệm khỏi flow beta.
+
+Exit criteria:
+
+- Product brief được duyệt và mỗi feature roadmap truy được về một user outcome.
+- Clone sạch chạy verify bằng một lệnh trên Linux và Windows.
+- CI là required check; không còn trạng thái “pass theo ghi chú” mà không có run.
+
+### R1 — Hardening protocol và room lifecycle
+
+Trạng thái: **hoàn thành R1A–R1C và đã merge**. Field soak trên mạng/device thật vẫn là release gate của R8, không phải lý do mở rộng content sớm.
+
+- Tách rõ `create room`, `join room`, `spectate`; room không tồn tại phải trả `ROOM_NOT_FOUND`.
+- Room ID đủ entropy, có private/public flag và capacity invariant tại server boundary.
+- Chuyển reconnect credential khỏi URL sang message xác thực đầu tiên hoặc secure session cookie.
+- Origin allowlist, trusted-proxy policy, HTTP/WS handshake rate limit, connection/IP cap và room creation cap.
+- Backpressure: ngừng/coalesce snapshot khi `bufferedAmount` vượt ngưỡng; disconnect slow consumer có lý do.
+- Command envelope có `requestId`, `clientSeq`, ack/error cụ thể; không consume sequence cho command chưa được chấp nhận.
+- Chaos tests cho duplicate, reorder, reconnect race, packet loss và tab sleep.
+
+Exit criteria:
+
+- Không thể vượt 6 ghế, chiếm lượt, tạo room vô hạn hoặc replay command.
+- Reconnect 30 giây giữ đúng identity/seat; token không xuất hiện trong URL/log.
+- Client 300 ms latency + jitter/loss vẫn kết thúc trận không desync.
+
+### R2 — Identity, profile và persistence
+
+Trạng thái: **hoàn thành R2A–R2E local; chờ CI/merge R2E**.
+
+- Guest identity bằng opaque ID + rotating session; hỗ trợ link email/OAuth sau, không lưu password tự chế.
+- PostgreSQL migrations và repository layer; schema cho user, profile, session, match, participant.
+- Profile version/optimistic concurrency; idempotent result settlement.
+- Lưu match summary và disconnect outcome; recovery policy khi process chết giữa trận.
+- Privacy baseline: consent, export/delete account, retention và secret management.
+
+Exit criteria:
+
+- Người chơi đăng nhập thiết bị khác thấy cùng profile.
+- Restart server không mất identity/profile/history đã chốt.
+- Cùng một match result gửi lại không thể cấp thưởng hai lần.
+
+### R3 — Matchmaking, party và social safety
+
+Trạng thái: **R3A–R3D hoàn thành local; chờ CI/merge R3D. R0–R2 và R3A/R3B ghi nhận đã merge vào `main` theo lịch sử git, nhưng field soak/production run thật vẫn là gate của R8.**
+
+- Queue thật theo mode/region/team size; timeout mở rộng tiêu chí có kiểm soát.
+- Party/invite lifecycle tách khỏi match room; leader transfer và leave/kick rõ.
+- Presence và reconnect routing; spectator policy.
+- Mute, block, report, profanity policy, chat retention ngắn và admin review queue. (R3D, hoàn thành local)
+- MMR chỉ triển khai sau khi match completion/disconnect data đáng tin.
+
+Exit criteria:
+
+- Solo player vào trận hợp lệ trong SLA đã chốt; không ghép sai team/mode/version.
+- Block/mute có hiệu lực phía server và report có audit trail. — **đạt**: `SocialSafety` chặn block lẫn nhau khỏi cùng ticket/room chat, `moderation_reports`/`chat_messages` ghi audit có retention.
+- Leaver/AFK policy nhất quán, không thể farm kết quả bằng reconnect.
+
+R3D bổ sung player-controlled block/mute/report (`POST /api/social/block`, `/mute`, `/report`), lọc chat theo người xem trên mọi snapshot và reconnect, chat retention 7 ngày tự purge theo giờ, và một admin review queue tối thiểu (`GET`/`PATCH /api/admin/reports`) gated bằng `MODERATION_TOKEN` chia sẻ — RBAC/audit theo từng admin identity vẫn là việc của R6. Chi tiết ở `docs/moderation.md`.
+
+### R4 — Combat engine và content pipeline
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Core state machine giữ nguyên (không đổi framework/tách microservice); replay+checksum, content schema và balance simulator đã thêm. Không có map/vũ khí/nhân vật mới nào được thêm trong milestone này.
+
+- Tách `Match`/`combat`/`turn-queue`/`bot` module: **đã có từ M1**, giữ nguyên. Chưa có module `terrain` riêng và chưa có snapshot/command envelope hình thức hóa (`Room.snapshot()` vẫn là shape thực tế) — còn mở cho một đợt sau.
+- Replay deterministic từ seed + command log; checksum định kỳ để phát hiện divergence — **đã có**: `src/core/replay.js` (`matchChecksum`, `applyCommand`, `replayMatch`) và `Room.commandLog`/`Room.checksumLog` (mỗi giây một checksum, capture mọi command aim/charge/release/cancel/action/keys). Sửa luôn 2 lời gọi `Math.random()` còn sót trong `match.js` (particle/trail) sang `this.random()` để seed quyết định toàn bộ state, không chỉ gameplay.
+- Content schema versioned cho character/weapon/map; validator — **đã có**: `src/content/schema.js` (`CONTENT_VERSION`, `validateContent`, `validateContentOrThrow`), gate qua `tests/content-schema.test.js`. **Chưa có migration runner thật** — version number mới là marker, chưa giải quyết rename/reinterpret field.
+- Balance simulator chạy hàng loạt trận bot; xuất win rate, first-turn advantage, damage và duration — **đã có**: `scripts/balance-simulator.mjs` (`npm run benchmark:balance`), headless qua `Match` trực tiếp, ~300 trận/~25s mặc định. Chưa gate vào CI (chưa có ngưỡng balance được chốt để so sánh).
+- Chốt vertical slice trước: không thêm map/vũ khí mới cho tới khi pipeline/versioning hoàn thành — **tuân thủ**, R4 này không thêm content mới.
+
+Chi tiết ở `docs/content-pipeline.md`.
+
+Exit criteria:
+
+- Replay cho checksum giống bản gốc trên CI — **đạt ở mức test local** (`tests/replay.test.js`, gồm 1 test replay trực tiếp từ command log của một `Room` sống thật); chưa chạy trên CI thật (chờ merge).
+- Content lỗi bị từ chối trước deploy; trận đang chạy không đổi balance giữa chừng — **đạt một phần**: lỗi content bị chặn ở test bắt buộc (không phải runtime loader vì content vẫn là bundled JS); "trận đang chạy không đổi balance giữa chừng" vốn đã đúng vì content không hot-reload.
+- Không character/shot/item vượt ngưỡng balance được chốt — **chưa đạt**: balance simulator có nhưng chưa có ngưỡng balance được product/design chốt để so sánh; đây là quyết định sản phẩm, không phải việc kỹ thuật.
+
+### R5 — Progression và economy công bằng
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Hạ tầng ledger/reward xong; chưa có shop, cosmetic catalog, mission content hay UI — đó là quyết định sản phẩm chưa được chốt (mục 8.5/8.6).
+
+- Chốt progression loop: XP/account level, mastery hoặc cosmetic collection — **một phần**: có XP/level (`server/economy.js`, đường cong phẳng 100xp/level, đặt tên rõ là placeholder chưa balance-tune), chưa có mastery hay cosmetic collection vì chưa có catalog cosmetic.
+- Inventory/entitlement và currency ledger có reason, request ID, before/after balance — **currency ledger đã có** (`currency_ledger`: append-only, unique theo `(user_id, request_id)`, balance luôn tính lại bằng `SUM(amount)` chứ không lưu số dư riêng để tránh hai nguồn sự thật). Bảng `entitlements` đã tạo làm scaffold nhưng **chưa có gì cấp vào** vì chưa có nội dung cosmetic để entitle.
+- Reward settlement từ server match result; anti-AFK/farm rule — **đã có**: `completeMatch()` cấp reward trong cùng transaction với kết quả trận (R2E); participant `disconnected` hoặc trận `abandoned` không nhận gì, chặn farm bằng cách rời trận/bỏ trận.
+- Daily/weekly mission và cosmetic unlock qua content config — **chưa làm**: đây là nội dung/thiết kế sản phẩm, không phải hạ tầng; milestone này dừng ở cơ chế reward/ledger để mission sau này dựa vào.
+- Không bán power trong PvP; nếu monetization có, ưu tiên cosmetic/battle pass và công bố odds khi pháp lý yêu cầu — **chưa vi phạm được vì chưa có gì để bán**; nguyên tắc giữ nguyên cho thiết kế sau.
+
+Chi tiết ở `docs/economy.md`.
+
+Exit criteria:
+
+- Không thể sửa client để tự cấp item/currency/reward — **đạt**: không có endpoint ghi currency/xp nào; chỉ `completeMatch()` phía server tạo ra ledger/progression.
+- Economy audit/reconcile được; rollback content không làm mất entitlement — **đạt phần audit** (ledger append-only, balance luôn = tổng ledger, tự reconcile được); "rollback content không mất entitlement" chưa áp dụng được vì chưa có entitlement thật nào tồn tại.
+- Người chơi free và trả phí có cùng combat power trong mode cạnh tranh — **đạt vì chưa có gì để mua**; không phải một xác nhận vững chắc cho tương lai, chỉ đúng ở trạng thái hiện tại.
+
+### R6 — LiveOps, admin và moderation
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Admin RBAC/sanctions/audit xong; remote config, maintenance mode và dashboard vận hành chưa làm.
+
+- Admin RBAC, player lookup, mute/ban/unban, room terminate, grant có audit và dual-control cho thao tác nhạy cảm — **đã có**: `users.role` ('player'/'admin'), gán qua `scripts/promote-admin.mjs` (không có UI/API tự cấp, chủ đích). `GET /api/admin/users/:id` (lookup tổng hợp: profile, wallet, progression, 10 trận gần nhất, lịch sử sanction). `POST /api/admin/sanctions` (`mute` active ngay; `ban` bắt đầu `pending_confirmation`, **chỉ có hiệu lực sau khi một admin KHÁC xác nhận** qua `POST /api/admin/sanctions/:id/confirm` — dual-control thật cho thao tác rủi ro cao nhất). `POST /api/admin/sanctions/:id/revoke`, `POST /api/admin/rooms/:id/terminate`. Mọi thao tác ghi thay đổi đều ghi vào `admin_actions` (ai/khi nào/lý do/metadata).
+- Remote config/content rollout theo environment, percentage và kill switch — **chưa làm**. `src/content/feature-flags.js` vẫn chỉ đọc default lúc deploy, chưa có runtime override/percentage rollout.
+- Announcement, maintenance mode, minimum client/protocol version — **chưa làm**.
+- Dashboard funnel, retention, match completion, queue time, disconnect, report rate — **chưa làm**. Chỉ có `/metrics` (Prometheus, từ R1C) và `GET /api/admin/actions` (audit log) làm nguồn machine-readable.
+
+Chi tiết ở `docs/admin.md`.
+
+Exit criteria:
+
+- Có thể tắt feature lỗi mà không redeploy client — **chưa đạt**: đây là phần remote config/kill switch chưa làm.
+- Mọi thao tác admin quan trọng truy được ai/lúc nào/lý do gì — **đạt** cho slice đã làm: mọi sanction create/confirm/revoke và room terminate đều ghi `admin_actions`; RBAC dựa trên `users.role` phía server, không tin role client khai báo.
+- Moderation xử lý được report mà không đọc log thủ công trên server — **tiến bộ đáng kể**: admin giờ có thể tra cứu một user (`lookupUser`) và hành động (ban/mute có dual-control cho ban) trực tiếp từ report, tất cả qua API; vẫn chưa có UI nối report → hành động trong một luồng.
+
+### R7 — Production reliability và delivery
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Readiness/security headers/dependency scan/SLO giấy đã có; CDN tách asset, OpenTelemetry, canary/blue-green và DDoS/WAF ở edge chưa làm — đều cần hạ tầng thật ngoài phạm vi một phiên code.
+
+- Tách static asset khỏi game process khi public; asset hash/CDN/cache immutable — **chưa làm**, cần hạ tầng CDN thật.
+- Readiness phản ánh DB, event-loop lag và khả năng nhận trận; metrics không public trực tiếp — **đạt phần lõi**: `/readyz` giờ trả `{ready, db, eventLoopLagMs, shuttingDown}` thật (trước đây luôn `ready:true` — bug đã ghi từ M8), `db` ping Postgres thật, lag đo bằng `perf_hooks.monitorEventLoopDelay()`, cờ `shuttingDown` bật ngay khi graceful shutdown bắt đầu. `/metrics` đã yêu cầu bearer token khi production từ R1C, không đổi thêm ở đây.
+- OpenTelemetry/error tracking, structured log có correlation ID và redaction — **chưa làm**.
+- SLO: API availability, queue latency, match tick delay, disconnect rate; alert dựa trên SLO — **chỉ có "paper SLO"**: bảng ngưỡng ghi trong `docs/operations.md` đối chiếu với `/metrics`/`/readyz` hiện có, **chưa có hệ alert thật chạy** (không có Alertmanager/Grafana hay tương đương được kết nối).
+- Backup/restore drill, migration rollback, canary/blue-green và capacity/load test — **một phần**: `migrate()` đã có test idempotent (chạy lại không áp lại migration cũ, điều kiện cần cho redeploy an toàn); quy trình backup/restore bằng `pg_dump`/`pg_restore` đã viết thành runbook trong `docs/operations.md` nhưng **chưa từng chạy drill thật** (cần Postgres thật ngoài phạm vi phiên này). Canary/blue-green và capacity/load test ở quy mô đã công bố chưa làm vì chưa có quyết định capacity target (mục 8.7).
+- Dependency scan, secret scan, CSP/security headers, DDoS/WAF ở edge — **một phần**: `npm run verify` giờ chạy `npm audit --audit-level=high` (trước đây chỉ chạy thủ công, không gate CI); mọi response có `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Content-Security-Policy` cùng-origin + Google Fonts, và `Strict-Transport-Security` khi proxy tin cậy xác nhận HTTPS — **đã xác minh bằng browser smoke thật** (Playwright/Chromium chạy được trong môi trường này ở thời điểm R7, khác các ghi chú "không có Chromium" ở mọi milestone trước — kiểm tra lại giả định này nếu môi trường đổi). Secret scan tự động và DDoS/WAF ở edge chưa làm.
+
+Chi tiết readiness/security/SLO/backup ở `docs/operations.md`.
+
+Exit criteria:
+
+- Load test đạt capacity đã công bố với tick p95/p99 trong budget — **chưa đạt**: chưa có capacity target được chốt để so; baseline 30-client cũ (M9) vẫn là số duy nhất có.
+- Deploy/rollback không làm tạo hai settlement hoặc orphan queue — **đạt về cấu trúc dữ liệu**: `result_key`/`request_id`/trạng thái `playing` guard đã idempotent từ R2E/R5; **chưa diễn tập rollback thật** trên môi trường triển khai thật.
+- On-call có dashboard, alert và runbook đã diễn tập — **chưa đạt**: runbook có (`docs/operations.md`), nhưng dashboard/alert chưa nối vào hệ thống thật và chưa diễn tập.
+
+### R8 — Closed alpha → online beta
+
+Trạng thái: **chưa bắt đầu thật (không thể "bắt đầu" bằng code) — đã thêm công cụ đo lường và checklist để chuẩn bị**. Bản thân closed alpha cần người dùng thật, decision sản phẩm/pháp lý thật và một đợt triển khai thật; không có phần nào trong số đó làm được chỉ bằng code trong một phiên.
+
+- Closed alpha 20–50 người: đo onboarding, queue, disconnect, trận hoàn tất và feedback điều khiển — **chưa chạy**; hạ tầng đo đã sẵn: `getMatchStats()` (tỉ lệ hoàn tất trận từ bảng `matches` thật) và `/metrics` `reconnectAttempts`/`reconnectSuccesses` (cumulative, sống sót qua khi room đóng — khác `RoomManager.metrics()` vốn mất số liệu khi room bị dọn).
+- Sửa blocker theo dữ liệu; không dùng số lượng content làm thước đo tiến độ — nguyên tắc giữ nguyên, chưa có dữ liệu thật để áp dụng.
+- Online beta chỉ mở khi security checklist, moderation, privacy, recovery và capacity đều pass — **checklist đã viết** ở `docs/beta-readiness.md` và `scripts/beta-readiness.mjs` (tự động hoá phần đo được: env config, DB reachable, completion rate; phần còn lại — capacity target, drill backup/restore thật, cross-browser thật, Terms/Privacy, IP/name approval, chính đợt alpha — đánh dấu rõ là MANUAL, không giả vờ script tự động hoá được).
+- Contact/support: **đã có** `POST /api/support/feedback` (bug/suggestion/other, yêu cầu session) và `GET /api/admin/feedback` (admin xem) — đáp ứng phần "contact/support" của exit criteria cuối, dù chưa có quy trình vận hành con người đứng sau.
+
+Chi tiết ở `docs/beta-readiness.md`.
+
+Exit criteria beta:
+
+- ≥95% trận bắt đầu hoàn tất hoặc kết thúc bằng outcome hợp lệ — **đo được, chưa đo thật**: `identityStore.getMatchStats()` tính trực tiếp từ bảng `matches`, nhưng chưa có lượt chạy thật để có số.
+- Reconnect thành công ≥95% trong grace window ở mạng được hỗ trợ — **đo được, chưa đo thật**: counter cumulative đã thêm ở R8, cần chạy thật trên mạng thật.
+- Không có lỗi severity-1 mở; restore và rollback đã diễn tập — **chưa đạt**: restore/rollback chỉ có runbook (R7), chưa diễn tập thật.
+- Desktop Chrome/Firefox/Safari, iOS Safari và Android Chrome hoàn thành được trận — **chưa đạt đầy đủ**: browser smoke (Playwright) chỉ xác nhận Chromium chạy được trong môi trường này (phát hiện ở R7); chưa xác nhận Firefox/Safari/iOS/Android thật.
+- Có Terms/Privacy, contact/support, moderation flow và IP/name approval — **một phần**: contact/support và moderation flow đã có (API); Terms/Privacy chỉ có baseline kỹ thuật (`docs/privacy.md`, chưa qua pháp lý) và IP/name approval (mục 8.1) vẫn chưa được chủ dự án chốt.
+
+## 6. Thứ tự triển khai
 
 ```text
-Input người chơi
-  -> lệnh có sequence number
-  -> server xác thực phòng/ghế/lượt/rate limit
-  -> Match authoritative cập nhật fixed-step
-  -> snapshot có tick + version
-  -> client buffer, nội suy, render
-  -> snapshot sai khác lớn: snap/correct
+R0 → R1 → R2 → R3
+          ├────→ R5 → R6
+          └────→ R4
+R0–R6 → R7 → R8
 ```
 
-## 4. Lộ trình thực hiện
+R4 có thể chạy song song sau khi R1 ổn định, nhưng chỉ ưu tiên tách engine, replay và content pipeline. Không mở rộng thêm nội dung trước khi R2/R3 hình thành loop online.
 
-### Giai đoạn 0 — Chốt baseline và sửa tài liệu lệch nhau
+## 7. Dừng hoặc hoãn
 
-Mục tiêu: biết chính xác cái gì đang chạy trước khi refactor.
+Cho đến khi R0–R2 hoàn thành:
 
-- Sửa README đang ghi “chưa có PvP online”, trái với code và phần hướng dẫn online.
-- Ghi protocol hiện tại: message type, payload, quyền gửi, response, lỗi.
-- Ghi performance baseline: server tick, snapshot size, CPU/RAM với 1/10/30 phòng.
-- Đưa smoke test vào script chuẩn: `test:browser`, `test:all`.
-- CI chạy unit, syntax, server integration, browser smoke ở 4 viewport.
+- Dừng thêm character, weapon, map, animation và item mới.
+- Dừng rank, season, guild, auction, shop trả phí và battle pass.
+- Không đổi framework/front-end stack chỉ để “trông hiện đại hơn”.
+- Không tách microservice/Kubernetes trước khi modular monolith có đo tải chứng minh cần tách.
+- Không coi localStorage name, room code hoặc reconnect token là account/session.
+- Không dùng số test hiện tại thay cho kiểm chứng CI, browser/device và production readiness.
 
-Hoàn thành khi:
+## 8. Các quyết định product cần chủ dự án chốt
 
-- Clone sạch, `npm ci && npm run test:all` chạy một lệnh.
-- README, `ARCHITECTURE.md`, code cùng mô tả một trạng thái.
-- Có số baseline để phát hiện regression.
+1. Tên/IP phát hành chính thức và phạm vi tham chiếu Gunny/Gunbound.
+2. Audience/độ tuổi, thị trường và ngôn ngữ đầu tiên.
+3. Trận chuẩn: 1v1 hay 2v2; thời lượng mục tiêu; real-time room hay asynchronous challenge.
+4. Guest-only hay bắt buộc account sau bao nhiêu trận.
+5. Progression cosmetic-only hay có PvE power tách khỏi PvP.
+6. Monetization dự kiến và nguyên tắc không pay-to-win.
+7. Quy mô beta mục tiêu để chọn topology/capacity, không thiết kế theo con số mơ hồ.
 
-### Giai đoạn 1 — Tách code, giữ nguyên hành vi
-
-Mục tiêu: giảm rủi ro trước khi thêm gameplay.
-
-**Trạng thái: hoàn thành.** Logic trận, UI, server và content đã được tách theo ranh giới trên; các entry point công khai, protocol, gameplay và layout được giữ nguyên. Chi tiết xác minh nằm trong `HANDOFF.md`.
-
-- Tách `match.js`: `combat.js`, `bot.js`, `turn-queue.js` placeholder, `match.js` điều phối.
-- Tách `game.js`: screen controller, renderer, HUD, input adapters.
-- Tách `server/server.js`: HTTP bootstrap, `RoomManager`, `Room`, connection validation.
-- Chuyển `assets.js`/`maps.js` sang `content/`; tách metadata ảnh khỏi balance data.
-- Giữ public interface của `LocalSession`, `OnlineSession`, `Match` trong bước này.
-
-Hoàn thành khi:
-
-- Replay cùng seed cho state cuối giống trước refactor.
-- Không đổi protocol, gameplay, ảnh hoặc layout.
-- Không module orchestration nào vượt khoảng 300–400 dòng mà không có lý do rõ.
-
-### Giai đoạn 2 — Protocol online bền vững
-
-Mục tiêu: chịu được mạng thật, tab nền, Wi-Fi chập chờn và client lỗi.
-
-**Trạng thái: đang thực hiện.** Protocol v1, validation, sequence/ack/tick/version, heartbeat, rate limit và reconnect giữ ghế 30 giây đã có; network simulation và đánh giá snapshot delta còn lại.
-
-- Thêm `protocolVersion`, schema validation cho mọi message.
-- Mỗi input có `clientSeq`; snapshot có `serverTick`, `lastAckSeq`, `roomVersion`.
-- Heartbeat/ping, timeout rõ ràng, trạng thái `connecting/reconnecting/disconnected`.
-- Reconnect token ngắn hạn; giữ ghế 30–60 giây; resync full snapshot khi quay lại.
-- Input idempotent; bỏ message cũ, trùng hoặc sai phase.
-- Giới hạn kích thước message, tần suất input, số kết nối/IP, số phòng.
-- Error code máy đọc được; UI dịch thành thông báo tiếng Việt.
-- Snapshot delta sau khi full snapshot ổn định; chưa cần binary protocol sớm.
-
-Hoàn thành khi:
-
-- Mất mạng 10 giây rồi nối lại vẫn giữ ghế và state.
-- Client gửi trùng/out-of-order không tạo hai phát bắn.
-- Client sửa payload không thể tự tăng HP, damage, energy hoặc chiếm lượt.
-- Test mô phỏng latency 50/150/300 ms, jitter, packet loss, reconnect.
-
-### Giai đoạn 3 — Đồng bộ và cảm giác chơi
-
-Mục tiêu: hình ảnh mượt nhưng server vẫn authoritative.
-
-**Trạng thái: đang thực hiện.** Client đã buffer snapshot 120 ms, nội suy actor/projectile, snap correction lớn, đếm timer từ snapshot server và resync khi reconnect; kiểm thử latency/jitter thực tế còn lại.
-
-- Buffer snapshot 100–150 ms; nội suy actor/projectile theo `serverTick`.
-- Client prediction chỉ cho thao tác cục bộ ít rủi ro: aim, charge UI, nút di chuyển.
-- Server reconciliation cho vị trí; sửa mềm dưới ngưỡng, snap khi sai lớn.
-- Đồng hồ lượt lấy mốc server, không đếm độc lập trên client.
-- Pause chỉ áp dụng luyện tập. Online: mở help/tab ẩn không dừng server.
-- Khi người có lượt mất kết nối: chờ grace period rồi auto-skip.
-
-Hoàn thành khi:
-
-- Hai client thấy cùng lượt, HP, crater, kết quả.
-- Không teleport đáng kể ở 150 ms latency.
-- Tab nền quay lại tự resync, không phát input bị kẹt.
-
-### Giai đoạn 4 — Responsive cross-platform
-
-Mục tiêu: desktop, tablet, mobile chơi được; không chỉ “co nhỏ desktop”.
-
-**Trạng thái: đang thực hiện.** Canvas đã dùng DPR tối đa 2, layout có safe-area/touch target 44 px, aim ±0,5°/±1°, pointer cancel/orientation handling và portrait hint; browser viewport matrix/60 FPS còn cần xác minh.
-
-#### Layout chung
-
-- Giữ battlefield logic 1200×620.
-- Dùng `100dvh`, safe-area (`env(safe-area-inset-*)`), `ResizeObserver`.
-- Canvas render theo `devicePixelRatio`, CSS size riêng; cap DPR 2 để giữ hiệu năng.
-- HUD dùng DOM, không scale toàn bộ cùng canvas. Text/nút giữ kích thước đọc/chạm được.
-- Không scroll trong battle; home/room/result được scroll.
-
-#### Desktop ≥ 1024 px
-
-- HUD hai cạnh, wind/turn queue trên cùng, control bar dưới.
-- Keyboard: A/D, mũi tên, Space; pointer vẫn hoạt động.
-- Có tooltip/phím tắt; focus state đầy đủ.
-
-#### Tablet 600–1023 px
-
-- HUD compact, control bar hai hàng nếu cần.
-- Touch target tối thiểu 44×44 CSS px.
-- Hỗ trợ landscape và portrait; landscape ưu tiên nhưng không khóa.
-
-#### Mobile < 600 px
-
-- Landscape là chế độ chơi ưu tiên.
-- Portrait: trận vẫn xem/chơi được; hiện gợi ý xoay ngang không chặn người dùng.
-- Điều khiển chia hai cụm: trái di chuyển; phải góc/lực/bắn.
-- Nút tăng/giảm góc 0,5° và 1°; slider là thao tác nhanh.
-- Nút bắn dùng pointer capture; xử lý `pointercancel`, mất focus, đổi orientation.
-- Turn queue, item, chat mở bằng sheet/panel; không che mục tiêu và quỹ đạo.
-
-#### Ma trận kiểm tra
-
-- 1920×1080, 1440×900, 1366×768.
-- iPad 1024×768 và 768×1024.
-- iPhone 390×844, 844×390.
-- Android nhỏ 360×800, 800×360.
-- DPR 1/2/3, reduced motion, touch-only, keyboard-only.
-
-Hoàn thành khi:
-
-- Battle không tràn hoặc scroll ở mọi viewport trên.
-- Nút chính ≥44×44 px; text HUD chính ≥12 px thực tế.
-- Aim chính xác 0,5° trên touch.
-- 60 FPS thiết bị trung bình; không rebuild terrain mỗi frame.
-
-### Giai đoạn 5 — Gameplay cốt lõi kiểu Gunbound
-
-Mục tiêu: tạo chiều sâu trước khi thêm nhiều nội dung.
-
-**Trạng thái: đang thực hiện.** Delay queue, S1/S2/SS, SS gauge, bốn item, map profile, match stats và bot action theo delay đã có; character-specific shot behavior và balance simulation còn lại.
-
-- Thay xen kẽ cứng bằng `TurnQueue` theo delay.
-- Thời gian suy nghĩ, loại shot, item cùng cộng delay trên server.
-- HUD luôn hiển thị 5–8 lượt kế tiếp.
-- Mỗi nhân vật có S1, S2, SS; SS nạp bằng damage nhận/gây ra theo thiết kế chốt.
-- 3–4 item đầu: Power Up, Blood, Teleport, Dual; mọi hiệu ứng nằm trong `combat`.
-- Map có wind range, ground hardness, spawn profile riêng.
-- Thống kê trận: hit rate, damage, terrain damage, average action delay.
-- Bot tính cả sai số điểm rơi và chi phí delay; bot chạy Worker/worker thread nếu profiling chứng minh cần.
-
-Hoàn thành khi:
-
-- Có tình huống hợp lệ đi hai lượt liên tiếp vì delay thấp.
-- Replay deterministic giữ đúng turn queue.
-- Client không thể sửa delay/SS/item.
-- Balance test bảo đảm không shot/item nào luôn tối ưu.
-
-### Giai đoạn 6 — Vòng đời người chơi
-
-Mục tiêu: người chơi vào trận nhanh, ở lại được, không cần hệ thống quá lớn.
-
-**Trạng thái: sẵn sàng beta ở phạm vi RAM hiện tại.** Quick Join, chat giới hạn/rate limit, ready/kick/host, spectator snapshot và lịch sử 10 trận trong RAM đã có; UI mute còn lại.
-
-- Quick Join theo phòng còn ghế; private room bằng mã vẫn giữ.
-- Chat phòng/trận với mute, rate limit, giới hạn độ dài.
-- Ready check, kick bởi host trước trận, chuyển host ổn định.
-- Spectator join giữa trận bằng full snapshot; spectator không gửi input gameplay.
-- Match history ngắn trong RAM trước; chỉ thêm database khi thật sự cần tài khoản/lịch sử lâu dài.
-- Tên người chơi có validation; không render bằng `innerHTML`.
-
-Hoàn thành khi:
-
-- Người mới từ home vào trận trong ≤3 thao tác với Quick Join.
-- Spectator vào giữa trận thấy state đúng.
-- Chat/input spam không làm chậm tick loop.
-
-### Giai đoạn 7 — Production trên Mac mini
-
-Mục tiêu: chạy ổn định cho vài chục người.
-
-**Trạng thái: sẵn sàng staging.** Health/readiness/metrics, graceful shutdown, structured bootstrap log, runbook và load-smoke đã có; ngưỡng tick p95 cần đo trên Mac mini đích.
-
-- HTTPS/WSS qua Caddy hoặc Cloudflare Tunnel; xác minh WebSocket upgrade.
-- Process supervision: launchd hoặc Docker restart policy; graceful shutdown.
-- Health: `/healthz` cho process; `/readyz` cho tick loop và room manager.
-- Metrics: active connections, rooms, tick drift, snapshot bytes, message reject count, reconnect count.
-- Structured logs có room ID/session ID; không log token reconnect.
-- Backup chỉ cần config/deploy; state trận trong RAM chấp nhận mất khi restart ở quy mô hiện tại.
-- Load test WebSocket 30–100 client; đặt ngưỡng dựa trên tick p95, không dựa cảm giác.
-
-Hoàn thành khi:
-
-- Tick p95 không trễ quá 16 ms ở tải mục tiêu.
-- Restart không để process/cổng treo; client nhận trạng thái mất server rõ ràng.
-- Có runbook deploy, rollback, xem log, kiểm tra health.
-
-## 4b. Hand-off theo từng bước
-
-Mỗi mốc M0 đến M7 có mục bàn giao riêng trong `HANDOFF.md`: trạng thái đã kiểm chứng, phạm vi, nhật ký các thay đổi, xác minh gần nhất và bước tiếp theo.
-
-Khi code và hand-off lệch nhau thì hand-off sai; sửa nó trong cùng commit làm lệch.
-
-## 5. Thứ tự ưu tiên đề xuất
-
-| Mốc | Nội dung | Giá trị | Phụ thuộc |
-|---|---|---:|---|
-| M0 | Baseline, docs, CI | Bắt lỗi sớm | Không |
-| M1 | Refactor giữ hành vi | Mở đường sửa an toàn | M0 |
-| M2 | Protocol, reconnect, validation | Online dùng được ngoài LAN ổn định | M1 |
-| M3 | Sync, interpolation, tab/background | Cảm giác chơi | M2 |
-| M4 | Responsive/input cross-platform | Desktop/mobile thật sự chơi được | M1; kiểm cùng M2–M3 |
-| M5 | Delay, S1/S2/SS, item | Bản sắc Gunbound | M1–M3 |
-| M6 | Quick Join, chat, spectator | Vòng đời social | M2 |
-| M7 | Production, metrics, load test | Vận hành | M2–M6 |
-
-M4 nên chạy song song theo từng feature, nhưng chỉ chốt sau M3 vì reconnect và tab nền ảnh hưởng mạnh mobile.
-
-## 6. Việc chưa nên làm
-
-- Không chuyển framework chỉ vì `game.js` dài; tách module trước.
-- Không dùng client lockstep thuần hoặc đồng bộ input ngang hàng; server authoritative hiện đúng.
-- Không thêm database, account, rank, shop, guild trước reconnect và protocol validation.
-- Không thêm auto-aim. Giữ skill bằng góc, lực, gió; chỉ hỗ trợ tinh chỉnh chính xác.
-- Không gửi toàn bộ terrain 20 lần/giây. Giữ version/delta hoặc gửi crater events kèm resync.
-- Không đổi kích thước thế giới theo viewport; sẽ làm vật lý và cân bằng khác giữa thiết bị.
-- Không tối ưu bot bằng Worker trước profiling; online bot chạy server, nghẽn chính có thể là room tick hoặc serialization.
-
-## 7. PR đầu tiên nên làm
-
-Phạm vi nhỏ, không đổi gameplay:
-
-1. Sửa README về trạng thái PvP online.
-2. Thêm `src/play/protocol.js` chứa version, message constants, validation cơ bản.
-3. Thêm `clientSeq/serverTick` vào message và snapshot nhưng giữ tương thích tạm một version.
-4. Thêm test message sai, trùng, out-of-order.
-5. Thêm test viewport 360×800 và 800×360.
-6. Thêm `npm run test:all`.
-
-Không gộp refactor toàn bộ, reconnect và hệ delay vào cùng PR.
-
-## 8. Tiêu chí phát hành online beta
-
-- 2–6 người chơi thật hoàn thành 20 trận không desync.
-- Reconnect trong 30 giây giữ ghế và khôi phục trận.
-- Không input giả nào thay đổi state ngoài lượt/quyền.
-- Desktop, iOS Safari, Android Chrome chơi đủ một trận.
-- Không scroll trong battle; touch không kẹt charge/move sau orientation change.
-- Server chịu tải mục tiêu với tick p95 đạt ngưỡng.
-- Có log, health check, rollback và thông báo khi server mất kết nối.
+Các quyết định này phải được ghi vào product brief ở R0 trước khi tiếp tục mở rộng gameplay.

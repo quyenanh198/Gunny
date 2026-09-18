@@ -1,0 +1,63 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: gunny
+          POSTGRES_PASSWORD: gunny_test
+          POSTGRES_DB: gunny_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gunny -d gunny_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://gunny:gunny_test@127.0.0.1:5432/gunny_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run verify
+
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run 30-client baseline
+        run: |
+          mkdir -p artifacts
+          MAX_CONNECTIONS_PER_IP=100 HANDSHAKES_PER_MINUTE=120 ROOM_CREATES_PER_MINUTE=100 node server/server.js > artifacts/server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 0.1; done
+          CLIENTS=30 DURATION_MS=5000 npm run benchmark:load | tee artifacts/baseline-30.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r0-load-baseline
+          path: artifacts/
+          retention-days: 30

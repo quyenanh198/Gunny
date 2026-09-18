@@ -10,10 +10,14 @@ import { bindResponsive } from "./ui/responsive.js";
 import { createScreenController } from "./ui/screens.js";
 import { LocalSession } from "./session.js";
 import { OnlineSession } from "./net.js";
+import { featureFlags } from "./content/feature-flags.js";
 
 const $ = (id) => document.getElementById(id),
   canvas = $("canvas"),
   ctx = canvas.getContext("2d");
+const features = featureFlags();
+$("quickJoin").hidden = !features.quickJoin;
+$("chatForm").hidden = !features.roomChat;
 const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 let reducedMotion = motionPreference.matches;
 motionPreference.addEventListener("change", (e) => (reducedMotion = e.matches));
@@ -65,8 +69,8 @@ async function refreshRooms() {
       const join = document.createElement("button");
       join.type = "button";
       join.className = "subtle";
-      join.textContent = "Vào";
-      join.onclick = () => joinRoom(room.id);
+      join.textContent = room.state === "playing" ? "Xem" : "Vào";
+      join.onclick = () => joinRoom(room.id, room.state === "playing" ? "spectate" : "join");
       li.append(join);
       list.append(li);
     }
@@ -83,9 +87,9 @@ function playerName() {
   return name;
 }
 
-function joinRoom(code) {
+function joinRoom(code, mode = "join", visibility = "private") {
   $("homeError").textContent = "";
-  session = new OnlineSession({ room: code, name: playerName(), onUpdate: onSession });
+  session = new OnlineSession({ room: code, name: playerName(), mode, visibility, onUpdate: onSession });
   setScreen("room");
   updateRoom();
 }
@@ -99,17 +103,17 @@ function startPractice() {
 $("joinForm").onsubmit = (e) => {
   e.preventDefault();
   const code = $("roomCode").value.trim().toUpperCase();
-  if (!/^[A-Z]{4}$/.test(code)) {
-    $("homeError").textContent = "Mã phòng gồm 4 chữ cái. Hoặc bấm Tạo phòng mới.";
+  if (!/^[A-Z]{6}$/.test(code)) {
+    $("homeError").textContent = "Mã phòng gồm 6 chữ cái. Hoặc bấm Tạo phòng mới.";
     return;
   }
   joinRoom(code);
 };
-$("newRoom").onclick = () => joinRoom("");
+$("newRoom").onclick = () => joinRoom("", "create", "private");
 $("quickJoin").onclick = async () => {
   try {
     const { room } = await (await fetch("/api/quick-join")).json();
-    joinRoom(room || "");
+    joinRoom(room, room ? "join" : "create", "public");
   } catch {
     $("homeError").textContent = "Không thể tìm phòng lúc này.";
   }
