@@ -287,4 +287,78 @@ export class PostgresIdentityStore {
     const result = await this.pool.query("SELECT xp, level FROM progression WHERE user_id = $1", [session.user.id]);
     return result.rows[0] ? { xp: result.rows[0].xp, level: result.rows[0].level } : { xp: 0, level: 1 };
   }
+
+  // --- Admin RBAC, sanctions and audit (R6) ---------------------------------
+
+  async getAdminSession(rawToken) {
+    const session = await this.authenticate(rawToken);
+    if (!session) return null;
+    const result = await this.pool.query("SELECT role FROM users WHERE id = $1", [session.user.id]);
+    return result.rows[0]?.role === "admin" ? session : null;
+  }
+  async setUserRole(userId, role) {
+    await this.pool.query("UPDATE users SET role = $2 WHERE id = $1", [userId, role]);
+  }
+  async createSanction({ userId, type, reason, issuedBy, expiresAt = null }) {
+    const id = randomUUID();
+    const status = type === "ban" ? "pending_confirmation" : "active";
+    await this.pool.query(`INSERT INTO sanctions(id, user_id, type, reason, status, issued_by, expires_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)`, [id, userId, type, reason, status, issuedBy, expiresAt]);
+    return { id, userId, type, reason, status, issuedBy, expiresAt };
+  }
+  async confirmSanction(id, confirmedBy) {
+    const result = await this.pool.query(`UPDATE sanctions SET status = 'active', confirmed_by = $2
+      WHERE id = $1 AND status = 'pending_confirmation' AND issued_by <> $2 RETURNING *`, [id, confirmedBy]);
+    return result.rows[0] || null;
+  }
+  async revokeSanction(id, revokedBy) {
+    const result = await this.pool.query(`UPDATE sanctions SET status = 'revoked', revoked_by = $2, revoked_at = now()
+      WHERE id = $1 AND status IN ('active', 'pending_confirmation') RETURNING *`, [id, revokedBy]);
+    return result.rows[0] || null;
+  }
+  async listSanctions(userId) {
+    const result = await this.pool.query("SELECT * FROM sanctions WHERE user_id = $1 ORDER BY created_at DESC", [userId]);
+    return result.rows;
+  }
+  async isBanned(userId) {
+    const result = await this.pool.query(`SELECT 1 FROM sanctions WHERE user_id = $1 AND type = 'ban'
+      AND status = 'active' AND (expires_at IS NULL OR expires_at > now()) LIMIT 1`, [userId]);
+    return result.rowCount > 0;
+  }
+  async isMuted(userId) {
+    const result = await this.pool.query(`SELECT 1 FROM sanctions WHERE user_id = $1 AND type = 'mute'
+      AND status = 'active' AND (expires_at IS NULL OR expires_at > now()) LIMIT 1`, [userId]);
+    return result.rowCount > 0;
+  }
+  async recordAdminAction({ adminUserId, action, targetUserId = null, targetRoomId = null, reason = null, metadata = null }) {
+    const id = randomUUID();
+    await this.pool.query(`INSERT INTO admin_actions(id, admin_user_id, action, target_user_id, target_room_id, reason, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [id, adminUserId, action, targetUserId, targetRoomId, reason, metadata ? JSON.stringify(metadata) : null]);
+    return { id, adminUserId, action, targetUserId, targetRoomId, reason, metadata };
+  }
+  async listAdminActions(limit = 100) {
+    const result = await this.pool.query("SELECT * FROM admin_actions ORDER BY created_at DESC LIMIT $1",
+      [Math.min(200, Math.max(1, limit))]);
+    return result.rows;
+  }
+  async lookupUser(userId) {
+    const profile = await this.pool.query(`SELECT u.id, u.kind, u.role, u.created_at, u.deleted_at,
+      p.display_name, p.version FROM users u JOIN profiles p ON p.user_id = u.id WHERE u.id = $1`, [userId]);
+    if (!profile.rowCount) return null;
+    const [wallet, progression, matches, sanctions] = await Promise.all([
+      this.pool.query("SELECT COALESCE(SUM(amount), 0) AS balance FROM currency_ledger WHERE user_id = $1", [userId]),
+      this.pool.query("SELECT xp, level FROM progression WHERE user_id = $1", [userId]),
+      this.pool.query(`SELECT m.id, m.room_id, m.status, m.started_at, m.ended_at FROM matches m
+        JOIN match_participants mp ON mp.match_id = m.id WHERE mp.user_id = $1 ORDER BY m.started_at DESC LIMIT 10`, [userId]),
+      this.listSanctions(userId),
+    ]);
+    return {
+      user: profile.rows[0],
+      wallet: { balance: Number(wallet.rows[0].balance) },
+      progression: progression.rows[0] || { xp: 0, level: 1 },
+      recentMatches: matches.rows,
+      sanctions,
+    };
+  }
 }

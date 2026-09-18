@@ -79,6 +79,47 @@ test("PostgreSQL recovery abandons stale playing matches only", { skip: !databas
   }
 });
 
+test("PostgreSQL admin RBAC enforces dual-control on a ban and audits every action", { skip: !databaseUrl }, async () => {
+  const pool = createPool(databaseUrl);
+  await migrate(pool);
+  const store = new PostgresIdentityStore(pool);
+  const adminA = await store.createGuest("Admin A");
+  const adminB = await store.createGuest("Admin B");
+  const target = await store.createGuest("Target");
+  try {
+    await store.setUserRole(adminA.user.id, "admin");
+    await store.setUserRole(adminB.user.id, "admin");
+    assert.equal(await store.getAdminSession(adminA.token) !== null, true);
+    assert.equal(await store.getAdminSession(target.token), null);
+
+    const sanction = await store.createSanction({ userId: target.user.id, type: "ban", reason: "cheating", issuedBy: adminA.user.id });
+    assert.equal(sanction.status, "pending_confirmation");
+    assert.equal(await store.isBanned(target.user.id), false);
+    assert.equal(await store.confirmSanction(sanction.id, adminA.user.id), null, "issuer cannot confirm their own ban");
+    const confirmed = await store.confirmSanction(sanction.id, adminB.user.id);
+    assert.equal(confirmed.status, "active");
+    assert.equal(await store.isBanned(target.user.id), true);
+
+    await store.recordAdminAction({ adminUserId: adminA.user.id, action: "sanction_create",
+      targetUserId: target.user.id, reason: "cheating", metadata: { sanctionId: sanction.id } });
+    const actions = await store.listAdminActions();
+    assert.ok(actions.some((a) => a.action === "sanction_create" && a.target_user_id === target.user.id));
+
+    const profile = await store.lookupUser(target.user.id);
+    assert.equal(profile.sanctions.length, 1);
+    assert.equal(profile.sanctions[0].status, "active");
+
+    const revoked = await store.revokeSanction(sanction.id, adminA.user.id);
+    assert.equal(revoked.status, "revoked");
+    assert.equal(await store.isBanned(target.user.id), false);
+  } finally {
+    await pool.query("DELETE FROM admin_actions WHERE admin_user_id = ANY($1::uuid[])", [[adminA.user.id, adminB.user.id]]);
+    await pool.query("DELETE FROM sanctions WHERE user_id = $1", [target.user.id]);
+    await pool.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [[adminA.user.id, adminB.user.id, target.user.id]]);
+    await pool.end();
+  }
+});
+
 test("PostgreSQL authoritative lifecycle completes a playing match exactly once", { skip: !databaseUrl }, async () => {
   const pool = createPool(databaseUrl);
   await migrate(pool);

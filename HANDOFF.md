@@ -620,3 +620,32 @@ Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Chỉ hạ 
 - Không có UI/API nào để chi tiêu currency hay xem inventory — chưa có gì để hiển thị. Khi có shop/cosmetic catalog, nhớ giữ nguyên tắc "server quyết định toàn bộ, không client-authoritative reward" đã áp dụng ở đây.
 - `entitlements` table tồn tại nhưng rỗng theo thiết kế; đừng coi sự tồn tại của bảng là bằng chứng tính năng cosmetic đã xong.
 - R6 (admin/moderation/LiveOps) là nơi hợp lý để thêm: xem/điều chỉnh currency của một user (grant có audit, dual-control), dashboard economy reconciliation, và daily/weekly mission — tất cả cần quyết định sản phẩm trước, không tự suy diễn số liệu.
+
+## M24 — R6 admin RBAC, sanctions và audit (một phần)
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. Chỉ làm RBAC/sanctions/room-terminate/audit; remote config, maintenance mode và dashboard vận hành chưa làm — xem "Hand-off sang R7" bên dưới.
+
+### Đã thay đổi
+
+- Migration `005_admin_moderation.sql`: `users.role` ('player'/'admin', default 'player'), bảng `sanctions` (mute/ban, trạng thái `pending_confirmation`/`active`/`revoked`), bảng `admin_actions` (audit: ai, hành động gì, target, lý do, metadata, khi nào).
+- `scripts/promote-admin.mjs`: công cụ ops duy nhất để cấp quyền admin (`UPDATE users SET role=...`), chạy trực tiếp với `DATABASE_URL` — chủ đích không có UI/API tự cấp quyền admin.
+- `PostgresIdentityStore`/`MemoryIdentityStore` thêm: `getAdminSession`, `setUserRole`, `createSanction`/`confirmSanction`/`revokeSanction`/`listSanctions`, `isBanned`/`isMuted`, `recordAdminAction`/`listAdminActions`, `lookupUser` (hồ sơ tổng hợp: profile + wallet + progression + 10 trận gần nhất + sanction).
+- API mới (đều yêu cầu session admin thật, kiểm qua `users.role` phía server — không tin role client khai): `GET /api/admin/users/:id`, `POST /api/admin/sanctions`, `POST /api/admin/sanctions/:id/confirm`, `POST /api/admin/sanctions/:id/revoke`, `GET /api/admin/sanctions?userId=`, `POST /api/admin/rooms/:id/terminate`, `GET /api/admin/actions`.
+- Dual-control thật cho ban: sanction `ban` khởi tạo `pending_confirmation`, **chưa enforce**; một admin KHÁC (không phải người tạo) phải confirm mới chuyển `active`. Cùng một admin tự confirm bị từ chối (409). Mute không cần dual-control (rủi ro thấp, tự đảo ngược được).
+- Enforcement: ban kiểm tra một lần lúc WebSocket connect (`identityStore.isBanned`), đóng socket ngay với mã lỗi `BANNED`, không chặn API privacy/identity (export/delete vẫn dùng được). Admin mute cũng kiểm tra lúc connect, cache vào `client.adminMuted`, chặn hẳn lệnh `chat` ở `Room.handle()` (khác với player-level mute R3D chỉ ẩn theo người xem — admin mute im lặng người gửi với tất cả mọi người).
+- `GET`/`PATCH /api/admin/reports` (R3D) giờ chấp nhận CẢ `MODERATION_TOKEN` cũ lẫn admin session mới — không phá endpoint cũ, chỉ thêm đường xác thực có định danh thật.
+- `docs/admin.md` ghi lại toàn bộ thiết kế, enforcement và giới hạn còn lại.
+
+### Xác minh local 2026-09-17
+
+- `node scripts/check-syntax.mjs` — 75 JavaScript files đạt.
+- `node --test` — 138 pass / 3 skip (skip vẫn là PostgreSQL integration).
+- `npm audit --audit-level=high` — 0 vulnerability.
+- Test mới: `tests/admin-api.test.js` (7 test — RBAC từ chối non-admin, lookup tổng hợp, dual-control ban đầy đủ [tạo → tự-confirm bị từ chối → admin khác confirm → active → revoke], mute single-admin có hiệu lực ngay, room terminate đóng mọi socket và xoá room, validate input sanction, và **một test thật qua WebSocket** — user bị ban nhận `BANNED` và socket đóng ngay, user bị admin mute gửi chat bị `COMMAND_REJECTED` và tin nhắn không bao giờ tới người khác trong phòng). Mở rộng `tests/postgres-identity.test.js` với test RBAC/dual-control/audit trên Postgres thật (skip cục bộ, chạy trên CI).
+- Chưa chạy `npm run verify` đầy đủ (browser smoke) — môi trường vẫn không có Chromium/Playwright.
+
+### Hand-off sang R7
+
+- Phần R6 còn lại — remote feature-flag rollout/kill-switch, maintenance mode/announcement/min-version, dashboard funnel/retention/queue-time/disconnect/report-rate — chưa làm và không phải infra khó, chỉ là chưa tới lượt; có thể tiếp tục trong một PR R6 riêng hoặc gộp vào R7 nếu hợp lý hơn về vận hành.
+- `client.adminMuted`/ban chỉ kiểm tra một lần lúc connect — một sanction ban hành giữa phiên chỉ có hiệu lực ở lần connect tiếp theo, không cắt ngay socket đang mở. Ghi rõ trong `docs/admin.md`; nếu cần cắt ngay, phải thêm cơ chế broadcast sanction tới các Room đang có user đó.
+- R7 (production reliability) là nơi hợp lý để: tách audit log `admin_actions` ra dashboard thật, thêm alert khi có nhiều ban/report bất thường, và readiness/structured logging tổng thể — không tự suy diễn SLO, cần benchmark thật trên máy đích.
