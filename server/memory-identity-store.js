@@ -4,7 +4,8 @@ import { rewardFor, levelForXp } from "./economy.js";
 export class MemoryIdentityStore {
   constructor() { this.sessions = new Map(); this.matches = new Map(); this.blocks = new Set();
     this.mutes = new Set(); this.reports = []; this.chatMessages = []; this.ledger = [];
-    this.progression = new Map(); this.roles = new Map(); this.sanctions = []; this.adminActions = []; }
+    this.progression = new Map(); this.roles = new Map(); this.sanctions = []; this.adminActions = [];
+    this.feedback = []; }
   async createGuest(displayName = "Guest") {
     const session = { token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 86400000).toISOString(), user: { id: randomUUID(), kind: "guest" },
@@ -143,6 +144,20 @@ export class MemoryIdentityStore {
     return record;
   }
   async listAdminActions(limit = 100) { return this.adminActions.slice(-limit).reverse(); }
+  async createFeedback({ userId, category, message, context = null }) {
+    const record = { id: randomUUID(), userId, category, message, context, createdAt: new Date().toISOString() };
+    this.feedback.push(record);
+    return record;
+  }
+  async listFeedback(limit = 100) { return this.feedback.slice(-limit).reverse(); }
+  async getMatchStats() {
+    const matches = [...this.matches.values()];
+    const total = matches.length;
+    const completed = matches.filter((match) => match.status === "completed").length;
+    const abandoned = matches.filter((match) => match.status === "abandoned").length;
+    const playing = matches.filter((match) => match.status === "playing").length;
+    return { total, completed, abandoned, playing, completionRate: total ? +(completed / total).toFixed(3) : null };
+  }
   async lookupUser(userId) {
     const session = [...this.sessions.values()].find((s) => s.user.id === userId);
     if (!session) return null;

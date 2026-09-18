@@ -679,3 +679,31 @@ Mọi ghi chú "chưa chạy được vì không có Chromium/Playwright" từ M
 - Phần R7 còn lại cần hạ tầng thật, không phải code: tách asset ra CDN, OpenTelemetry/error tracking, alert thật nối vào bảng SLO giấy, canary/blue-green, DDoS/WAF ở edge, và **drill backup/restore thật** (runbook đã có, chưa chạy lần nào).
 - Capacity target vẫn chưa được chốt (mục 8.7 roadmap) — không tự suy ra một con số; load test "đạt capacity đã công bố" không thể đóng cho tới khi có quyết định đó.
 - R8 (closed alpha) đứng sau R0–R7; theo "Thứ tự triển khai" trong roadmap, R7 chưa đạt đầy đủ (thiếu phần hạ tầng) nên R8 chưa nên mở thật với người dùng ngoài — phần code có thể chuẩn bị trước (checklist, form feedback, v.v.) nhưng đừng công bố alpha khi capacity/alert chưa có.
+
+## M26 — R8 đo lường và checklist beta readiness (chuẩn bị, không phải chạy alpha thật)
+
+Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. R8 về bản chất là chạy một đợt alpha thật với người dùng thật cộng các quyết định sản phẩm/pháp lý — không có phần nào trong số đó làm được chỉ bằng code. Milestone này chỉ thêm công cụ đo lường và checklist để khi có người/quyết định thật, có sẵn hạ tầng để dùng ngay.
+
+### Đã thay đổi
+
+- `/metrics` thêm `reconnectAttempts`/`reconnectSuccesses`: cumulative theo vòng đời process, **khác** `RoomManager.metrics()` vốn chỉ cộng dồn các room ĐANG mở và mất số liệu ngay khi room đóng. Đây là số cần để đo "reconnect thành công ≥95%" — một exit criteria của R8 — trên một lượt chạy thật, không chỉ snapshot tức thời.
+- `identityStore.getMatchStats()` (Postgres: query trực tiếp bảng `matches` GROUP BY status; memory: tính từ Map): trả `{total, completed, abandoned, playing, completionRate}` — đo trực tiếp exit criteria "≥95% trận hoàn tất hoặc kết thúc bằng outcome hợp lệ".
+- `GET /api/admin/dashboard` (admin auth): gộp `matches` (từ `getMatchStats`), `openReports`, `feedbackCount`, `reconnect` (attempts/successes/successRate), `rooms` (từ `RoomManager.metrics()`) — vừa lấp một phần khoảng trống "dashboard vận hành" còn lại từ R6, vừa phục vụ đo R8.
+- Migration `006_feedback.sql` + `POST /api/support/feedback` (session bắt buộc, category bug/suggestion/other, message ≤2000 ký tự, context tuỳ chọn) + `GET /api/admin/feedback` (admin auth) — đáp ứng mục "contact/support" trong exit criteria beta, dù chưa có quy trình vận hành con người đứng sau kênh này.
+- `scripts/beta-readiness.mjs`: audit tách rõ AUTOMATED (env config, DB reachable, completion rate, report backlog — thật sự có thể fail) và MANUAL (capacity target, drill backup/restore thật, cross-browser thật, Terms/Privacy, IP/name approval, chính đợt alpha — liệt kê rõ, không giả vờ script tự động hoá được). Exit code khác 0 nếu có AUTOMATED check fail; MANUAL không ảnh hưởng exit code.
+- `docs/beta-readiness.md`: checklist đầy đủ, bảng trạng thái exit criteria tính tới R7, và lời nhắc rõ ràng — tài liệu này không phải quyết định launch.
+
+### Xác minh local 2026-09-17
+
+- `node scripts/check-syntax.mjs` — 81 JavaScript files đạt.
+- `node --test` — 148 pass / 5 skip (skip là PostgreSQL integration).
+- `npm audit --audit-level=high` — 0 vulnerability.
+- `node scripts/beta-readiness.mjs` chạy được, đúng như kỳ vọng: fail phần lớn AUTOMATED check trên máy dev (không có `DATABASE_URL`/`ALLOWED_ORIGINS`/`METRICS_TOKEN` production thật) — hành vi đúng đắn cho một script kiểm tra deployment thật, không phải bug.
+- Test mới: `tests/admin-dashboard.test.js` (2 test — dashboard yêu cầu admin và tính đúng completion rate từ match thật, reconnect counter cumulative qua một lượt resume thành công + một lượt replay token cũ bị `RECONNECT_EXPIRED`, xác minh cả object trả về lẫn text `/metrics`), `tests/feedback-api.test.js` (2 test — validate input/auth, admin thấy được feedback còn người thường thì không, dashboard đếm đúng).
+- Chưa chạy drill backup/restore thật, chưa có capacity target, chưa có Terms/Privacy qua pháp lý — tất cả đã liệt kê rõ trong `docs/beta-readiness.md`, không lặp lại ở đây.
+
+### Hand-off — đây là điểm dừng hợp lý của chuỗi roadmap R3D→R8 trong một phiên
+
+- R0–R7 đều đã có code merge vào `main` (một phần hoặc đầy đủ tuỳ mục), có test, có tài liệu. R8 có công cụ đo lường và checklist nhưng KHÔNG có — và không thể có — một đợt closed alpha thật đã chạy.
+- Việc tiếp theo không phải thêm code: là (1) chủ dự án chốt các quyết định ở mục 8 của roadmap (tên/IP, audience, trận chuẩn, account policy, progression, monetization, capacity), (2) vận hành viên chạy `scripts/beta-readiness.mjs` cộng checklist MANUAL trong `docs/beta-readiness.md` trên một triển khai thật, rồi (3) mời 20–50 người dùng thật.
+- Mọi milestone trong phiên này đều merge thẳng vào `main` (bypass branch protection theo yêu cầu người dùng, xem M22) và được xác nhận xanh trên GitHub Actions thật (`Verify` workflow) — không chỉ chạy local.

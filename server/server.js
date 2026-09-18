@@ -126,6 +126,12 @@ export function createServer({
   const parties = new PartyService();
   const ipOptions = { trustProxy, trustedProxies };
   const activeByIp = new Map();
+  // Cumulative across the process lifetime, unlike RoomManager.metrics()
+  // which only sums currently-open rooms and loses a room's counters the
+  // moment it closes. Needed to measure the R8 beta exit criterion "≥95%
+  // reconnect success within the grace window" over an entire alpha run.
+  let reconnectAttempts = 0;
+  let reconnectSuccesses = 0;
   const handshakeLimiter = new FixedWindowLimiter({ limit: handshakesPerMinute, windowMs: 60000 });
   const roomCreateLimiter = new FixedWindowLimiter({ limit: roomCreatesPerMinute, windowMs: 60000 });
   const httpLimiter = new FixedWindowLimiter({ limit: httpRequestsPerMinute, windowMs: 60000 });
@@ -289,6 +295,17 @@ export function createServer({
       const data = await identityStore.exportUser(requestCredential(req));
       return data ? sendJson(res, 200, data) : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
+    if (req.url === "/api/support/feedback" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req, 4096);
+      if (!["bug", "suggestion", "other"].includes(body.category) ||
+          typeof body.message !== "string" || !body.message.trim() || body.message.length > 2000)
+        return sendJson(res, 400, { error: "INVALID_FEEDBACK" });
+      const feedback = await identityStore.createFeedback({ userId: session.user.id, category: body.category,
+        message: body.message.trim(), context: body.context && typeof body.context === "object" ? body.context : null });
+      return sendJson(res, 201, { feedback });
+    }
     if (req.url === "/api/social/block" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
@@ -392,6 +409,22 @@ export function createServer({
       if (req.url === "/api/admin/actions" && req.method === "GET") {
         return sendJson(res, 200, { actions: await identityStore.listAdminActions() });
       }
+      if (req.url === "/api/admin/feedback" && req.method === "GET") {
+        return sendJson(res, 200, { feedback: await identityStore.listFeedback() });
+      }
+      if (req.url === "/api/admin/dashboard" && req.method === "GET") {
+        const matches = await identityStore.getMatchStats?.() ?? null;
+        const openReports = await identityStore.listOpenReports();
+        const feedback = await identityStore.listFeedback?.() ?? [];
+        return sendJson(res, 200, {
+          matches,
+          openReports: openReports.length,
+          feedbackCount: feedback.length,
+          reconnect: { attempts: reconnectAttempts, successes: reconnectSuccesses,
+            successRate: reconnectAttempts ? +(reconnectSuccesses / reconnectAttempts).toFixed(3) : null },
+          rooms: roomManager.metrics(),
+        });
+      }
       return sendJson(res, 404, { error: "NOT_FOUND" });
     }
     if (req.url === "/api/session" && req.method === "DELETE") {
@@ -415,7 +448,7 @@ export function createServer({
         res.writeHead(401, { "content-type": "text/plain", "www-authenticate": "Bearer" }).end("unauthorized");
         return;
       }
-      const metrics = roomManager.metrics();
+      const metrics = { ...roomManager.metrics(), reconnectAttempts, reconnectSuccesses };
       res.writeHead(200, { "content-type": "text/plain; version=0.0.4" });
       res.end(Object.entries(metrics).map(([name, value]) => `gunny_${name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)} ${value}`).join("\n") + "\n");
       return;
@@ -546,11 +579,13 @@ export function createServer({
         }
         const room = roomManager.get(message.room);
         const client = room?.reconnect(message.reconnectToken, ws, randomUUID(), identity?.user.id || null);
+        reconnectAttempts++;
         if (!client) {
           sendError(ws, "RECONNECT_EXPIRED");
           ws.close(1008, "reconnect expired");
           return;
         }
+        reconnectSuccesses++;
         client.adminMuted = adminMuted;
         activate(ws, room, client);
         syncPresence(room);

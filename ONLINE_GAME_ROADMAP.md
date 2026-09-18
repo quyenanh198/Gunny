@@ -259,19 +259,22 @@ Exit criteria:
 
 ### R8 — Closed alpha → online beta
 
-Trạng thái: **chưa bắt đầu**.
+Trạng thái: **chưa bắt đầu thật (không thể "bắt đầu" bằng code) — đã thêm công cụ đo lường và checklist để chuẩn bị**. Bản thân closed alpha cần người dùng thật, decision sản phẩm/pháp lý thật và một đợt triển khai thật; không có phần nào trong số đó làm được chỉ bằng code trong một phiên.
 
-- Closed alpha 20–50 người: đo onboarding, queue, disconnect, trận hoàn tất và feedback điều khiển.
-- Sửa blocker theo dữ liệu; không dùng số lượng content làm thước đo tiến độ.
-- Online beta chỉ mở khi security checklist, moderation, privacy, recovery và capacity đều pass.
+- Closed alpha 20–50 người: đo onboarding, queue, disconnect, trận hoàn tất và feedback điều khiển — **chưa chạy**; hạ tầng đo đã sẵn: `getMatchStats()` (tỉ lệ hoàn tất trận từ bảng `matches` thật) và `/metrics` `reconnectAttempts`/`reconnectSuccesses` (cumulative, sống sót qua khi room đóng — khác `RoomManager.metrics()` vốn mất số liệu khi room bị dọn).
+- Sửa blocker theo dữ liệu; không dùng số lượng content làm thước đo tiến độ — nguyên tắc giữ nguyên, chưa có dữ liệu thật để áp dụng.
+- Online beta chỉ mở khi security checklist, moderation, privacy, recovery và capacity đều pass — **checklist đã viết** ở `docs/beta-readiness.md` và `scripts/beta-readiness.mjs` (tự động hoá phần đo được: env config, DB reachable, completion rate; phần còn lại — capacity target, drill backup/restore thật, cross-browser thật, Terms/Privacy, IP/name approval, chính đợt alpha — đánh dấu rõ là MANUAL, không giả vờ script tự động hoá được).
+- Contact/support: **đã có** `POST /api/support/feedback` (bug/suggestion/other, yêu cầu session) và `GET /api/admin/feedback` (admin xem) — đáp ứng phần "contact/support" của exit criteria cuối, dù chưa có quy trình vận hành con người đứng sau.
+
+Chi tiết ở `docs/beta-readiness.md`.
 
 Exit criteria beta:
 
-- ≥95% trận bắt đầu hoàn tất hoặc kết thúc bằng outcome hợp lệ.
-- Reconnect thành công ≥95% trong grace window ở mạng được hỗ trợ.
-- Không có lỗi severity-1 mở; restore và rollback đã diễn tập.
-- Desktop Chrome/Firefox/Safari, iOS Safari và Android Chrome hoàn thành được trận.
-- Có Terms/Privacy, contact/support, moderation flow và IP/name approval.
+- ≥95% trận bắt đầu hoàn tất hoặc kết thúc bằng outcome hợp lệ — **đo được, chưa đo thật**: `identityStore.getMatchStats()` tính trực tiếp từ bảng `matches`, nhưng chưa có lượt chạy thật để có số.
+- Reconnect thành công ≥95% trong grace window ở mạng được hỗ trợ — **đo được, chưa đo thật**: counter cumulative đã thêm ở R8, cần chạy thật trên mạng thật.
+- Không có lỗi severity-1 mở; restore và rollback đã diễn tập — **chưa đạt**: restore/rollback chỉ có runbook (R7), chưa diễn tập thật.
+- Desktop Chrome/Firefox/Safari, iOS Safari và Android Chrome hoàn thành được trận — **chưa đạt đầy đủ**: browser smoke (Playwright) chỉ xác nhận Chromium chạy được trong môi trường này (phát hiện ở R7); chưa xác nhận Firefox/Safari/iOS/Android thật.
+- Có Terms/Privacy, contact/support, moderation flow và IP/name approval — **một phần**: contact/support và moderation flow đã có (API); Terms/Privacy chỉ có baseline kỹ thuật (`docs/privacy.md`, chưa qua pháp lý) và IP/name approval (mục 8.1) vẫn chưa được chủ dự án chốt.
 
 ## 6. Thứ tự triển khai
 

@@ -346,6 +346,29 @@ export class PostgresIdentityStore {
     await this.pool.query("SELECT 1");
     return true;
   }
+  // Durable completion-rate measurement for the R8 beta exit criterion
+  // ("≥95% trận bắt đầu hoàn tất hoặc kết thúc bằng outcome hợp lệ"). Reads
+  // the matches table directly rather than an in-process counter, so it
+  // reflects the whole alpha/beta run across restarts, not just uptime.
+  async getMatchStats() {
+    const result = await this.pool.query("SELECT status, COUNT(*)::int AS count FROM matches GROUP BY status");
+    const counts = Object.fromEntries(result.rows.map((row) => [row.status, row.count]));
+    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+    const completed = counts.completed || 0;
+    return { total, completed, abandoned: counts.abandoned || 0, playing: counts.playing || 0,
+      completionRate: total ? +(completed / total).toFixed(3) : null };
+  }
+  async createFeedback({ userId, category, message, context = null }) {
+    const id = randomUUID();
+    await this.pool.query(`INSERT INTO feedback(id, user_id, category, message, context)
+      VALUES ($1, $2, $3, $4, $5)`, [id, userId, category, message, context ? JSON.stringify(context) : null]);
+    return { id, userId, category, message, context };
+  }
+  async listFeedback(limit = 100) {
+    const result = await this.pool.query(`SELECT id, user_id, category, message, context, created_at
+      FROM feedback ORDER BY created_at DESC LIMIT $1`, [Math.min(200, Math.max(1, limit))]);
+    return result.rows;
+  }
   async lookupUser(userId) {
     const profile = await this.pool.query(`SELECT u.id, u.kind, u.role, u.created_at, u.deleted_at,
       p.display_name, p.version FROM users u JOIN profiles p ON p.user_id = u.id WHERE u.id = $1`, [userId]);
