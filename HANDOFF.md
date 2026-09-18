@@ -707,3 +707,27 @@ Trạng thái: **một phần, hoàn thành local; chờ CI/merge**. R8 về b�
 - R0–R7 đều đã có code merge vào `main` (một phần hoặc đầy đủ tuỳ mục), có test, có tài liệu. R8 có công cụ đo lường và checklist nhưng KHÔNG có — và không thể có — một đợt closed alpha thật đã chạy.
 - Việc tiếp theo không phải thêm code: là (1) chủ dự án chốt các quyết định ở mục 8 của roadmap (tên/IP, audience, trận chuẩn, account policy, progression, monetization, capacity), (2) vận hành viên chạy `scripts/beta-readiness.mjs` cộng checklist MANUAL trong `docs/beta-readiness.md` trên một triển khai thật, rồi (3) mời 20–50 người dùng thật.
 - Mọi milestone trong phiên này đều merge thẳng vào `main` (bypass branch protection theo yêu cầu người dùng, xem M22) và được xác nhận xanh trên GitHub Actions thật (`Verify` workflow) — không chỉ chạy local.
+
+## M27 — Audit code R3D–R8 và sửa bug tìm được
+
+Trạng thái: **đã merge thẳng vào `main`** (commit `5244780`), không qua nhánh riêng vì đây là fix nhỏ, đã verify local đầy đủ trước khi push.
+
+Chạy `/code-review high` trên toàn bộ diff R3D→R8 (`b3f20a4..3665aa5`) theo yêu cầu người dùng. Tìm 6 vấn đề, xác minh và sửa 4 cái thật:
+
+- `GET /api/admin/sanctions?userId=` so `req.url` nguyên chuỗi (gồm query string) với path trần — route không bao giờ khớp, luôn rơi vào 404 nhánh cuối cùng. **Endpoint chết từ lúc merge ở R6, không có test nào gọi qua HTTP thật để bắt ra.** Sửa: parse `pathname` trước khi so sánh.
+- `POST /api/admin/sanctions` không validate `expiresAt` — chuỗi không parse được thành `Invalid Date`, ném lỗi trong pg driver, trả `500` thay vì `400` như các field sai khác. Sửa: kiểm `Number.isNaN(expiresAt.getTime())` trước khi gọi store.
+- `MemoryIdentityStore.chatMessages` không giới hạn; `pruneExpiredChat()` cho store này luôn là no-op (không có retention window thật trong RAM) nên tích vô hạn trên process chạy lâu không có `DATABASE_URL`. Sửa: cap 1000 tin nhắn, bỏ cũ nhất.
+- `scripts/verify.mjs` chạy `npm audit` TRƯỚC browser smoke — một CVE mới xuất hiện ở dependency không liên quan gì tới diff cũng chặn luôn browser smoke chạy, giấu mất kết quả phần chức năng thật. Sửa: audit chạy sau cùng.
+
+Hai vấn đề còn lại xem xét kỹ và **không sửa vội**:
+
+- Ban/mute chỉ kiểm tra lúc WebSocket connect, không cắt session đang mở giữa chừng — đây là giới hạn đã ghi rõ chủ đích trong `docs/admin.md` từ R6, không phải lỗi ẩn.
+- `SocialSafety` cache block/mute (`this.blocks`/`this.mutes`/`this.loaded`) không bao giờ evict — leak chậm trên server chạy nhiều tuần. Không vá vội vì evict theo từng user không an toàn: một cặp `"A:B"` có thể được nạp bởi load() của A HOẶC của B, evict một bên mà không biết bên kia còn cache hay không có thể âm thầm mở lại tương tác cho người vẫn đang online — một regression về privacy còn tệ hơn chính cái leak. Đã ghi comment rõ trong code, cần thiết kế đúng (reference counting hoặc reset có điều kiện "không ai đang connect") mới nên làm, không phải patch nhanh.
+
+### Xác minh local 2026-09-18
+
+- `node scripts/check-syntax.mjs` — 82 JavaScript files đạt.
+- `node --test` — 150 pass / 5 skip.
+- `node scripts/verify.mjs` chạy **toàn bộ, thành công**, gồm browser smoke thật và audit (giờ chạy cuối) — xác nhận thứ tự mới không phá gì.
+- Test mới/mở rộng: `tests/admin-api.test.js` thêm test cho `GET /api/admin/sanctions?userId=` (route giờ khớp thật, trả đúng danh sách) và `expiresAt` sai bị từ chối 400; `tests/memory-identity-store.test.js` (mới, 1 test xác nhận buffer chat cap đúng 1000, bỏ tin cũ nhất).
+- Đã push thẳng `main`, GitHub Actions `Verify` sẽ tự chạy — chưa kiểm tra lại kết quả CI cho commit này trong log hand-off (kiểm tra qua `gh`/GitHub API nếu cần xác nhận thêm).
