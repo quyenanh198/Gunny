@@ -559,6 +559,9 @@ export function createServer({
       const remaining = Math.max(0, (activeByIp.get(ip) || 1) - 1);
       if (remaining) activeByIp.set(ip, remaining);
       else activeByIp.delete(ip);
+      if (activeByIp.size === 0 && (!matchmaking || matchmaking.byUser.size === 0)) {
+        socialSafety.resetIfIdle();
+      }
     });
     ws.isAlive = true;
     ws.on("pong", () => (ws.isAlive = true));

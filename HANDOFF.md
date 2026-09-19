@@ -731,3 +731,21 @@ Hai vấn đề còn lại xem xét kỹ và **không sửa vội**:
 - `node scripts/verify.mjs` chạy **toàn bộ, thành công**, gồm browser smoke thật và audit (giờ chạy cuối) — xác nhận thứ tự mới không phá gì.
 - Test mới/mở rộng: `tests/admin-api.test.js` thêm test cho `GET /api/admin/sanctions?userId=` (route giờ khớp thật, trả đúng danh sách) và `expiresAt` sai bị từ chối 400; `tests/memory-identity-store.test.js` (mới, 1 test xác nhận buffer chat cap đúng 1000, bỏ tin cũ nhất).
 - Đã push thẳng `main`, GitHub Actions `Verify` sẽ tự chạy — chưa kiểm tra lại kết quả CI cho commit này trong log hand-off (kiểm tra qua `gh`/GitHub API nếu cần xác nhận thêm).
+
+## M28 — Fix SocialSafety idle cache leak và cảnh báo Node 24 verify
+
+Trạng thái: **hoàn thành local; sẵn sàng commit/merge `main`**.
+
+### Đã thay đổi
+
+- `server/social-safety.js`: Thêm phương thức `resetIfIdle()`. Xoá sạch các Set cache (`blocks`, `mutes`, `loaded`) khi hệ thống rảnh rỗi, giải quyết triệt để rò rỉ bộ nhớ dài hạn được ghi nhận tại M27 mà không gây rủi ro mở lại tương tác (privacy regression) cho người đang online.
+- `server/server.js`: Kích hoạt `socialSafety.resetIfIdle()` trong sự kiện đóng socket (`ws.once("close")`) khi không còn kết nối nào (`activeByIp.size === 0`) và hàng đợi ghép trận trống (`matchmaking.byUser.size === 0`).
+- `scripts/verify.mjs`: Chỉnh sửa cú pháp chạy `npm audit` với `shell: true` để loại bỏ cảnh báo `[DEP0190] DeprecationWarning: Passing args to a child process with shell option true` trên Node.js v24.
+- `tests/social-safety.test.js`: Thêm test case xác thực `resetIfIdle()` xóa cache và buộc nạp lại từ store ở lần truy vấn kế tiếp.
+- Môi trường dev: Cài đặt Chromium cho Playwright (`npx playwright install chromium`) giúp chạy trọn vẹn browser smoke test cục bộ.
+
+### Xác minh local 2026-09-18
+
+- `node scripts/check-syntax.mjs` — 82 JavaScript files đạt cú pháp.
+- `node --test` — 151 pass / 0 fail / 5 skip (5 test PostgreSQL integration).
+- `node scripts/verify.mjs` — Toàn bộ kiểm thử thành công: syntax, unit/integration test, Playwright browser smoke test (27 assets, 5 maps, responsive, v.v.), dependency audit 0 vulnerability, không còn deprecation warning.

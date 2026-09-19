@@ -104,3 +104,15 @@ test("report rejects self-reports, unknown categories and oversized details", as
   assert.equal(report.details, "padded");
   assert.equal(store.reports.length, 1);
 });
+
+test("resetIfIdle clears cache and forces reload on next query", async () => {
+  const store = fakeStore();
+  const safety = new SocialSafety(store);
+  await safety.load("alice");
+  assert.equal(store.loadCalls(), 1);
+  await safety.load("alice");
+  assert.equal(store.loadCalls(), 1);
+  safety.resetIfIdle();
+  await safety.load("alice");
+  assert.equal(store.loadCalls(), 2);
+});

@@ -50,5 +50,5 @@ try {
 // npm ships as npm.cmd/npm.ps1 on Windows, which Node's spawn() cannot exec
 // directly without a shell (EINVAL) — see scripts/check-syntax.mjs's own
 // history of Unix-only tooling breaking Windows dev machines.
-await run("npm", ["audit", "--audit-level=high"], {}, { shell: true });
+await run("npm audit --audit-level=high", [], {}, { shell: true });
 console.log("verify ok: syntax, unit/integration, browser smoke, dependency audit");
