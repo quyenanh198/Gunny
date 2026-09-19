@@ -51,7 +51,7 @@ manual("Reconnect success rate >= 95% in the grace window on real networks",
   "GET /metrics reconnectAttempts/reconnectSuccesses from a real running instance after real usage, not from this script");
 manual("Terms of Service and Privacy Policy published",
   "docs/privacy.md is an engineering data-handling baseline, not a published legal document — needs legal review");
-manual("IP/name approval for public release (\"Gunny\"/Gunbound reference)", "roadmap §8.1, unresolved");
+manual("IP/name approval for public release: 'Gunny'", "resolved by project owner on 2026-09-18");
 manual("Closed alpha (20-50 real users) run and blockers fixed from real data", "not something a coding session can execute");
 manual("Backup/restore drill actually performed (not just documented)", "runbook exists in docs/operations.md, never executed for real");
 manual("Cross-browser/device matrix completed on real devices",

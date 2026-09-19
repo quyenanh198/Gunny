@@ -300,7 +300,7 @@ Cho đến khi R0–R2 hoàn thành:
 
 ## 8. Các quyết định product cần chủ dự án chốt
 
-1. Tên/IP phát hành chính thức và phạm vi tham chiếu Gunny/Gunbound.
+1. Tên/IP phát hành chính thức: **Đã chốt là "Gunny"** (quyết định của chủ dự án ngày 2026-09-18).
 2. Audience/độ tuổi, thị trường và ngôn ngữ đầu tiên.
 3. Trận chuẩn: 1v1 hay 2v2; thời lượng mục tiêu; real-time room hay asynchronous challenge.
 4. Guest-only hay bắt buộc account sau bao nhiêu trận.

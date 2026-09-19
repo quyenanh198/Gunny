@@ -35,10 +35,7 @@ Pulled directly from `ONLINE_GAME_ROADMAP.md` R8 and section 8:
    windows, player controls) — it has never been legal-reviewed and isn't
    phrased as a legal document a player agrees to. Don't ship it as one
    without that review.
-4. **IP/name approval** (§8.1) — "Gunny" and any Gunbound-genre resemblance
-   is explicitly unresolved in the roadmap. This blocks any *public* launch,
-   not necessarily a closed/invite-only alpha, but get a real answer before
-   assuming either is fine.
+4. **IP/name approval** (§8.1) — Chủ dự án đã chốt tên chính thức là "Gunny" (quyết định ngày 2026-09-18).
 5. **Closed alpha with 20–50 real people, run and iterated on from their
    data** — the actual point of R8. No amount of code changes this.
 6. **Backup/restore drill performed for real.** The runbook in
@@ -57,7 +54,7 @@ Pulled directly from `ONLINE_GAME_ROADMAP.md` R8 and section 8:
 | ≥95% reconnect success in grace window | Measurable now (`/metrics`); not yet measured on a real run |
 | No open severity-1 bug; restore/rollback drilled | Restore/rollback not drilled for real |
 | Completes a match on Desktop Chrome/Firefox/Safari, iOS Safari, Android Chrome | Only Chromium verified |
-| Terms/Privacy, contact/support, moderation flow, IP/name approval | Contact/support exists (`POST /api/support/feedback`, R8); moderation flow exists (R3D–R6); Terms/Privacy and IP/name approval are open product/legal decisions |
+| Terms/Privacy, contact/support, moderation flow, IP/name approval | Contact/support exists (`POST /api/support/feedback`, R8); moderation flow exists (R3D–R6); IP/name approval đã chốt là "Gunny"; Terms/Privacy chờ duyệt pháp lý |
 
 Do not move R8 to "in progress" in the roadmap based on this document alone —
 it's a checklist and a measurement tool, not a launch decision.

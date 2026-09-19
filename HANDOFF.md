@@ -749,3 +749,6 @@ Trạng thái: **hoàn thành local; sẵn sàng commit/merge `main`**.
 - `node scripts/check-syntax.mjs` — 82 JavaScript files đạt cú pháp.
 - `node --test` — 151 pass / 0 fail / 5 skip (5 test PostgreSQL integration).
 - `node scripts/verify.mjs` — Toàn bộ kiểm thử thành công: syntax, unit/integration test, Playwright browser smoke test (27 assets, 5 maps, responsive, v.v.), dependency audit 0 vulnerability, không còn deprecation warning.
+
+### Quyết định sản phẩm (2026-09-18)
+- Chủ dự án đã chốt tên phát hành chính thức là **"Gunny"** (giải quyết mục 8.1 trong `ONLINE_GAME_ROADMAP.md` và `PRODUCT_BRIEF.md`, cập nhật checklist trong `docs/beta-readiness.md` và `scripts/beta-readiness.mjs`).

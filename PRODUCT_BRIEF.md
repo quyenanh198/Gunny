@@ -7,7 +7,7 @@ Trạng thái: working contract cho R0. Các mặc định dưới đây đượ
 - Thị trường đầu tiên: Việt Nam; ngôn ngữ đầu tiên: tiếng Việt.
 - Nhóm chính: người chơi từ 13 tuổi, thích trận chiến thuật ngắn trên browser và chơi cùng bạn bè.
 - Thiết bị: desktop browser là baseline; iOS Safari và Android Chrome là first-class clients.
-- IP: art, nhân vật, tên vật phẩm và lore phải nguyên bản. Tên phát hành “Gunny” cần legal/name review trước public beta.
+- IP: art, nhân vật, tên vật phẩm và lore phải nguyên bản. Tên phát hành chính thức được chốt là "Gunny".
 
 ## Core promise
 
@@ -56,3 +56,4 @@ Trạng thái: working contract cho R0. Các mặc định dưới đây đượ
 | 2026-09-17 | Guest-first, account linking cho cross-device | Working default |
 | 2026-09-17 | Cosmetic-only power policy cho competitive PvP | Working default |
 | 2026-09-17 | 100 CCU là capacity target đầu, không phải cam kết launch | Working default |
+| 2026-09-18 | Tên phát hành chính thức là "Gunny" (quyết định của chủ dự án) | Đã duyệt |
