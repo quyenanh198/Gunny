@@ -66,6 +66,26 @@ Vận hành production, rollback, metrics và load smoke được ghi tại `doc
 
 Reverse proxy đứng trước phải chuyển tiếp WebSocket upgrade trên `/ws`, nếu không chỉ chơi được chế độ luyện tập.
 
+### Gắn vào Chat (mượn đăng nhập sẵn có)
+
+Game chạy được ở hai chỗ cùng lúc: `gunny.lazybutts.com/` (khách, tự đặt tên) và
+`chat.lazybutts.com/gunny/` (lấy luôn người đang đăng nhập ở Chat).
+
+- Reverse proxy **cắt tiền tố** `/gunny` trước khi chuyển vào server (Caddy:
+  `handle_path /gunny/*`), nên server không cần biết mình nằm ở đâu. Phía client mọi
+  URL dựng từ `document.baseURI` (`src/base-url.js`), chạy đúng ở cả hai chỗ — đừng
+  viết lại thành `fetch("/api/...")`.
+- Đặt `CHAT_API_URL` (ví dụ `http://chat:8082`) để bật `POST /api/sessions/chat`:
+  server chuyển cookie `lb_session` sang `GET /api/me` của Chat, Chat bảo ai thì người
+  đó là người chơi. Không có secret dùng chung. Thiếu biến này thì endpoint trả 404 và
+  client tự lùi về phiên khách.
+- Lần đầu một người Chat vào chơi thì tạo user mới lấy tên hiển thị bên Chat; những
+  lần sau nhận lại đúng user đó (`users.provider`/`external_id`), nên ví vàng và cấp độ
+  đi theo người. Đổi tên trong Gunny sau đó **không** bị Chat ghi đè.
+- `BASE_PATH=/gunny` chỉ để bó cookie `gunny_session` trong nhánh đó, khỏi gửi kèm mọi
+  request sang Chat. `ALLOWED_ORIGINS` phải liệt kê cả hai origin.
+
+
 Chơi từ ngoài mạng nhà: cách an toàn nhất là Tailscale trên Mac mini và máy khách, dùng địa chỉ Tailscale của Mac mini. Nếu mở port trên router thì đặt server sau một reverse proxy có HTTPS (ví dụ Caddy với `reverse_proxy localhost:8080`), vì WebSocket trên trang HTTPS phải là `wss://`, client tự đổi theo `location.protocol`.
 
 ## Cách chơi

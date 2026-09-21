@@ -40,6 +40,42 @@ export class PostgresIdentityStore {
     }
   }
 
+  /**
+   * Phiên cho người đã đăng nhập ở một app khác cùng nhà (hiện là Chat). Lần đầu
+   * thì tạo user + profile lấy tên bên đó; những lần sau nhận lại đúng user cũ, nên
+   * ví vàng và cấp độ theo người chứ không theo lần mở trang. Tên hiển thị chỉ lấy
+   * lúc tạo: đổi tên trong Gunny xong mà lần đăng nhập sau bị ghi đè thì khó chịu.
+   */
+  async linkExternal({ provider, externalId, displayName = "Guest" }) {
+    const expiresAt = new Date(Date.now() + this.sessionTtlMs);
+    const rawToken = token();
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const found = await client.query(`
+        SELECT u.id AS user_id, u.kind, p.display_name, p.version
+        FROM users u JOIN profiles p ON p.user_id = u.id
+        WHERE u.provider = $1 AND u.external_id = $2 AND u.deleted_at IS NULL`, [provider, externalId]);
+      let row = found.rows[0];
+      if (!row) {
+        const userId = randomUUID();
+        await client.query("INSERT INTO users(id, kind, provider, external_id) VALUES ($1, 'account', $2, $3)",
+          [userId, provider, externalId]);
+        await client.query("INSERT INTO profiles(user_id, display_name) VALUES ($1, $2)", [userId, displayName]);
+        row = { user_id: userId, kind: "account", display_name: displayName, version: 1 };
+      }
+      await client.query("INSERT INTO sessions(id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)",
+        [randomUUID(), row.user_id, hash(rawToken), expiresAt]);
+      await client.query("COMMIT");
+      return publicSession({ ...row, expires_at: expiresAt }, rawToken);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async authenticate(rawToken) {
     if (!rawToken) return null;
     const result = await this.pool.query(`

@@ -19,6 +19,7 @@ import { MatchmakingQueue } from "./matchmaking.js";
 import { PartyService } from "./party.js";
 import { PresenceService } from "./presence.js";
 import { SocialSafety } from "./social-safety.js";
+import { createChatIdentity } from "./chat-identity.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -53,7 +54,11 @@ const sendJson = (res, status, value, headers = {}) => {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...headers });
   res.end(JSON.stringify(value));
 };
-const sessionCookie = (value) => `gunny_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
+// Caddy cắt tiền tố /gunny trước khi vào đây, nên server không thấy nó — BASE_PATH
+// chỉ để giới hạn cookie đúng nhánh của game. Chạy chung host với Chat mà để Path=/
+// thì token của Gunny theo mọi request sang Chat, không cần thiết.
+const COOKIE_PATH = `/${(process.env.BASE_PATH || "").replace(/^\/+|\/+$/g, "")}`.replace(/\/$/, "") || "/";
+const sessionCookie = (value) => `gunny_session=${value}; Path=${COOKIE_PATH}; HttpOnly; SameSite=Strict; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
 // index.html loads only same-origin scripts/assets plus Google Fonts (see
 // style.css's @import). Verified against the real page structure, not just
 // assumed — but confirm with a real browser (npm run verify's browser smoke,
@@ -111,6 +116,7 @@ export function createServer({
   httpRequestsPerMinute = Number(process.env.HTTP_REQUESTS_PER_MINUTE || 240),
   metricsToken = process.env.METRICS_TOKEN || "",
   identityStore = new MemoryIdentityStore(),
+  chatIdentity = createChatIdentity({ baseUrl: process.env.CHAT_API_URL }),
   requireRealtimeIdentity = false,
   moderationToken = process.env.MODERATION_TOKEN || "",
   readyEventLoopLagMs = Number(process.env.READY_EVENT_LOOP_LAG_MS || 200),
@@ -176,6 +182,16 @@ export function createServer({
       const session = await identityStore.rotate(requestCredential(req));
       return session ? sendJson(res, 200, session, { "set-cookie": sessionCookie(session.token) })
         : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    // Mở game từ trong Chat: mượn luôn đăng nhập bên đó, không bắt đặt tên lại.
+    if (req.url === "/api/sessions/chat" && req.method === "POST") {
+      if (!chatIdentity) return sendJson(res, 404, { error: "CHAT_LINK_DISABLED" });
+      const chatUser = await chatIdentity.resolve(req.headers.cookie);
+      if (!chatUser) return sendJson(res, 401, { error: "CHAT_NOT_SIGNED_IN" });
+      const session = await identityStore.linkExternal({
+        provider: "chat", externalId: chatUser.id, displayName: chatUser.displayName || "Guest",
+      });
+      return sendJson(res, 201, session, { "set-cookie": sessionCookie(session.token) });
     }
     if (req.url === "/api/profile" && req.method === "GET") {
       const session = await identityStore.authenticate(requestCredential(req));

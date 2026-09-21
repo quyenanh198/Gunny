@@ -5,7 +5,7 @@ export class MemoryIdentityStore {
   constructor() { this.sessions = new Map(); this.matches = new Map(); this.blocks = new Set();
     this.mutes = new Set(); this.reports = []; this.chatMessages = []; this.ledger = [];
     this.progression = new Map(); this.roles = new Map(); this.sanctions = []; this.adminActions = [];
-    this.feedback = []; }
+    this.feedback = []; this.linked = new Map(); }
   async createGuest(displayName = "Guest") {
     const session = { token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 86400000).toISOString(), user: { id: randomUUID(), kind: "guest" },
@@ -14,6 +14,18 @@ export class MemoryIdentityStore {
     return session;
   }
   async authenticate(token) { return this.sessions.get(token) || null; }
+  async linkExternal({ provider, externalId, displayName = "Guest" }) {
+    const key = `${provider}:${externalId}`;
+    const known = this.linked.get(key);
+    const session = { token: randomBytes(32).toString("base64url"),
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      user: { id: known?.id || randomUUID(), kind: "account" },
+      profile: { displayName: known?.displayName || displayName, version: 1 } };
+    this.linked.set(key, { id: session.user.id, displayName: session.profile.displayName });
+    this.sessions.set(session.token, session);
+    return session;
+  }
+
   async rotate(token) {
     const current = this.sessions.get(token);
     if (!current) return null;

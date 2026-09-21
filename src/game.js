@@ -13,6 +13,7 @@ import { OnlineSession } from "./net.js";
 import { featureFlags } from "./content/feature-flags.js";
 import { AudioEngine } from "./ui/audio-engine.js";
 import { EconomyWallet } from "./core/economy.js";
+import { apiUrl } from "./base-url.js";
 
 const audio = new AudioEngine();
 window.addEventListener("pointerdown", () => audio.init(), { once: true });
@@ -78,7 +79,7 @@ const setScreen = screens.set;
 async function refreshRooms() {
   const list = $("roomList");
   try {
-    const rooms = await (await fetch("/api/rooms")).json();
+    const rooms = await (await fetch(apiUrl("api/rooms"))).json();
     list.replaceChildren();
     if (!rooms.length) {
       list.innerHTML = '<li class="empty">Chưa có phòng nào. Tạo một phòng mới nhé!</li>';
@@ -137,7 +138,7 @@ $("joinForm").onsubmit = (e) => {
 $("newRoom").onclick = () => joinRoom("", "create", "private");
 $("quickJoin").onclick = async () => {
   try {
-    const { room } = await (await fetch("/api/quick-join")).json();
+    const { room } = await (await fetch(apiUrl("api/quick-join"))).json();
     joinRoom(room, room ? "join" : "create", "public");
   } catch {
     $("homeError").textContent = "Không thể tìm phòng lúc này.";
