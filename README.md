@@ -66,6 +66,14 @@ Vận hành production, rollback, metrics và load smoke được ghi tại `doc
 
 Reverse proxy đứng trước phải chuyển tiếp WebSocket upgrade trên `/ws`, nếu không chỉ chơi được chế độ luyện tập.
 
+### Tiến trình MMO lưu ở đâu
+
+Thú cưng, cường hoá vũ khí, ngọc, pháo đài và số lần phá hầm ngục nằm trong bảng
+`mmo_profiles` (một khối JSON mỗi người chơi, migration 008). Có `DATABASE_URL` thì
+`MmoStore` nạp hồ sơ từ đó trước mỗi thao tác và ghi lại sau — khởi động lại hay
+deploy không mất đồ. Không có `DATABASE_URL` (chạy tay để thử) thì hồ sơ chỉ nằm
+trong RAM và mất khi tắt, như trước.
+
 ### Gắn vào Chat (mượn đăng nhập sẵn có)
 
 Game chạy được ở hai chỗ cùng lúc: `gunny.lazybutts.com/` (khách, tự đặt tên) và

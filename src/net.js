@@ -27,6 +27,12 @@ const ERROR_MESSAGES = {
   STALE_SEQUENCE: "Thao tác cũ hoặc trùng đã bị bỏ qua.",
   COMMAND_REJECTED: "Thao tác không hợp lệ ở trạng thái hiện tại.",
   ROOM_CREATE_LIMITED: "Bạn đã tạo quá nhiều phòng. Hãy thử lại sau.",
+  ALREADY_JOINED: "Bạn đang mở phòng này ở một cửa sổ khác.",
+  AUTH_REQUIRED: "Chưa có phiên người chơi. Hãy tải lại trang.",
+  SERVER_UNAVAILABLE: "Máy chủ đang bận. Hãy thử lại sau.",
+  NOT_RESERVED: "Ghế trong phòng này đã dành cho người khác.",
+  SPECTATOR_DISABLED: "Phòng này không cho xem trận.",
+  BANNED: "Tài khoản của bạn đang bị khoá.",
 };
 
 // A read-only view of the server's Match, smoothed between snapshots.
@@ -282,7 +288,11 @@ export class OnlineSession {
     this.ws.onclose = () => {
       if (this.closed) return;
       this.state = this.reconnectToken ? "reconnecting" : "offline";
-      this.error = this.reconnectToken ? "Mất kết nối, đang thử nối lại…" : "Mất kết nối tới máy chủ.";
+      // Server đóng kèm lý do (phòng đầy, trùng phiên…) thì giữ nguyên câu đó:
+      // "Mất kết nối tới máy chủ." làm người chơi tưởng mạng hỏng và thử lại mãi.
+      const serverSaid = this.error && this.lastErrorAt && Date.now() - this.lastErrorAt < 2000;
+      if (!serverSaid)
+        this.error = this.reconnectToken ? "Mất kết nối, đang thử nối lại…" : "Mất kết nối tới máy chủ.";
       this.onUpdate(this);
       if (this.reconnectToken) this.reconnectTimer = setTimeout(() => this.connect(), 1000);
     };
@@ -312,6 +322,7 @@ export class OnlineSession {
     if (s.t === "error") {
       if (s.requestId) this.pending.delete(s.requestId);
       this.error = ERROR_MESSAGES[s.code] || "Máy chủ từ chối thao tác.";
+      this.lastErrorAt = Date.now();
       if (s.code === "RECONNECT_EXPIRED" || s.code === "VERSION_MISMATCH") {
         this.closed = true;
         this.state = "offline";
@@ -373,6 +384,10 @@ export class OnlineSession {
   leave() {
     this.closed = true;
     clearTimeout(this.reconnectTimer);
+    // Báo server bỏ ghế trước khi đóng. Chỉ đóng socket thì server tưởng rớt mạng,
+    // giữ chỗ 30 giây, và lần "Vào nhanh" ngay sau đó vào lại đúng phòng cũ sẽ bị
+    // chặn vì trùng danh tính với chính mình.
+    this.send({ t: "leave" });
     this.ws.close();
   }
 }

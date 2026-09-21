@@ -7,8 +7,28 @@ import { WeaponForge } from "../src/core/forge.js";
 import { PersonalFortress } from "../src/core/fortress.js";
 
 export class MmoStore {
-  constructor() {
+  constructor(persistence = null) {
     this.profiles = new Map(); // userId -> UserMmoProfile
+    // Không có persistence (test, hoặc chạy không DATABASE_URL) thì hồ sơ chỉ sống
+    // trong RAM như trước — mất khi khởi động lại.
+    this.persistence = persistence;
+  }
+
+  /** Nạp hồ sơ đã lưu vào bộ nhớ nếu chưa có. Gọi trước mỗi thao tác. */
+  async hydrate(userId) {
+    if (!this.persistence || this.profiles.has(userId)) return;
+    const saved = await this.persistence.load(userId);
+    if (saved) this.profiles.set(userId, saved);
+  }
+
+  /**
+   * Ghi hồ sơ xuống DB. Lỗi ghi được để nổi lên tận handler (trả 500) thay vì nuốt:
+   * ấp trứng xong mà mất trứng lẫn vàng khi restart còn khó chịu hơn một lần báo lỗi.
+   */
+  async flush(userId) {
+    if (!this.persistence) return;
+    const profile = this.profiles.get(userId);
+    if (profile) await this.persistence.save(userId, profile);
   }
 
   // Get or initialize user's authoritative MMO profile

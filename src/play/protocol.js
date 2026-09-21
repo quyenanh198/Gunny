@@ -26,10 +26,12 @@ const validators = {
     (message.item === undefined || message.item === null || ["power", "blood", "teleport", "dual"].includes(message.item)),
   chat: (message) => typeof message.text === "string" && message.text.trim().length > 0 && message.text.length <= 160,
   kick: (message) => Number.isSafeInteger(message.id) && message.id > 0,
+  // Rời phòng hẳn, khác với mất kết nối: server bỏ ghế ngay thay vì giữ chỗ chờ nối lại.
+  leave: () => true,
 };
 const fields = {
   team: ["team"], ready: ["value"], loadout: ["character", "weapon"], setup: ["map", "difficulty", "bots"],
-  start: [], restart: [], lobby: [], keys: ["keys"], aim: ["angle"], charge: [], release: [], cancel: [], action: ["shot", "item"], chat: ["text"], kick: ["id"],
+  start: [], restart: [], lobby: [], keys: ["keys"], aim: ["angle"], charge: [], release: [], cancel: [], action: ["shot", "item"], chat: ["text"], kick: ["id"], leave: [],
 };
 
 export function validateClientMessage(message) {

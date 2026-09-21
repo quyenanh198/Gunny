@@ -20,7 +20,9 @@ import { PartyService } from "./party.js";
 import { PresenceService } from "./presence.js";
 import { SocialSafety } from "./social-safety.js";
 import { createChatIdentity } from "./chat-identity.js";
-import { mmoStore } from "./mmo-store.js";
+import { MmoStore } from "./mmo-store.js";
+import { PostgresMmoPersistence } from "./mmo-persistence.js";
+import { mmoStore as sharedMmoStore } from "./mmo-store.js";
 import { coopDungeonManager } from "./coop-dungeon.js";
 import { siegeWarfareEngine } from "./fortress-siege.js";
 
@@ -120,6 +122,7 @@ export function createServer({
   metricsToken = process.env.METRICS_TOKEN || "",
   identityStore = new MemoryIdentityStore(),
   chatIdentity = createChatIdentity({ baseUrl: process.env.CHAT_API_URL }),
+  mmoStore = sharedMmoStore,
   requireRealtimeIdentity = false,
   moderationToken = process.env.MODERATION_TOKEN || "",
   readyEventLoopLagMs = Number(process.env.READY_EVENT_LOOP_LAG_MS || 200),
@@ -201,64 +204,73 @@ export function createServer({
       return session ? sendJson(res, 200, { user: session.user, profile: session.profile })
         : sendJson(res, 401, { error: "INVALID_SESSION" });
     }
+    // Hồ sơ MMO nằm trong DB: nạp trước khi tính, ghi lại sau khi đổi. Gói chung một
+    // chỗ để không handler nào lỡ quên bước ghi và làm người chơi mất đồ khi restart.
+    const withMmo = async (session, mutate) => {
+      const userId = session.user.id;
+      await mmoStore.hydrate(userId);
+      const result = mutate(userId);
+      await mmoStore.flush(userId);
+      return result;
+    };
     if (req.url === "/api/mmo/profile" && req.method === "GET") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
-      const mmoProfile = mmoStore.getProfile(session.user.id, session.profile?.displayName);
+      const mmoProfile = await withMmo(session, (userId) => mmoStore.getProfile(userId, session.profile?.displayName));
       return sendJson(res, 200, mmoProfile);
     }
     if (req.url === "/api/mmo/forge/enhance" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       const body = await jsonBody(req);
-      const result = mmoStore.enhanceWeapon(session.user.id, body?.weaponId);
+      const result = await withMmo(session, (userId) => mmoStore.enhanceWeapon(userId, body?.weaponId));
       return sendJson(res, result.success ? 200 : 400, result);
     }
     if (req.url === "/api/mmo/pets/hatch" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       const body = await jsonBody(req);
-      const result = mmoStore.hatchPet(session.user.id, body?.eggType, body?.customName);
+      const result = await withMmo(session, (userId) => mmoStore.hatchPet(userId, body?.eggType, body?.customName));
       return sendJson(res, result.success ? 200 : 400, result);
     }
     if (req.url === "/api/mmo/pets/equip" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       const body = await jsonBody(req);
-      const result = mmoStore.equipPet(session.user.id, body?.petId);
+      const result = await withMmo(session, (userId) => mmoStore.equipPet(userId, body?.petId));
       return sendJson(res, result.success ? 200 : 400, result);
     }
     if (req.url === "/api/mmo/fortress/recruit" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       const body = await jsonBody(req);
-      const result = mmoStore.recruitMercenary(session.user.id, body?.mercenaryId);
+      const result = await withMmo(session, (userId) => mmoStore.recruitMercenary(userId, body?.mercenaryId));
       return sendJson(res, result.success ? 200 : 400, result);
     }
     if (req.url === "/api/mmo/fortress/claim" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
-      const result = mmoStore.claimFortressYield(session.user.id);
+      const result = await withMmo(session, (userId) => mmoStore.claimFortressYield(userId));
       return sendJson(res, 200, result);
     }
     if (req.url === "/api/mmo/forge/socket" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       const body = await jsonBody(req);
-      const result = mmoStore.socketGem(session.user.id, body?.weaponId, body?.slotIndex, body?.gemType);
+      const result = await withMmo(session, (userId) => mmoStore.socketGem(userId, body?.weaponId, body?.slotIndex, body?.gemType));
       return sendJson(res, result.success ? 200 : 400, result);
     }
     if (req.url === "/api/mmo/fortress/upgrade" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
-      const result = mmoStore.upgradeFortress(session.user.id);
+      const result = await withMmo(session, (userId) => mmoStore.upgradeFortress(userId));
       return sendJson(res, result.success ? 200 : 400, result);
     }
     if (req.url === "/api/mmo/dungeon/reward" && req.method === "POST") {
       const session = await identityStore.authenticate(requestCredential(req));
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       const body = await jsonBody(req);
-      const result = mmoStore.recordDungeonClear(session.user.id, body?.dungeonId, body?.rewards);
+      const result = await withMmo(session, (userId) => mmoStore.recordDungeonClear(userId, body?.dungeonId, body?.rewards));
       return sendJson(res, 200, result);
     }
     // Co-op Dungeon Matchmaking & Session routes
@@ -663,6 +675,17 @@ export function createServer({
       }
       const previousAck = client.lastAckSeq;
       client.lastAckSeq = message.clientSeq;
+      // Bấm "Rời phòng" là bỏ hẳn, không phải rớt mạng: trả ghế ngay. Nếu chỉ đóng
+      // socket, ghế vẫn bị giữ 30 giây chờ nối lại và người đó vào nhanh lại đúng
+      // phòng cũ sẽ bị chính mình chặn (ALREADY_JOINED).
+      if (message.t === "leave") {
+        client.left = true;
+        room.remove(client);
+        presence.clear(client.userId);
+        ws.send(JSON.stringify({ t: "ack", requestId: message.requestId, clientSeq: message.clientSeq }));
+        ws.close(1000, "left room");
+        return;
+      }
       if (!room.handle(client, message)) {
         client.lastAckSeq = previousAck;
         room.rejectedMessages++;
@@ -673,6 +696,7 @@ export function createServer({
       syncPresence(room);
     });
     ws.on("close", () => {
+      if (client.left) return;
       room.disconnect(client);
       presence.set(client.userId, "reconnecting", { roomId: room.id, role: client.role,
         reconnectUntil: Date.now() + 30000 });
@@ -768,10 +792,17 @@ export function createServer({
       ws.close(1008, "seat not reserved");
       return;
     }
-    if (role === "player" && identity && [...room.clients].some((client) => client.userId === identity.user.id)) {
-      sendError(ws, "ALREADY_JOINED");
-      ws.close(1008, "identity already joined");
-      return;
+    if (role === "player" && identity) {
+      const mine = [...room.clients].find((client) => client.userId === identity.user.id);
+      // Còn đang mở ở tab khác thì đúng là trùng, chặn. Còn cái ghế của một kết nối
+      // đã đứt (đóng tab, rớt mạng, hết hạn nối lại) thì thu lại cho chính chủ —
+      // không ai bị khoá ngoài phòng vì bóng ma của chính mình.
+      if (mine?.connected) {
+        sendError(ws, "ALREADY_JOINED");
+        ws.close(1008, "identity already joined");
+        return;
+      }
+      if (mine) room.remove(mine);
     }
     if (!room.canJoin(role)) {
       ws.send(JSON.stringify({ t: "error", code: role === "spectator"
@@ -853,7 +884,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.warn(JSON.stringify({ event: "ephemeral_identity_store", warning: "identity is lost on restart" }));
     identityStore = new MemoryIdentityStore();
   }
-  const server = createServer({ identityStore, requireRealtimeIdentity: !!process.env.DATABASE_URL });
+  // Có DB thì tiến trình MMO (thú cưng, cường hoá, pháo đài) ghi xuống đó; không thì
+  // giữ trong RAM như cũ và mất khi khởi động lại — chấp nhận được cho bản chạy tay.
+  const mmoStore = pool ? new MmoStore(new PostgresMmoPersistence(pool)) : undefined;
+  const server = createServer({ identityStore, requireRealtimeIdentity: !!process.env.DATABASE_URL,
+    ...(mmoStore ? { mmoStore } : {}) });
   server.listen(port, () => console.log(JSON.stringify({ event: "server_started", port })));
   for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, async () => {
     server.gracefulShutdown();
