@@ -14,6 +14,7 @@ import { featureFlags } from "./content/feature-flags.js";
 import { AudioEngine } from "./ui/audio-engine.js";
 import { EconomyWallet } from "./core/economy.js";
 import { apiUrl } from "./base-url.js";
+import { MmoHubController } from "./ui/mmo-hub.js";
 
 const audio = new AudioEngine();
 window.addEventListener("pointerdown", () => audio.init(), { once: true });
@@ -146,6 +147,16 @@ $("quickJoin").onclick = async () => {
 };
 $("practice").onclick = startPractice;
 $("refreshRooms").onclick = refreshRooms;
+
+const mmoHub = new MmoHubController({
+  $,
+  audio,
+  onStartDungeon: ({ mode }) => {
+    if (mode === "solo") startPractice();
+    else joinRoom("", "create", "public");
+  },
+});
+if ($("mmoHubBtn")) $("mmoHubBtn").onclick = () => mmoHub.open();
 
 // ---------------------------------------------------------------- room screen
 function onSession(s, was) {

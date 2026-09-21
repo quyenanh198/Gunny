@@ -213,3 +213,4 @@ export function hatchEgg(eggType = "common_egg", customName = null, randomFn = M
     energy: 0,
   });
 }
+

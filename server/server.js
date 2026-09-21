@@ -21,6 +21,8 @@ import { PresenceService } from "./presence.js";
 import { SocialSafety } from "./social-safety.js";
 import { createChatIdentity } from "./chat-identity.js";
 import { mmoStore } from "./mmo-store.js";
+import { coopDungeonManager } from "./coop-dungeon.js";
+import { siegeWarfareEngine } from "./fortress-siege.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -238,6 +240,98 @@ export function createServer({
       if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
       const result = mmoStore.claimFortressYield(session.user.id);
       return sendJson(res, 200, result);
+    }
+    if (req.url === "/api/mmo/forge/socket" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const result = mmoStore.socketGem(session.user.id, body?.weaponId, body?.slotIndex, body?.gemType);
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/mmo/fortress/upgrade" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const result = mmoStore.upgradeFortress(session.user.id);
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/mmo/dungeon/reward" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const result = mmoStore.recordDungeonClear(session.user.id, body?.dungeonId, body?.rewards);
+      return sendJson(res, 200, result);
+    }
+    // Co-op Dungeon Matchmaking & Session routes
+    if (req.url === "/api/coop/rooms" && req.method === "GET") {
+      return sendJson(res, 200, coopDungeonManager.listPublicRooms());
+    }
+    if (req.url === "/api/coop/rooms/create" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const room = coopDungeonManager.createRoom({
+        dungeonTemplateId: body?.dungeonTemplateId,
+        hostUser: { id: session.user.id, name: session.profile?.displayName, ...body?.loadout },
+      });
+      return sendJson(res, 201, room.getSnapshot());
+    }
+    if (req.url === "/api/coop/rooms/join" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const room = coopDungeonManager.getRoom(body?.roomId);
+      if (!room) return sendJson(res, 404, { error: "ROOM_NOT_FOUND" });
+      const result = room.addPlayer({ id: session.user.id, name: session.profile?.displayName, ...body?.loadout });
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/coop/rooms/ready" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const room = coopDungeonManager.getRoom(body?.roomId);
+      if (!room) return sendJson(res, 404, { error: "ROOM_NOT_FOUND" });
+      const result = room.setReady(session.user.id, body?.ready);
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/coop/rooms/start" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const room = coopDungeonManager.getRoom(body?.roomId);
+      if (!room) return sendJson(res, 404, { error: "ROOM_NOT_FOUND" });
+      if (room.players[0]?.id !== session.user.id) return sendJson(res, 403, { error: "NOT_ROOM_HOST" });
+      const result = room.start();
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/coop/rooms/action" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const room = coopDungeonManager.getRoom(body?.roomId);
+      if (!room) return sendJson(res, 404, { error: "ROOM_NOT_FOUND" });
+      const result = room.processTurn({ partyDamage: body?.partyDamage, enemyDamageDealt: body?.enemyDamageDealt });
+      return sendJson(res, 200, result);
+    }
+    // World Map & Asynchronous Fortress Siege routes
+    if (req.url === "/api/siege/world-map" && req.method === "GET") {
+      return sendJson(res, 200, siegeWarfareEngine.getWorldMap());
+    }
+    if (req.url === "/api/siege/raid" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const result = siegeWarfareEngine.raidTerritory({
+        attackerId: session.user.id,
+        attackerName: session.profile?.displayName || "Lãnh Chúa",
+        territoryId: body?.territoryId,
+        weaponLevel: body?.weaponLevel || 0,
+      });
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/siege/history" && req.method === "GET") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      return sendJson(res, 200, siegeWarfareEngine.getLogsForUser(session.user.id));
     }
     if (req.url === "/api/profile" && req.method === "PATCH") {
       const body = await jsonBody(req);

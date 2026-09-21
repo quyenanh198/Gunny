@@ -100,3 +100,4 @@ test("PersonalFortress resolves siege battle differently based on owner online s
   assert.equal(autoResult.mode, "auto_resolved");
   assert.equal(autoResult.defenseWon, true);
 });
+

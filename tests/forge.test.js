@@ -69,3 +69,4 @@ test("WeaponForge sockets elemental gemstones into 3 slots", () => {
   const r3 = WeaponForge.socketGem(weapon, 5, "emerald");
   assert.equal(r3.success, false);
 });
+

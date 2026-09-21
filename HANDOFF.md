@@ -863,6 +863,46 @@ Trạng thái: **hoàn thành và xác minh toàn diện; sẵn sàng commit & p
 - `node --test`: **183 passed / 0 failed / 5 skipped** (188 tests tổng).
 - `node scripts/verify.mjs`: **Vượt qua 100% toàn bộ pipeline kiểm thử** (cú pháp, unit test, Playwright browser smoke test, và audit 0 lỗ hổng).
 
+## M35–M37 — MMO-Lite Interactive Hub, Co-op Dungeons & World Map Siege Warfare (2026-09-21)
+
+Trạng thái: **hoàn thành và xác minh toàn diện 100%; sẵn sàng commit & push `origin/main`**.
+
+### Đã triển khai
+
+1. **Milestone M35: Giao Diện Trực Quan MMO-Lite Hub**:
+   - `src/ui/mmo-hub.js`: Bộ điều khiển trung tâm (`MmoHubController`) hỗ trợ giao diện modal 4 tab tương tác:
+     - **🐾 Chuồng Pet**: Hiển thị linh thú xuất trận, thanh kinh nghiệm, nội tại và tuyệt kỹ tích nộ; danh sách bộ sưu tập pet; bảng ấp trứng (hỗ trợ đặt tên tùy biến).
+     - **🔨 Tiệm Rèn**: Nâng cấp vũ khí (+1 đến +12), hiển thị mốc khóa an toàn (+3, +6, +9, +12), tỷ lệ thành công cộng dồn May Mắn (Pity Luck +5% mỗi lần xịt), bảng khảm ngọc nguyên tố 3 ô (Ruby, Topaz, Emerald).
+     - **🏰 Pháo Đài**: Nâng cấp thành trì cấp 1–10 (mở rộng máu phòng thủ và sức chứa quân); chiêu mộ bot lính đánh thuê (Sniper, Burrower, Guardian) bằng vàng; thu hoạch thuế tài nguyên theo giờ.
+     - **🗺️ Phó Bản PvE**: Bảng chọn chế độ vượt ải đơn (Solo) và tổ đội co-op (2–4 người).
+   - `index.html`: Thêm nút truy cập nổi bật `⚔️ KHU VỰC MMO` tại sảnh chờ và phần tử `<dialog id="mmoHubDialog">`.
+   - `style.css`: Giao diện modal tối ưu, responsive linh hoạt trên mobile và desktop, không làm vỡ tỷ lệ khung hình hay tràn viewport.
+   - `tests/mmo-hub.test.js`: Kiểm thử đơn vị cho việc mở modal, chuyển tab và gọi callback bắt đầu phó bản.
+
+2. **Milestone M36: Ghép Đội Co-op Phó Bản Thời Gian Thực (Real-Time Co-op Dungeons)**:
+   - `server/coop-dungeon.js`: Quản lý phòng phó bản co-op (`CoopDungeonRoom` & `CoopDungeonManager`):
+     - Tổ đội 1–4 người chơi cùng phe (Team 0 Allies) hợp lực vượt ải.
+     - Đồng bộ tiến trình 3 ải liên hoàn (Quái nhỏ -> Địa hình độc -> Boss Vua Gà Hoàng Gia).
+     - Cơ chế trạm tiếp tế hồi sinh lực 30% giữa các ải.
+     - Tự động phát thưởng rương báu phó bản authoritatively cho toàn bộ thành viên tổ đội qua `mmoStore.recordDungeonClear`.
+   - `server/server.js`: Bổ sung các REST endpoint `/api/coop/rooms`, `/api/coop/rooms/create`, `/api/coop/rooms/join`, `/api/coop/rooms/ready`, `/api/coop/rooms/start`, `/api/coop/rooms/action`.
+   - `tests/coop-dungeon.test.js`: 3 bài kiểm thử đơn vị & tích hợp kiểm tra quy trình ghép đội, sức chứa, chuyển ải và phát thưởng.
+
+3. **Milestone M37: Bản Đồ Thế Giới & Công Thành Chiến Bất Đối Xứng (World Map & Siege Warfare)**:
+   - `server/fortress-siege.js`: Động cơ công thành chiến (`SiegeWarfareEngine`):
+     - Bản đồ thế giới với các cứ điểm chiến lược: *Mỏ Vàng Hoàng Kim* (+120 Vàng/giờ), *Hầm Đá Rèn Hắc Diệu* (+2 Đá/giờ), *Pháo Đài Không Gian* (+250 Vàng & +3 Đá/giờ).
+     - Thuật toán mô phỏng công thành nhiều hiệp: Sức công phá pháo thủ và đội bot đánh thuê vs máu thành lũy và dàn bot đồn trú của đối thủ.
+     - Đổi chủ cứ điểm khi công phá thành công, cướp đoạt thuế tài nguyên tích lũy và ghi nhận nhật ký chiến trường (`battleLogs`).
+   - `server/server.js`: Bổ sung các endpoint `/api/siege/world-map`, `/api/siege/raid`, `/api/siege/history`.
+   - Tích hợp giao diện công thành trực tiếp vào tab Pháo Đài trong `mmo-hub.js`.
+   - `tests/siege.test.js`: 3 bài kiểm thử cho bản đồ thế giới, mô phỏng chiến đấu, cướp thuế và chống công thành chính mình.
+
+### Kết quả xác minh toàn diện (2026-09-21)
+- `node scripts/check-syntax.mjs`: **Đạt cú pháp 107 JavaScript files**.
+- `node --test`: **196 passed / 0 failed / 5 skipped** (201 tests tổng).
+- `node scripts/verify.mjs`: **100% PASS** toàn bộ pipeline (cú pháp, unit test, Playwright browser smoke test, và audit 0 lỗ hổng bảo mật).
+
+
 
 
 

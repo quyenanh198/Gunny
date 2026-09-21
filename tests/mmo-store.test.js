@@ -56,3 +56,4 @@ test("MmoStore recruits mercenary and claims territory yield", () => {
   const r2 = store.claimFortressYield("user_alpha");
   assert.ok(r2.claimed !== undefined);
 });
+

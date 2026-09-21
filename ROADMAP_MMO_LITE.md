@@ -101,3 +101,4 @@ Gunny sẽ không dừng lại ở một game bắn súng tọa độ web đơn 
 1. **Simplicity Over Clutter**: Mọi giao diện nâng cấp, ấp trứng hay thuê bot chỉ gói gọn trong tối đa 2 thao tác chạm/click.
 2. **Zero Pay-to-Win Integrity**: Vàng là tiền tệ tối cao kiếm được từ chơi game. Mọi người chơi bỏ công sức, trí tuệ và kỹ năng ngắm bắn đều có thể đạt tới vũ khí +12 và sở hữu pet thần thoại.
 3. **Visceral Tactile Feedback**: Mỗi cú đập búa rèn đồ, mỗi tiếng pet gầm khi xả tuyệt chiêu, mỗi vụ nổ công thành đều phải mang lại cảm giác rung chấn thỏa mãn tuyệt đối qua Web Audio và Particle VFX.
+

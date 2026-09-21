@@ -35,3 +35,4 @@ test("MMO API endpoints handle authentication and profile operations", async () 
   const claimRes = mmoStore.claimFortressYield(guest.user.id);
   assert.ok(claimRes !== null);
 });
+

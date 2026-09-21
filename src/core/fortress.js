@@ -210,3 +210,4 @@ export class PersonalFortress {
     return new PersonalFortress(data);
   }
 }
+

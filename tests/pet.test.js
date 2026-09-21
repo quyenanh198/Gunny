@@ -92,3 +92,4 @@ test("Pet serializes and deserializes state accurately", () => {
   assert.equal(restored.xp, 60);
   assert.equal(restored.energy, 85);
 });
+

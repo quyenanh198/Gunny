@@ -140,12 +140,54 @@ export class MmoStore {
       profile.fortress = fortress.serialize();
       profile.updatedAt = Date.now();
     }
-
     return {
       ...result,
       wallet: profile.wallet,
     };
   }
+
+  // Authoritative gem socketing
+  socketGem(userId, weaponId, slotIndex, gemType) {
+    const profile = this.getProfile(userId);
+    const weapon = profile.weapons[weaponId];
+    if (!weapon) return { success: false, reason: "Vũ khí không hợp lệ." };
+    const gemIdx = profile.wallet.gems?.indexOf(gemType);
+    if (gemIdx === -1) return { success: false, reason: "Bạn không có loại ngọc này trong túi đồ." };
+
+    const result = WeaponForge.socketGem(weapon, slotIndex, gemType);
+    if (result.success) {
+      profile.wallet.gems.splice(gemIdx, 1);
+      profile.updatedAt = Date.now();
+    }
+    return { ...result, weapon, wallet: profile.wallet };
+  }
+
+  // Authoritative fortress upgrade
+  upgradeFortress(userId) {
+    const profile = this.getProfile(userId);
+    const fortress = PersonalFortress.deserialize(profile.fortress);
+    const result = fortress.upgrade(profile.wallet.gold);
+    if (result.success) {
+      profile.wallet.gold -= result.spentGold;
+      profile.fortress = fortress.serialize();
+      profile.updatedAt = Date.now();
+    }
+    return { ...result, wallet: profile.wallet, fortress: profile.fortress };
+  }
+
+  // Authoritative dungeon clear reward
+  recordDungeonClear(userId, dungeonId, rewards = {}) {
+    const profile = this.getProfile(userId);
+    profile.dungeonClears = profile.dungeonClears || {};
+    profile.dungeonClears[dungeonId] = (profile.dungeonClears[dungeonId] || 0) + 1;
+    if (rewards.gold) profile.wallet.gold = (profile.wallet.gold || 0) + rewards.gold;
+    if (rewards.stones) profile.wallet.stones = (profile.wallet.stones || 0) + rewards.stones;
+    if (rewards.gems) profile.wallet.gems.push(...rewards.gems);
+    if (rewards.eggs) profile.wallet.eggs.push(...rewards.eggs);
+    profile.updatedAt = Date.now();
+    return { success: true, profile, rewards };
+  }
 }
 
 export const mmoStore = new MmoStore();
+
