@@ -3,6 +3,7 @@ import { ENHANCE_CONFIG, WeaponForge, ELEMENTAL_GEMS } from "../core/forge.js";
 import { MERCENARY_CATALOG, OUTPOST_CATALOG, PersonalFortress } from "../core/fortress.js";
 import { DUNGEON_TEMPLATES } from "../core/dungeon.js";
 import { apiUrl } from "../base-url.js";
+import { ensureIdentity } from "../session-identity.js";
 
 const DEFAULT_PROFILE = {
   wallet: { gold: 800, stones: 10, gems: ["ruby", "topaz"], eggs: ["common_egg"] },
@@ -40,7 +41,10 @@ export class MmoHubController {
   // Load from local storage or server
   async initProfile() {
     try {
-      const res = await fetch(apiUrl("api/mmo/profile"));
+      // Không có phiên thì mọi thao tác MMO đều 401 và tiến trình chỉ nằm trong
+      // localStorage của đúng máy đó — dựng phiên trước khi hỏi hồ sơ.
+      await ensureIdentity().catch(() => {});
+      const res = await fetch(apiUrl("api/mmo/profile"), { credentials: "same-origin" });
       if (res.ok) {
         this.profile = await res.json();
         return;
@@ -93,6 +97,8 @@ export class MmoHubController {
 
   switchTab(tabName) {
     this.currentTab = tabName;
+    // Câu báo của thao tác trước không còn liên quan ở tab mới.
+    this.feedback = null;
     this.render();
   }
 
@@ -134,8 +140,22 @@ export class MmoHubController {
 
     contentHtml += `</div><div id="mmoFeedback" class="mmo-feedback"></div>`;
     dialog.innerHTML = contentHtml;
+    // Mọi thao tác đều gọi render() ngay sau khi viết câu báo kết quả, mà render()
+    // dựng lại cả dialog — viết xong là mất. Giữ câu báo ở đây rồi vẽ lại sau.
+    const feedbackBox = this.$("mmoFeedback");
+    if (feedbackBox && this.feedback) {
+      feedbackBox.replaceChildren(Object.assign(document.createElement("span"), {
+        className: `mmo-${this.feedback.kind}`,
+        textContent: this.feedback.text,
+      }));
+    }
 
     this.bindEvents();
+  }
+
+  /** Câu báo kết quả sống qua lần render kế tiếp. kind: "ok" | "fail" | "info". */
+  setFeedback(kind, text) {
+    this.feedback = { kind, text };
   }
 
   // --- TAB 1: PETS ---
@@ -169,8 +189,8 @@ export class MmoHubController {
       <div class="mmo-card">
         <h3>ẤP TRỨNG LINH THÚ</h3>
         <p>Có 4 chủng loài: <b>Rồng Lửa</b> (Công), <b>Mầm Cây</b> (Máu), <b>Kiến Vàng</b> (Thủ), <b>Băng Linh</b> (Nhanh nhẹn).</p>
-        <div class="row" style="margin-top: 8px;">
-          <input id="petCustomName" placeholder="Đặt tên thú cưng (tùy chọn)" maxlength="16" style="flex: 1;" />
+        <div class="row mmo-form-row">
+          <input id="petCustomName" class="pet-name-input" placeholder="Đặt tên thú cưng (tùy chọn)" maxlength="16" />
           <button type="button" id="hatchEggBtn" class="primary">
             🥚 Ấp Trứng (${eggCount > 0 ? "Dùng 1 Trứng" : "400 Vàng"})
           </button>
@@ -217,7 +237,7 @@ export class MmoHubController {
 
     let html = `
       <div class="mmo-forge-view">
-        <div class="weapon-selector row" style="margin-bottom: 12px;">
+        <div class="weapon-selector row">
           <label>CHỌN VŨ KHÍ: </label>
           <select id="forgeWeaponSelect">
             ${Object.keys(weapons).map((wId) => `<option value="${wId}" ${wId === this.selectedWeapon ? "selected" : ""}>${wId.toUpperCase()} (+${weapons[wId].level || 0})</option>`).join("")}
@@ -289,7 +309,7 @@ export class MmoHubController {
             🌾 THU HOẠCH THUẾ ĐỊA PHẬN
           </button>
           ${!isMax ? `
-            <button type="button" id="upgradeFortressBtn" class="subtle" style="margin-left: 8px;">
+            <button type="button" id="upgradeFortressBtn" class="subtle mmo-btn-inline">
               ⭐ Nâng cấp Thành Cấp ${level + 1} (${nextCost} Vàng)
             </button>
           ` : ""}
@@ -318,29 +338,29 @@ export class MmoHubController {
         <div class="mmo-card siege-card">
           <h3>🗺️ BẢN ĐỒ THẾ GIỚI & CÔNG THÀNH CHIẾN (PvP / PvE Asymmetric)</h3>
           <p>Mang đội quân bot đi công phá các cứ điểm để đoạt quyền lãnh chúa và cướp thuế tài nguyên:</p>
-          <div class="territory-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-            <div class="territory-item" style="background: #0e2227; padding: 10px; border-radius: 8px; border: 1px solid #ffffff15; display: flex; justify-content: space-between; align-items: center;">
+          <div class="territory-list">
+            <div class="territory-item">
               <div>
                 <strong>🥇 Mỏ Vàng Hoàng Kim</strong>
-                <small style="display: block; color: #a7c9bd;">Sản lượng: +120 Vàng/giờ · Phòng thủ: 2,000 HP</small>
+                <small>Sản lượng: +120 Vàng/giờ · Phòng thủ: 2,000 HP</small>
               </div>
               <button type="button" class="primary raid-territory-btn" data-territory="territory_gold_mine">
                 ⚔️ Công Thành
               </button>
             </div>
-            <div class="territory-item" style="background: #0e2227; padding: 10px; border-radius: 8px; border: 1px solid #ffffff15; display: flex; justify-content: space-between; align-items: center;">
+            <div class="territory-item">
               <div>
                 <strong>💎 Hầm Đá Rèn Hắc Diệu</strong>
-                <small style="display: block; color: #a7c9bd;">Sản lượng: +2 Đá Rèn/giờ · Phòng thủ: 3,000 HP</small>
+                <small>Sản lượng: +2 Đá Rèn/giờ · Phòng thủ: 3,000 HP</small>
               </div>
               <button type="button" class="primary raid-territory-btn" data-territory="territory_stone_forge">
                 ⚔️ Công Thành
               </button>
             </div>
-            <div class="territory-item" style="background: #0e2227; padding: 10px; border-radius: 8px; border: 1px solid #ffffff15; display: flex; justify-content: space-between; align-items: center;">
+            <div class="territory-item">
               <div>
                 <strong>🌌 Pháo Đài Không Gian</strong>
-                <small style="display: block; color: #a7c9bd;">Sản lượng: +250 Vàng & +3 Đá Rèn/giờ · Phòng thủ: 5,000 HP</small>
+                <small>Sản lượng: +250 Vàng & +3 Đá Rèn/giờ · Phòng thủ: 5,000 HP</small>
               </div>
               <button type="button" class="primary raid-territory-btn" data-territory="territory_sky_citadel">
                 ⚔️ Công Thành
@@ -369,11 +389,11 @@ export class MmoHubController {
           <div class="dungeon-rewards">
             🎁 <b>Phần thưởng rương báu:</b> 1,500 Vàng, 5 Viên Đá Rèn, và Cơ hội nhận Trứng Pet Cổ Xưa!
           </div>
-          <div class="row" style="margin-top: 16px;">
-            <button type="button" id="startSoloDungeonBtn" class="primary" style="flex: 1; padding: 12px; font-size: 14px;">
+          <div class="row mmo-actions-row">
+            <button type="button" id="startSoloDungeonBtn" class="primary">
               ⚔️ BẮT ĐẦU VƯỢT ẢI (SOLO)
             </button>
-            <button type="button" id="startCoopDungeonBtn" class="subtle" style="flex: 1; padding: 12px; font-size: 14px; margin-left: 8px;">
+            <button type="button" id="startCoopDungeonBtn" class="subtle">
               👥 TỔ ĐỘI CO-OP (2–4 Người)
             </button>
           </div>
@@ -387,7 +407,6 @@ export class MmoHubController {
   bindEvents() {
     if (typeof document === "undefined") return;
     const $ = this.$;
-    const feedback = $("mmoFeedback");
 
     // Close button
     const closeBtn = $("closeMmoHub");
@@ -421,11 +440,11 @@ export class MmoHubController {
           });
           const data = await res.json();
           if (data.success) {
-            feedback.innerHTML = `<span style="color: #64dd17;">🎉 ${data.message}</span>`;
+            this.setFeedback("ok", `🎉 ${data.message}`);
             this.profile.weapons[this.selectedWeapon] = data.weapon;
             this.profile.wallet = data.wallet;
           } else {
-            feedback.innerHTML = `<span style="color: #ff5252;">❌ ${data.reason || "Cường hóa thất bại!"}</span>`;
+            this.setFeedback("fail", `❌ ${data.reason || "Cường hóa thất bại!"}`);
           }
         } catch {
           // Offline fallback
@@ -438,9 +457,9 @@ export class MmoHubController {
             this.profile.wallet.gold -= result.spentGold;
             this.profile.wallet.stones -= result.spentStones;
           }
-          feedback.innerHTML = result.success
-            ? `<span style="color: #64dd17;">🎉 ${result.message}</span>`
-            : `<span style="color: #ff5252;">❌ ${result.reason || "Cường hóa thất bại!"}</span>`;
+          this.setFeedback(result.success ? "ok" : "fail", result.success
+            ? `🎉 ${result.message}`
+            : `❌ ${result.reason || "Cường hóa thất bại!"}`);
         }
         this.saveLocal();
         this.render();
@@ -461,15 +480,15 @@ export class MmoHubController {
           });
           const data = await res.json();
           if (data.success) {
-            feedback.innerHTML = `<span style="color: #64dd17;">🐣 Ấp thành công ${data.pet.name}!</span>`;
+            this.setFeedback("ok", `🐣 Ấp thành công ${data.pet.name}!`);
             this.profile.pets.push(data.pet);
             this.profile.activePetId = data.activePetId;
             this.profile.wallet = data.wallet;
           } else {
-            feedback.innerHTML = `<span style="color: #ff5252;">❌ ${data.reason}</span>`;
+            this.setFeedback("fail", `❌ ${data.reason}`);
           }
         } catch {
-          feedback.innerHTML = `<span style="color: #64dd17;">🐣 Đã ấp nở Pet thành công!</span>`;
+          this.setFeedback("fail", "❌ Không gọi được máy chủ, chưa ấp được trứng.");
         }
         this.saveLocal();
         this.render();
@@ -503,13 +522,13 @@ export class MmoHubController {
           const res = await fetch(apiUrl("api/mmo/fortress/claim"), { method: "POST" });
           const data = await res.json();
           if (data.claimed) {
-            feedback.innerHTML = `<span style="color: #64dd17;">🌾 Đã thu hoạch +${data.gold} Vàng và +${data.stones} Đá rèn!</span>`;
+            this.setFeedback("ok", `🌾 Đã thu hoạch +${data.gold} Vàng và +${data.stones} Đá rèn!`);
             this.profile.wallet = data.wallet;
           } else {
-            feedback.innerHTML = `<span>⏳ Thuế đang tích lũy, vui lòng quay lại sau ít phút.</span>`;
+            this.setFeedback("info", "⏳ Thuế đang tích lũy, vui lòng quay lại sau ít phút.");
           }
         } catch {
-          feedback.innerHTML = `<span>⏳ Thuế đang tích lũy.</span>`;
+          this.setFeedback("info", "⏳ Không gọi được máy chủ, chưa thu hoạch được.");
         }
         this.saveLocal();
         this.render();
@@ -524,11 +543,11 @@ export class MmoHubController {
           const res = await fetch(apiUrl("api/mmo/fortress/upgrade"), { method: "POST" });
           const data = await res.json();
           if (data.success) {
-            feedback.innerHTML = `<span style="color: #64dd17;">🏰 Pháo đài đã thăng cấp ${data.level}!</span>`;
+            this.setFeedback("ok", `🏰 Pháo đài đã thăng cấp ${data.level}!`);
             this.profile.fortress = data.fortress;
             this.profile.wallet = data.wallet;
           } else {
-            feedback.innerHTML = `<span style="color: #ff5252;">❌ ${data.reason}</span>`;
+            this.setFeedback("fail", `❌ ${data.reason}`);
           }
         } catch {}
         this.saveLocal();
@@ -549,11 +568,11 @@ export class MmoHubController {
           });
           const data = await res.json();
           if (data.success) {
-            feedback.innerHTML = `<span style="color: #64dd17;">🛡️ Đã chiêu mộ bot bảo vệ thành trì!</span>`;
+            this.setFeedback("ok", `🛡️ Đã chiêu mộ bot bảo vệ thành trì!`);
             this.profile.fortress = data.fortress;
             this.profile.wallet = data.wallet;
           } else {
-            feedback.innerHTML = `<span style="color: #ff5252;">❌ ${data.reason}</span>`;
+            this.setFeedback("fail", `❌ ${data.reason}`);
           }
         } catch {}
         this.saveLocal();
@@ -593,15 +612,15 @@ export class MmoHubController {
           });
           const data = await res.json();
           if (data.success && data.victory) {
-            feedback.innerHTML = `<span style="color: #64dd17;">👑 THẮNG LỢI! Bạn đã chiếm được ${data.territoryName}, cướp được +${data.plunderedGold} Vàng & +${data.plunderedStones} Đá Rèn!</span>`;
+            this.setFeedback("ok", `👑 THẮNG LỢI! Bạn đã chiếm được ${data.territoryName}, cướp được +${data.plunderedGold} Vàng & +${data.plunderedStones} Đá Rèn!`);
             if (data.wallet) this.profile.wallet = data.wallet;
           } else if (data.success && !data.victory) {
-            feedback.innerHTML = `<span style="color: #ff5252;">⚔️ THẤT BẠI! Đội phòng thủ cứ điểm quá kiên cố sau ${data.rounds} hiệp.</span>`;
+            this.setFeedback("fail", `⚔️ THẤT BẠI! Đội phòng thủ cứ điểm quá kiên cố sau ${data.rounds} hiệp.`);
           } else {
-            feedback.innerHTML = `<span style="color: #ff5252;">❌ ${data.reason}</span>`;
+            this.setFeedback("fail", `❌ ${data.reason}`);
           }
         } catch {
-          feedback.innerHTML = `<span style="color: #64dd17;">⚔️ Đã tham gia công thành chiến!</span>`;
+          this.setFeedback("fail", "❌ Không gọi được máy chủ, chưa đánh được cứ điểm.");
         }
         this.saveLocal();
         this.render();

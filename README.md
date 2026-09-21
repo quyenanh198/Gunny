@@ -66,6 +66,13 @@ Vận hành production, rollback, metrics và load smoke được ghi tại `doc
 
 Reverse proxy đứng trước phải chuyển tiếp WebSocket upgrade trên `/ws`, nếu không chỉ chơi được chế độ luyện tập.
 
+### Viết style ở đâu
+
+CSP của game (`server/server.js`) khai báo `style-src 'self'` — **không** có
+`'unsafe-inline'` — nên mọi `style="..."` viết thẳng vào thẻ HTML đều bị trình duyệt
+bỏ: thẻ vẫn hiện nhưng trơ, mất nền, không giãn, và không có lỗi nào ném ra cho người
+chơi thấy. Dùng class trong `style.css`. `tests/inline-style.test.js` canh việc này.
+
 ### Tiến trình MMO lưu ở đâu
 
 Thú cưng, cường hoá vũ khí, ngọc, pháo đài và số lần phá hầm ngục nằm trong bảng

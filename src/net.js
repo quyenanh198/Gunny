@@ -7,6 +7,7 @@ import { advanceAnimation } from "./animation.js";
 import { PROTOCOL_VERSION } from "./play/protocol.js";
 import { SnapshotBuffer } from "./play/snapshot-buffer.js";
 import { apiUrl, socketUrl } from "./base-url.js";
+import { ensureIdentity } from "./session-identity.js";
 
 const ERROR_MESSAGES = {
   INVALID_JSON: "Dữ liệu gửi lên không hợp lệ.",
@@ -252,23 +253,10 @@ export class OnlineSession {
     this.openSocket();
   }
   async ensureIdentity() {
-    const current = await fetch(apiUrl("api/profile"), { credentials: "same-origin" });
-    if (current.ok) return;
-    // Mở từ trong Chat thì đã có người đăng nhập sẵn — hỏi Chat trước, hỏng thì mới
-    // tạo khách. Ở gunny.lazybutts.com endpoint này trả 404 và rơi xuống nhánh dưới.
-    const linked = await fetch(apiUrl("api/sessions/chat"), { method: "POST", credentials: "same-origin" })
-      .catch(() => null);
-    if (linked?.ok) {
-      const session = await linked.json().catch(() => null);
-      if (session?.profile?.displayName) this.name = session.profile.displayName;
-      return;
-    }
-    const created = await fetch(apiUrl("api/sessions/guest"), {
-      method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ displayName: this.name || "Guest" }),
-    });
-    if (!created.ok) throw new Error("identity bootstrap failed");
+    const name = await ensureIdentity(this.name || "Guest");
+    if (name) this.name = name;
   }
+
   openSocket() {
     const url = socketUrl("ws");
     url.searchParams.set("room", this.id);

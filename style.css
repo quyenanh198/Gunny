@@ -1522,3 +1522,67 @@ body[data-screen="game"] #fire {
   font-size: 13px;
 }
 
+
+/* ---- Khu vực MMO: lớp thay cho style="" ------------------------------------
+   CSP của game không có 'unsafe-inline' cho style-src, nên mọi style viết thẳng
+   vào thẻ HTML đều bị trình duyệt bỏ (thẻ hiện ra nhưng trơ, không nền không
+   giãn). Khai báo ở đây để giữ CSP chặt mà giao diện vẫn đúng. */
+.mmo-hub-modal .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.mmo-form-row {
+  margin-top: 8px;
+}
+.mmo-actions-row {
+  margin-top: 16px;
+}
+.mmo-actions-row > button {
+  flex: 1;
+  padding: 12px;
+  font-size: 14px;
+}
+.pet-name-input {
+  flex: 1;
+}
+.weapon-selector {
+  margin-bottom: 12px;
+}
+.mmo-btn-inline {
+  margin-left: 8px;
+}
+.territory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.territory-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0e2227;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ffffff15;
+}
+.territory-item small {
+  display: block;
+  color: #a7c9bd;
+}
+/* Kết quả thao tác: xanh là được, đỏ là hỏng. */
+.mmo-ok {
+  color: #64dd17;
+}
+.mmo-fail {
+  color: #ff5252;
+}
+/* Thông báo không thành cũng không hỏng (thuế chưa tới giờ, đang chờ…). */
+.mmo-info {
+  color: #a7c9bd;
+}
+#mmoHubBtn {
+  background: linear-gradient(135deg, #e8a838, #d46b12);
+  width: 100%;
+}
