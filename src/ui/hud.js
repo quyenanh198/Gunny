@@ -30,7 +30,9 @@ function sync(m) {
     img.alt = face.name;
   }
   $("round").textContent = `LƯỢT ${String(m.round).padStart(2, "0")}/${MAX_ROUNDS}`;
-  $("timer").textContent = Math.ceil(m.time);
+  const secondsLeft = Math.ceil(m.time);
+  $("timer").textContent = secondsLeft;
+  $("timer").classList.toggle("urgent", secondsLeft <= 3 && m.phase === "aim");
   // Wind is px/s² in physics (max 30); players see a 0..10 scale.
   $("wind").textContent = m.wind
     ? `GIÓ ${m.wind < 0 ? "←" : "→"} cấp ${Math.ceil(Math.abs(m.wind) / 3)}`
@@ -73,7 +75,8 @@ function sync(m) {
     }), { shots: 0, hits: 0, damage: 0, terrainDamage: 0, totalDelay: 0 });
     const hitRate = total.shots ? Math.round((total.hits / total.shots) * 100) : 0;
     const averageDelay = total.shots ? Math.round(total.totalDelay / total.shots) : 0;
-    $("resultText").textContent = `${m.status} · Trúng ${hitRate}% · ${total.damage} damage · ${Math.round(total.terrainDamage)} đất · delay TB ${averageDelay}`;
+    const rewardNotice = options.reward ? ` · +${options.reward.earned} Vàng 🪙 (Ví: ${options.reward.newBalance})` : "";
+    $("resultText").textContent = `${m.status}${rewardNotice} · Trúng ${hitRate}% · ${total.damage} dmg · delay TB ${averageDelay}`;
     $("restart").hidden = session.online && !session.host;
     $("toLobby").textContent = session.online && !session.host ? "Rời phòng" : "Về phòng chờ";
   }

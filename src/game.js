@@ -11,6 +11,30 @@ import { createScreenController } from "./ui/screens.js";
 import { LocalSession } from "./session.js";
 import { OnlineSession } from "./net.js";
 import { featureFlags } from "./content/feature-flags.js";
+import { AudioEngine } from "./ui/audio-engine.js";
+import { EconomyWallet } from "./core/economy.js";
+
+const audio = new AudioEngine();
+window.addEventListener("pointerdown", () => audio.init(), { once: true });
+window.addEventListener("keydown", () => audio.init(), { once: true });
+
+const loadWallet = () => {
+  try {
+    const raw = localStorage.getItem("gunny-wallet");
+    if (raw) return EconomyWallet.deserialize(raw);
+  } catch {}
+  return new EconomyWallet({ initialGold: 100 });
+};
+
+const saveWallet = (w) => {
+  try {
+    localStorage.setItem("gunny-wallet", w.serialize());
+  } catch {}
+};
+
+const wallet = loadWallet();
+let matchRewarded = false;
+let lastReward = null;
 
 const $ = (id) => document.getElementById(id),
   canvas = $("canvas"),
@@ -26,6 +50,7 @@ let session = null,
   images = new Map(),
   groundLayer = null,
   lastTurn = -1,
+  lastExplosionRef = null,
   last = 0,
   accumulator = 0,
   paused = false;
@@ -306,17 +331,58 @@ function frame(now) {
   accumulator += elapsed;
   const m = match();
   while (accumulator >= DT) {
-    if (m && !paused) m.update(DT);
+    if (m && !paused) {
+      const prevPhase = m.phase;
+      m.update(DT);
+      if (prevPhase === "aim" && m.phase === "flight") {
+        audio.playShoot(m.shotType);
+      }
+      if (m.lastExplosion && m.lastExplosion !== lastExplosionRef) {
+        lastExplosionRef = m.lastExplosion;
+        audio.playExplosion({ critical: m.lastExplosion.critical });
+        if (m.lastExplosion.hits && m.lastExplosion.hits.some((h) => h > 0)) {
+          audio.playHit({ critical: m.lastExplosion.critical });
+        }
+      }
+    }
     accumulator -= DT;
   }
   if (m && screen() === "game") {
+    if (m.phase === "aim" && m.time <= 3 && m.time > 0) {
+      audio.playTimerTick(m.time);
+    }
+    if (m.phase === "over") {
+      if (!matchRewarded) {
+        matchRewarded = true;
+        const playerIndex = m.actors.findIndex(
+          (a) => a.control === "human" && a.player === session?.you?.player,
+        );
+        const idx = playerIndex >= 0 ? playerIndex : 0;
+        const actor = m.actors[idx];
+        const stat = m.stats?.[idx] || { damage: 0, hits: 0 };
+        const won =
+          m.status.includes("Chiến thắng") ||
+          (actor &&
+            m.alive(actor.team).length > 0 &&
+            m.teamHp(actor.team) >= m.teamHp(1 - actor.team));
+        lastReward = wallet.awardMatchRewards({
+          won,
+          damage: stat.damage || 0,
+          hits: stat.hits || 0,
+        });
+        saveWallet(wallet);
+      }
+    } else {
+      matchRewarded = false;
+    }
     if (m.terrainDirty || !groundLayer) refreshGround(m);
     if (lastTurn !== m.turn) {
       lastTurn = m.turn;
+      audio.playWindChange(m.wind);
       updateBattleLoadout();
     }
-    renderBattle(m, { ctx, images, groundLayer, reducedMotion });
-    syncHud(m, { $, session, paused });
+    renderBattle(m, { ctx, images, groundLayer, reducedMotion, paused });
+    syncHud(m, { $, session, paused, reward: lastReward });
   }
   requestAnimationFrame(frame);
 }

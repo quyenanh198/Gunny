@@ -289,25 +289,46 @@ export class Match {
       shooter.y = this.terrain[Math.floor(shooter.x)];
     }
     this.terrainDirty = true;
+    let isCritical = false;
     for (const [i, a] of this.actors.entries()) {
       const hit = hits[i];
       if (hit > 0) {
-        a.hurt = 0.3;
+        const distToCenter = Math.hypot(a.x - p.x, a.y - BODY_OFFSET - p.y);
+        const critical = distToCenter < HIT_RADIUS * 0.45;
+        if (critical) isCritical = true;
+        a.hurt = critical ? 0.45 : 0.3;
         playAnimation(a.animation, "hurt");
-        this.popups.push({ x: a.x, y: a.y - 130, text: `-${hit}`, life: 1 });
+        this.popups.push({
+          x: a.x,
+          y: a.y - 130,
+          text: critical ? `BẠO KÍCH! -${hit}` : `-${hit}`,
+          critical,
+          life: 1,
+        });
       }
     }
-    this.shake = 0.3;
-    for (let i = 0; i < 28; i++) {
+    this.shake = isCritical ? 0.55 : 0.3;
+    this.lastExplosion = { x: p.x, y: p.y, critical: isCritical, hits };
+    if (typeof this.onExplosion === "function") {
+      this.onExplosion(this.lastExplosion);
+    }
+    const particleCount = isCritical ? 42 : 28;
+    for (let i = 0; i < particleCount; i++) {
       const angle = this.random() * Math.PI * 2,
-        speed = 40 + this.random() * 150;
+        speed = 40 + this.random() * (isCritical ? 240 : 160);
+      const isSmoke = i % 5 === 0;
+      const isDebris = i % 4 === 0;
       this.particles.push({
         x: p.x,
         y: p.y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0.7,
-        color: i % 2 ? "#ffe49b" : "#f4a779",
+        vy: Math.sin(angle) * speed - (isDebris ? 50 : 0),
+        gravity: isSmoke ? -40 : (isDebris ? 380 : 250),
+        size: isSmoke ? 8 : (isDebris ? 5 : 3),
+        life: isSmoke ? 0.9 : 0.7,
+        maxLife: isSmoke ? 0.9 : 0.7,
+        type: isSmoke ? "smoke" : (isDebris ? "debris" : "spark"),
+        color: isSmoke ? "#524d5b" : (isDebris ? "#8b6849" : (i % 2 ? "#ffe49b" : "#f4a779")),
       });
     }
     this.projectile = null;
@@ -379,7 +400,7 @@ export class Match {
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vy += 250 * dt;
+      p.vy += (p.gravity ?? 250) * dt;
       p.life -= dt;
     }
     this.particles = this.particles.filter((p) => p.life > 0);

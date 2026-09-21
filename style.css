@@ -202,13 +202,30 @@ canvas {
   font-weight: 800;
 }
 .turn strong {
-  font-size: 30px;
+  font-size: 32px;
+  font-weight: 900;
+  transition: color 0.2s, transform 0.2s;
+}
+.turn strong.urgent {
+  color: #ff3b30;
+  text-shadow: 0 0 10px rgba(255, 59, 48, 0.7);
+  animation: timer-pulse 0.45s infinite alternate ease-in-out;
+}
+@keyframes timer-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.18);
+  }
 }
 .turn small {
-  background: #ffffffb0;
+  background: #ffffffc0;
   border-radius: 20px;
   padding: 6px 12px;
   font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 .status {
   position: absolute;

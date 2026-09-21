@@ -81,6 +81,26 @@ export function drawCharacter(
     draw();
   }
   ctx.restore();
+
+  // Chibi distress sweat drop when HP is low (< 25%)
+  if (actor.hp > 0 && actor.hp <= 25) {
+    ctx.save();
+    const facing = actor.angle > 90 ? -1 : 1;
+    ctx.translate(actor.x + facing * 24, actor.y - 105);
+    ctx.fillStyle = "#6be3ff";
+    ctx.strokeStyle = "#1b4d63";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -7);
+    ctx.quadraticCurveTo(5, -1, 3, 5);
+    ctx.arc(0, 5, 3.5, 0, Math.PI);
+    ctx.quadraticCurveTo(-5, -1, 0, -7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
   if (active) {
     ctx.fillStyle = "#ffe3a0";
     ctx.strokeStyle = "#35544b";

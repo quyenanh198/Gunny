@@ -771,3 +771,45 @@ Chi tiết đánh giá và chiến lược sản phẩm được lưu tại [`AU
 - **Giai đoạn 4 (Progression & Wardrobe)**: Kho đồ (inventory), cường hóa trang bị PvE (+1 tới +12), Battle Pass và shop thời trang mua bằng vàng.
 - **Giai đoạn 5 (Ranked League & Social Network)**: Đấu hạng MMR mùa giải, phòng party bạn bè, chia sẻ video/link instant replay, phòng chờ khán giả (spectator lounge).
 
+## M30 — MMO-Lite Foundation: Game Feel, Web Audio, PvE Co-Op Boss Raid & Gold Economy (2026-09-21)
+
+Trạng thái: **hoàn thành và xác minh toàn diện; sẵn sàng commit & push `origin/main`**.
+
+### Đã triển khai
+
+1. **Giai đoạn 1: Game Feel & Procedural Audio Engine (Juice & Tactile Delight)**:
+   - `src/ui/audio-engine.js`: Bộ tổng hợp âm thanh đa tầng bằng Web Audio API thuần (zero external assets, 0ms latency). Tái hiện tiếng đại bác giật nổ, tiếng rít đạn xé gió, tiếng nổ sub-bass rền vang hố đạn, tiếng keng kim loại khi bắn trúng điểm yếu chí mạng, tiếng gió vút chuyển lượt và tiếng tim đập dồn dập khi lượt bắn còn dưới 3 giây. An toàn tuyệt đối trong môi trường Node/SSR và tuân thủ autoplay policy trình duyệt.
+   - `src/ui/battle-renderer.js`: Nâng cấp camera impulse rung màn hình dựa trên trauma phi tuyến tính (rotational + translational spring damper), hiệu ứng khói bốc lan tỏa, mảnh đất đá văng theo trọng lực và tia lửa bốc cháy từ tâm vụ nổ.
+   - `src/match.js`: Bổ sung cơ chế phát hiện Bạo Kích (Critical Hit) khi đạn trúng hồng tâm nhân vật (< 45% bán kính thân), tăng độ rung chấn động camera và bung số nhảy sát thương nổi bật màu vàng hoàng kim rực rỡ.
+
+2. **Giai đoạn 2: Khí hậu chiến trường & Biểu cảm Chibi (Visual Atmosphere)**:
+   - `src/ui/battle-renderer.js`: Bổ sung hệ thống bụi hoa / cánh hoa / hạt gió bay lơ lửng trên đấu trường di chuyển đồng pha với vector gió (`match.wind`), giúp pháo thủ nhận diện tức thì vận tốc và hướng gió một cách trực quan, sống động. Đảm bảo đóng băng trạng thái khi trận đấu bị tạm dừng (pause).
+   - `src/sprites.js`: Thêm biểu cảm giọt mồ hôi hoảng sợ chibi khi HP xuống thấp dưới 25%, gia tăng kịch tính và chiều sâu cá tính nhân vật.
+   - `style.css` & `src/ui/hud.js`: Nâng cấp hiệu ứng số đếm lùi thời gian lượt đấu (nhấp nháy báo động đỏ rực khi `<= 3s`), giao diện bảng điểm và hiển thị phần thưởng vàng.
+
+3. **Giai đoạn 3: Kiến trúc PvE Co-Op Boss Raid (MMO-Lite Foundation)**:
+   - `src/core/boss.js`: Máy trạng thái Boss phó bản nhiều người chơi (`RaidBoss`) gồm:
+     - Đa điểm chạm (Multi-part Hitbox): Lõi năng lượng (Core weak point x2.0–2.2 sát thương), Giáp thân hạng nặng (Chassis armor x0.75 sát thương), Tháp pháo phụ (Turret x1.25 sát thương).
+     - 3 giai đoạn chiến đấu (Phases): Giai đoạn 1 pháo kích thông thường, Giai đoạn 2 mưa pháo chùm phá hủy địa hình, Giai đoạn Cuồng Nộ (Enrage) tăng tốc độ và sát thương hủy diệt.
+     - Vùng cảnh báo oanh tạc (Telegraphed Hazard Zones): Dự báo trước vị trí nổ sau 1 lượt buộc pháo thủ phải di chuyển chiến thuật.
+     - Cơ chế tính thưởng và vinh danh MVP dựa trên sát thương đóng góp của tổ đội.
+   - `tests/boss.test.js`: Kiểm thử đơn vị 100% cho toàn bộ cơ chế boss, hitbox, chuyển pha, vùng nổ và tính điểm thưởng.
+
+4. **Giai đoạn 4: Hệ thống kinh tế Vàng In-Game & Tủ đồ Thời trang (Vanity Wardrobe)**:
+   - `src/core/economy.js`: Ví tiền tệ (`EconomyWallet`) kiểm soát chặt chẽ toàn bộ giao dịch, hoàn toàn không pay-to-win.
+     - Cơ chế thưởng vàng sau trận đấu: thưởng thắng/thua, thưởng theo lượng sát thương và số phát bắn trúng, cấp số nhân chuỗi thắng (win streak bonus lên tới +50%).
+     - Tủ đồ thời trang (`VANITY_CATALOG`): Mua danh hiệu (Thiện Xạ Gió, Bách Phát Bách Trúng, Chúa Tể Pháo Thủ), hiệu ứng vệt đạn (Vệt Sao Băng Vàng, Tia Lửa Plasma), động tác ăn mừng (Vũ Điệu Chiến Thắng) 100% bằng vàng cày trong game.
+     - Tích hợp lưu trữ liên tục (persistence) qua `localStorage` cho trải nghiệm zero-install web-first mượt mà.
+   - `tests/economy.test.js`: Kiểm thử kiểm tra số dư, chuỗi thắng, mua sắm và ngăn chặn mua trùng lặp.
+   - `src/game.js` & `src/ui/hud.js`: Tích hợp ví tiền vào vòng lặp kết thúc trận đấu, cập nhật số vàng tích lũy trực tiếp trên màn hình kết quả.
+
+### Kết quả xác minh toàn diện (2026-09-21)
+- `node scripts/check-syntax.mjs`: **Đạt cú pháp 87 JavaScript files**.
+- `node --test`: **159 passed / 0 failed / 5 skipped** (164 tests tổng).
+- `node scripts/verify.mjs`: **Vượt qua toàn bộ bộ kiểm thử**:
+  - Cú pháp toàn bộ codebase.
+  - Bộ unit/integration tests đầy đủ.
+  - Playwright browser smoke test trên môi trường thật (27 assets, 5 maps, 80 animation frames, responsive layout, đóng băng canvas khi pause, điều khiển bắn và đổi lượt).
+  - Dependency audit: 0 lỗ hổng bảo mật (found 0 vulnerabilities).
+
+
