@@ -812,4 +812,12 @@ Trạng thái: **hoàn thành và xác minh toàn diện; sẵn sàng commit & p
   - Playwright browser smoke test trên môi trường thật (27 assets, 5 maps, 80 animation frames, responsive layout, đóng băng canvas khi pause, điều khiển bắn và đổi lượt).
   - Dependency audit: 0 lỗ hổng bảo mật (found 0 vulnerabilities).
 
+### Kế hoạch hành động tiếp theo (Next Action)
+- Xem chi tiết tài liệu chiến lược và lộ trình tính năng M31–M34 tại [`ROADMAP_MMO_LITE.md`](ROADMAP_MMO_LITE.md) với 4 trụ cột:
+  1. **M31**: Thú Cưng Đồng Hành (Pet Companion System - Ấp trứng, nội tại, Pet Ultimate shot).
+  2. **M32**: Rèn Cột Mốc An Toàn & Khảm Ngọc Nguyên Tố (+1 to +12, hào quang lửa/sét/vũ trụ).
+  3. **M33**: Chuỗi Phó Bản PvE Nhiều Giai Đoạn (3-Stage Dungeons, Boss Raid drops).
+  4. **M34**: Công Thành Chiếm Cứ Điểm & Thuê Bot Lính Đánh Thuê (Mô hình "Mỗi người là một bang chủ").
+
+
 

@@ -103,3 +103,4 @@ Following our detailed design grill session, the game's direction is codified ar
 | **Phase 3** | **PvE Co-Op Boss Raids** | MMO-Lite Core | Boss state machine with weak points, telegraphed AOE zones, 2-4 player co-op room loop, dungeon reward loot drops. |
 | **Phase 4** | **Progression, Wardrobe & Gold Shop** | Retention | Inventory system, gear enhancement for PvE (+1 to +12), gold-based Battle Pass and cosmetic vanity wardrobe. |
 | **Phase 5** | **Ranked League & Social Network** | Community | Ranked MMR ladder with seasonal tiers, party lobbies, instant replay link sharing, spectator lounge. |
+
