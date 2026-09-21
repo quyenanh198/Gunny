@@ -110,3 +110,4 @@ test("RaidBoss victory distributes fair in-game gold rewards and MVP status", ()
   assert.equal(aliceReward.badge, "Dũng Sĩ Diệt Boss");
   assert.equal(bobReward.isMvp, false);
 });
+

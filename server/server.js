@@ -20,6 +20,7 @@ import { PartyService } from "./party.js";
 import { PresenceService } from "./presence.js";
 import { SocialSafety } from "./social-safety.js";
 import { createChatIdentity } from "./chat-identity.js";
+import { mmoStore } from "./mmo-store.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = {
@@ -197,6 +198,46 @@ export function createServer({
       const session = await identityStore.authenticate(requestCredential(req));
       return session ? sendJson(res, 200, { user: session.user, profile: session.profile })
         : sendJson(res, 401, { error: "INVALID_SESSION" });
+    }
+    if (req.url === "/api/mmo/profile" && req.method === "GET") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const mmoProfile = mmoStore.getProfile(session.user.id, session.profile?.displayName);
+      return sendJson(res, 200, mmoProfile);
+    }
+    if (req.url === "/api/mmo/forge/enhance" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const result = mmoStore.enhanceWeapon(session.user.id, body?.weaponId);
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/mmo/pets/hatch" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const result = mmoStore.hatchPet(session.user.id, body?.eggType, body?.customName);
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/mmo/pets/equip" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const result = mmoStore.equipPet(session.user.id, body?.petId);
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/mmo/fortress/recruit" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const body = await jsonBody(req);
+      const result = mmoStore.recruitMercenary(session.user.id, body?.mercenaryId);
+      return sendJson(res, result.success ? 200 : 400, result);
+    }
+    if (req.url === "/api/mmo/fortress/claim" && req.method === "POST") {
+      const session = await identityStore.authenticate(requestCredential(req));
+      if (!session) return sendJson(res, 401, { error: "INVALID_SESSION" });
+      const result = mmoStore.claimFortressYield(session.user.id);
+      return sendJson(res, 200, result);
     }
     if (req.url === "/api/profile" && req.method === "PATCH") {
       const body = await jsonBody(req);

@@ -812,12 +812,57 @@ Trạng thái: **hoàn thành và xác minh toàn diện; sẵn sàng commit & p
   - Playwright browser smoke test trên môi trường thật (27 assets, 5 maps, 80 animation frames, responsive layout, đóng băng canvas khi pause, điều khiển bắn và đổi lượt).
   - Dependency audit: 0 lỗ hổng bảo mật (found 0 vulnerabilities).
 
-### Kế hoạch hành động tiếp theo (Next Action)
-- Xem chi tiết tài liệu chiến lược và lộ trình tính năng M31–M34 tại [`ROADMAP_MMO_LITE.md`](ROADMAP_MMO_LITE.md) với 4 trụ cột:
-  1. **M31**: Thú Cưng Đồng Hành (Pet Companion System - Ấp trứng, nội tại, Pet Ultimate shot).
-  2. **M32**: Rèn Cột Mốc An Toàn & Khảm Ngọc Nguyên Tố (+1 to +12, hào quang lửa/sét/vũ trụ).
-  3. **M33**: Chuỗi Phó Bản PvE Nhiều Giai Đoạn (3-Stage Dungeons, Boss Raid drops).
-  4. **M34**: Công Thành Chiếm Cứ Điểm & Thuê Bot Lính Đánh Thuê (Mô hình "Mỗi người là một bang chủ").
+## M31–M34 — MMO-Lite Core Systems: Pets, Safe Forge (+1 to +12), Multi-Stage Dungeons & Bot Mercenary Fortress (2026-09-21)
+
+Trạng thái: **hoàn thành và xác minh toàn diện; sẵn sàng commit & push `origin/main`**.
+
+### Đã triển khai
+
+1. **Milestone M31: Thú Cưng Đồng Hành (Pet Companion System)**:
+   - `src/core/pet.js`: Hệ thống Thú Cưng hoàn chỉnh gồm 4 chủng loài (Rồng Lửa Nhỏ, Mầm Cây Thần Kỳ, Kiến Siêu Quậy, Băng Tinh Linh). Hỗ trợ cơ chế ấp trứng (`hatchEgg`), tích lũy XP thăng cấp, hào quang nội tại (tăng bán kính đào đất, hồi phục sinh lực, giảm sát thương rơi ngã, giáp chắn), và tích tụ thanh *Pet Ultimate Gauge* (nạp khi bắn trúng/chí mạng) để kích hoạt tuyệt chiêu tối thượng (*Mưa Thiên Thạch*, *Cơn Lốc Thảo Mộc*, *Địa Chấn Khoét Đất*, *Băng Tiễn Tê Liệt*).
+   - `src/ui/battle-renderer.js`: Vẽ linh thú chibi bay lượn đồng hành bên cạnh vai nhân vật với hiệu ứng nhấp nhô lơ lửng và ánh sáng hào quang sinh động.
+   - `tests/pet.test.js`: 5 bài kiểm thử đơn vị bao phủ toàn bộ cơ chế thăng cấp, sạc năng lượng, xả chiêu và ấp trứng.
+
+2. **Milestone M32: Rèn Cột Mốc An Toàn & Khảm Ngọc Nguyên Tố (+1 đến +12)**:
+   - `src/core/forge.js`: Hệ thống Rèn Cường Hóa loại bỏ hoàn toàn việc vỡ đồ. Các mốc **+3, +6, +9, +12** là mốc khóa vĩnh viễn (khi xịt không bao giờ rớt dưới mốc). Cơ chế tích lũy may mắn (*Pity Luck*) cộng dồn +5% sau mỗi lần thất bại, bảo đảm kiên trì là chắc chắn thành công.
+   - `src/sprites.js`: Hiển thị hào quang vũ khí cực đỉnh:
+     - $+7$ đến $+9$: Hào quang Lửa rực cháy (*Flame Aura*).
+     - $+10$ đến $+11$: Tia sét tím giật lách tách uy lực (*Thunder Spark*).
+     - $+12$: Vòng sáng vũ trụ lấp lánh thiên hà (*Cosmic Halo*).
+   - Hệ thống Khảm Ngọc 3 ô: Ngọc Hỏa Ruby (thiêu đốt địa hình DoT), Ngọc Lôi Topaz (sét lan mục tiêu kế cận), Ngọc Phong Emerald (xuyên gió).
+   - `tests/forge.test.js`: 5 bài kiểm thử đơn vị cho tỷ lệ rèn, khóa mốc sàn an toàn, hiệu ứng hào quang và khảm ngọc.
+
+3. **Milestone M33: Chuỗi Phó Bản PvE Nhiều Giai Đoạn (Multi-Stage Dungeons)**:
+   - `src/core/dungeon.js`: Máy phiên phó bản (`DungeonSession`) với chuỗi 3 ải liên hoàn:
+     - Ải 1: Đàn quái đào đất quấy nhiễu (*Minion Wave*).
+     - Ải 2: Đấu trường hiểm địa gió lốc và bẫy nổ (*Hazard Arena*).
+     - Ải 3: Đại chiến Boss đa điểm chạm với hitbox lõi năng lượng và vùng oanh tạc (*Boss Raid* kết hợp `RaidBoss`).
+     - Hồi phục sinh lực 30% tại trạm kiểm soát giữa các ải (*Checkpoint recovery*).
+     - Bảng thưởng rơi vật phẩm phó bản: Vàng, Đá Rèn, Mảnh Ngọc Nguyên Tố và Trứng Pet.
+   - `tests/dungeon.test.js`: 4 bài kiểm thử đơn vị cho tiến trình vượt ải, dọn quái và sinh chiến lợi phẩm.
+
+4. **Milestone M34: Pháo Đài Cá Nhân & Thuê Bot Lính Đánh Thuê ("Mỗi Người Là Một Bang Chủ")**:
+   - `src/core/fortress.js`: Hệ thống Pháo Đài Cá Nhân (`PersonalFortress`):
+     - Nâng cấp thành trì cấp 1–10 mở rộng máu phòng thủ và sức chứa quân đồn trú.
+     - Chợ chiêu mộ Bot lính đánh thuê bằng vàng: Bot Xạ Thủ (Sniper Bot), Bot Đào Đất (Burrower Bot), Bot Hộ Vệ (Guardian Bot).
+     - Chiếm cứ điểm mỏ tài nguyên (Mỏ Vàng, Mỏ Đá Rèn) sản sinh thuế vàng và đá rèn tự động theo giờ.
+     - Cơ chế công thành lai (Hybrid Siege): Khi bị tấn công, bot tự động phòng thủ nếu chủ thành offline; kích hoạt chuông báo động đỏ nghênh chiến trực tiếp nếu chủ thành online.
+   - `tests/fortress.test.js`: 5 bài kiểm thử đơn vị cho nâng cấp thành, thuê lính, tính thuế mỏ và mô phỏng công thành.
+
+5. **Server-Authoritative MMO Progression & Identity Binding**:
+   - `server/mmo-store.js`: Kho lưu trữ tiến trình MMO máy chủ gắn chặt với `user.id` / session tài khoản đăng nhập (chống hack/cheat từ client).
+   - `server/server.js`: Định tuyến và xác thực các REST endpoint:
+     - `GET /api/mmo/profile`: Nạp toàn bộ hồ sơ MMO (Ví tiền, Thú cưng, Cấp vũ khí, Pháo đài, Lịch sử ải).
+     - `POST /api/mmo/forge/enhance`: Rèn vũ khí có trừ tài nguyên và khóa mốc an toàn.
+     - `POST /api/mmo/pets/hatch` & `/equip`: Ấp trứng thú cưng và trang bị đồng hành.
+     - `POST /api/mmo/fortress/recruit` & `/claim`: Thuê bot đồn trú và thu thuế mỏ tài nguyên.
+   - `tests/mmo-store.test.js` & `tests/mmo-api.test.js`: 5 bài kiểm thử đơn vị và tích hợp API máy chủ.
+
+### Kết quả xác minh toàn diện (2026-09-21)
+- `node scripts/check-syntax.mjs`: **Đạt cú pháp 98 JavaScript files**.
+- `node --test`: **183 passed / 0 failed / 5 skipped** (188 tests tổng).
+- `node scripts/verify.mjs`: **Vượt qua 100% toàn bộ pipeline kiểm thử** (cú pháp, unit test, Playwright browser smoke test, và audit 0 lỗ hổng).
+
 
 
 

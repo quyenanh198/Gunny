@@ -56,6 +56,21 @@ function character(m, a, i) {
   drawWeapon(ctx, images.get(a.weapon), a, a.angle, reducedMotion);
   drawMuzzle(ctx, a, a.angle, reducedMotion);
   ctx.restore();
+
+  // Draw floating companion pet beside actor
+  if (a.pet && a.hp > 0) {
+    ctx.save();
+    const petOffset = a.angle > 90 ? 34 : -34;
+    const petBob = !reducedMotion && !isPaused ? Math.sin(Date.now() * 0.005) * 5 : 0;
+    ctx.translate(a.x + petOffset, a.y - 75 + petBob);
+    ctx.shadowColor = a.pet.color || "#ff5252";
+    ctx.shadowBlur = 8;
+    ellipse(0, 0, 12, 10, a.pet.color || "#ff5252");
+    ellipse(a.angle > 90 ? -3 : 3, -2, 2.5, 2.5, "#ffffff");
+    ellipse(a.angle > 90 ? -4 : 4, -2, 1.2, 1.2, "#111111");
+    ctx.restore();
+  }
+
   // Name tag so teams of several actors stay readable.
   ctx.font = "800 20px 'Be Vietnam Pro', system-ui, sans-serif";
   ctx.textAlign = "center";

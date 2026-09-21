@@ -131,6 +131,49 @@ export function drawWeapon(ctx, image, actor, angle, reducedMotion = false) {
     ctx.fillStyle = "#e8d4a0";
     ctx.fillRect(27, -9, 7, 18);
   }
+
+  // Visual Weapon Auras (+7 Flame, +10 Thunder, +12 Cosmic Halo)
+  const level = actor.weaponLevel || 0;
+  if (!reducedMotion && (level >= 7 || actor.weaponAura)) {
+    ctx.save();
+    if (level >= 12 || actor.weaponAura === "cosmic") {
+      // Cosmic Halo: Celestial rotating iridescent ring
+      ctx.strokeStyle = "#00e5ff";
+      ctx.lineWidth = 3;
+      ctx.shadowColor = "#00e5ff";
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.ellipse(10, 0, 24, 14, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#ffd700";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(10, 0, 27, 17, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (level >= 10 || actor.weaponAura === "thunder") {
+      // Thunder Spark: Violet electrical glow & sparks
+      ctx.shadowColor = "#b388ff";
+      ctx.shadowBlur = 8;
+      ctx.strokeStyle = "#d1c4e9";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-6, -8);
+      ctx.lineTo(8, -14);
+      ctx.lineTo(18, -4);
+      ctx.lineTo(26, -10);
+      ctx.stroke();
+    } else if (level >= 7 || actor.weaponAura === "flame") {
+      // Flame Aura: Fiery orange combustion glow
+      ctx.shadowColor = "#ff6d00";
+      ctx.shadowBlur = 9;
+      ctx.fillStyle = "rgba(255, 109, 0, 0.4)";
+      ctx.beginPath();
+      ctx.ellipse(10, 0, 22, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
   ctx.restore();
 }
 
