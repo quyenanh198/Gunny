@@ -752,3 +752,22 @@ Trạng thái: **hoàn thành local; sẵn sàng commit/merge `main`**.
 
 ### Quyết định sản phẩm (2026-09-18)
 - Chủ dự án đã chốt tên phát hành chính thức là **"Gunny"** (giải quyết mục 8.1 trong `ONLINE_GAME_ROADMAP.md` và `PRODUCT_BRIEF.md`, cập nhật checklist trong `docs/beta-readiness.md` và `scripts/beta-readiness.mjs`).
+
+## M29 — Steve Jobs Product Audit & Game Leadership Vision (2026-09-21)
+
+Chi tiết đánh giá và chiến lược sản phẩm được lưu tại [`AUDIT.md`](AUDIT.md).
+
+### Quyết định định vị sản phẩm (Grill-Me Outcomes)
+1. **Thể loại cốt lõi**: **Deep Progression MMO-Lite** — kết hợp lối chơi bắn súng tọa độ phản xạ tức thì với tiến trình dài hạn (dungeon PvE, raid săn boss, chế đồ, pet và tủ đồ thời trang).
+2. **Cân bằng PvP & PvE**: **Stat-Normalized PvP với PvE-Only Gear Power** — PvP 100% công bằng (tất cả chỉ số chuẩn hóa), trang bị cường hóa (+1 đến +12) và vũ khí boss chỉ phát huy sức mạnh trong phó bản PvE và săn boss.
+3. **Thiết kế PvE Co-Op**: **Multi-phase Boss Raids** với điểm yếu di động (shifting weak points), vùng cảnh báo đòn đánh (telegraphed hazard zones), quái phụ (adds) và cơ chế phối hợp 2–4 người.
+4. **Kiến trúc Client**: **Web-first zero-install PWA (< 5MB initial load)** — chơi mượt trên Safari/Chrome desktop & mobile, render bằng Canvas/WebGL với asset streaming tiến trình.
+5. **Kinh tế & Monetization**: **Gold-driven Battle Pass & Vanity Wardrobe** — Battle Pass, chìa khóa phó bản, trang phục thời trang, hiệu ứng đạn và danh hiệu đều mở bằng **vàng cày cuốc trong game**, hoàn toàn không pay-to-win.
+
+### Lộ trình triển khai ưu tiên
+- **Giai đoạn 1 (Juice & Tactile Delight)**: Hệ thống rung màn hình (trauma camera impulse), hiệu ứng hạt va chạm (particle VFX: tia lửa, khói, mảnh vỡ địa hình), âm thanh Web Audio đa tầng, hiển thị luồng gió động.
+- **Giai đoạn 2 (Visual Atmosphere & Chibi Art)**: Nền parallax nhiều lớp, hoạt ảnh chibi biểu cảm (thở, giật lùi khi bắn, nhảy mừng, hoảng sợ khi thấp máu).
+- **Giai đoạn 3 (PvE Co-Op Boss Raids)**: Máy trạng thái Boss, hitbox điểm yếu, phòng đấu co-op 2–4 người, bảng rớt vật phẩm phó bản.
+- **Giai đoạn 4 (Progression & Wardrobe)**: Kho đồ (inventory), cường hóa trang bị PvE (+1 tới +12), Battle Pass và shop thời trang mua bằng vàng.
+- **Giai đoạn 5 (Ranked League & Social Network)**: Đấu hạng MMR mùa giải, phòng party bạn bè, chia sẻ video/link instant replay, phòng chờ khán giả (spectator lounge).
+
